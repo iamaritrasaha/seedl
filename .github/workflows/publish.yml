@@ -24,7 +24,7 @@ jobs:
           persist-credentials: false
 
       - name: Install uv
-        uses: astral-sh/setup-uv@f94e142e70d13161a0b3ac0f5b6e929e4cda735e # v5.3.0
+        uses: astral-sh/setup-uv@1edb52594c857e2b5b13128931090f0640537287 # v5.3.0
         with:
           enable-cache: true
 
@@ -116,7 +116,7 @@ jobs:
 
     steps:
       - name: Download verified distributions
-        uses: actions/download-artifact@cc203385981b70ca67e1ab388640d04474e5dd76 # v4.1.9
+        uses: actions/download-artifact@cc203385981b70ca67e1cc392babf9cc229d5806 # v4.1.9
         with:
           name: python-package-distributions
           path: dist/

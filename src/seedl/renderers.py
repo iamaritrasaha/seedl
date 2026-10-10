@@ -303,7 +303,7 @@ def _svg(view: Visualization) -> str:
             f"Row/column indices are zero-based; hover cells for values.</text>"
         )
         height = int(y0 + row_count * cell + 55)
-    elif kind == "image":
+    elif kind in {"image", "dataset_images"}:
         pixels = data.get("pixels", [])
         channels = data.get("channels", 1)
         h, w = len(pixels), max((len(row) for row in pixels), default=0)
@@ -372,7 +372,7 @@ def _svg(view: Visualization) -> str:
             'transform="rotate(-90 30 165)">Count</text>'
         )
         height = 310
-    elif kind == "training":
+    elif kind in {"training", "history_comparison"}:
         groups = data.get("groups", [])
         body_parts = []
         top = 105
@@ -457,6 +457,164 @@ def _svg(view: Visualization) -> str:
             rendered.append(f'<line x1="32" y1="{y + 8}" x2="875" y2="{y + 8}" class="grid"/>')
         body = heading + "".join(rendered)
         height = 145 + max(len(shown), 1) * 23
+    elif kind == "classification_predictions":
+        ranked = data.get("ranked", [])
+        bars = []
+        for i, item in enumerate(ranked):
+            prob = float(item.get("probability", 0.0))
+            bar_w = max(2, int(prob * 450))
+            y = 110 + i * 32
+            bars.append(
+                f'<text x="40" y="{y + 16}" class="row">{_esc(item.get("class", ""))}</text>'
+                f'<rect x="180" y="{y}" width="{bar_w}" height="22" rx="3" fill="#4b78c2"/>'
+                f'<text x="{190 + bar_w}" y="{y + 16}" class="label">{prob:.1%}</text>'
+            )
+        body = "".join(bars)
+        height = 130 + len(ranked) * 32
+    elif kind == "prediction_comparison":
+        rows = data.get("rows", [])[:15]
+        heading = (
+            '<text x="40" y="105" class="head">Class</text>'
+            f'<text x="240" y="105" class="head">{_esc(data.get("name_a", "Model A"))}</text>'
+            f'<text x="400" y="105" class="head">{_esc(data.get("name_b", "Model B"))}</text>'
+            '<text x="560" y="105" class="head">Difference</text>'
+            '<line x1="40" y1="115" x2="720" y2="115" class="axis"/>'
+        )
+        rendered = []
+        for i, row in enumerate(rows):
+            y = 135 + i * 24
+            delta = float(row.get("delta", 0.0))
+            delta_str = f"{delta:+.1%}"
+            color = "#24a079" if delta > 0 else "#db5264" if delta < 0 else "#52657d"
+            rendered.append(
+                f'<text x="40" y="{y}" class="row">{_esc(row.get("class", ""))}</text>'
+                f'<text x="240" y="{y}" class="row">{float(row.get("score_a", 0.0)):.1%}</text>'
+                f'<text x="400" y="{y}" class="row">{float(row.get("score_b", 0.0)):.1%}</text>'
+                f'<text x="560" y="{y}" class="row" fill="{color}">{delta_str}</text>'
+                f'<line x1="40" y1="{y + 6}" x2="720" y2="{y + 6}" class="grid"/>'
+            )
+        body = heading + "".join(rendered)
+        height = 150 + len(rows) * 24
+    elif kind == "model_comparison":
+        rows = data.get("layer_rows", [])[:30]
+        heading = (
+            '<text x="40" y="105" class="head">Layer</text>'
+            f'<text x="250" y="105" class="head">{_esc(data.get("name_a", "Model A"))} Params</text>'
+            f'<text x="450" y="105" class="head">{_esc(data.get("name_b", "Model B"))} Params</text>'
+            '<line x1="40" y1="115" x2="720" y2="115" class="axis"/>'
+        )
+        rendered = []
+        for i, row in enumerate(rows):
+            y = 135 + i * 22
+            p_a = row.get("params_a", 0)
+            p_b = row.get("params_b", 0)
+            rendered.append(
+                f'<text x="40" y="{y}" class="row">{_esc(row.get("layer", ""))}</text>'
+                f'<text x="250" y="{y}" class="row">{p_a:, if isinstance(p_a, int) else p_a}</text>'
+                f'<text x="450" y="{y}" class="row">{p_b:, if isinstance(p_b, int) else p_b}</text>'
+                f'<line x1="40" y1="{y + 6}" x2="720" y2="{y + 6}" class="grid"/>'
+            )
+        body = heading + "".join(rendered)
+        height = 150 + len(rows) * 22
+    elif kind in {"attention", "educational_attention"}:
+        matrix = data.get("matrix", [])
+        tokens = data.get("tokens", [])
+        n_tok = len(matrix)
+        cell = min(36.0, 500.0 / max(n_tok, 1))
+        x0, y0 = 120, 110
+        rects = []
+        for i, row in enumerate(matrix):
+            for j, val in enumerate(row):
+                intensity = round(float(val) * 255)
+                color = f"rgb({255 - intensity}, {255 - intensity // 2}, 255)"
+                tok_from = tokens[i] if i < len(tokens) else str(i)
+                tok_to = tokens[j] if j < len(tokens) else str(j)
+                rects.append(
+                    f'<rect class="cell" x="{x0 + j * cell:.1f}" y="{y0 + i * cell:.1f}" '
+                    f'width="{cell:.1f}" height="{cell:.1f}" fill="{color}">'
+                    f"<title>{_esc(tok_from)} -> {_esc(tok_to)}: {float(val):.3f}</title></rect>"
+                )
+        labels_svg = []
+        for idx in range(min(n_tok, 20)):
+            tok = tokens[idx] if idx < len(tokens) else str(idx)
+            labels_svg.append(
+                f'<text x="{x0 - 8}" y="{y0 + idx * cell + cell * 0.7:.1f}" text-anchor="end" class="label">{_esc(tok)}</text>'
+            )
+            labels_svg.append(
+                f'<text x="{x0 + idx * cell + cell * 0.5:.1f}" y="{y0 - 8}" text-anchor="middle" class="label">{_esc(tok)}</text>'
+            )
+        body = "".join(labels_svg) + "".join(rects)
+        height = int(y0 + n_tok * cell + 60)
+    elif kind in {"educational_activations", "educational_losses"}:
+        funcs = data.get("functions", {})
+        if not funcs and "mse" in data:
+            funcs = {k: data[k] for k in ("mse", "mae", "huber") if k in data}
+        x_coords = data.get("x", data.get("errors", []))
+        traces = [{"name": name, "values": vals, "x": x_coords} for name, vals in funcs.items()]
+        body = _svg_line_chart(
+            traces, top=105, height=180, title="Function Curves", x_label="x", y_label="f(x)"
+        )
+        height = 360
+    elif kind == "educational_gradient_descent":
+        traj = data.get("trajectory", [])
+        traces = [
+            {"name": "Loss", "values": [p["loss"] for p in traj], "x": [p["step"] for p in traj]},
+            {
+                "name": "Parameter w",
+                "values": [p["w"] for p in traj],
+                "x": [p["step"] for p in traj],
+            },
+        ]
+        body = _svg_line_chart(
+            traces,
+            top=105,
+            height=180,
+            title="Optimization Progress",
+            x_label="Step",
+            y_label="Value",
+        )
+        height = 360
+    elif kind == "educational_backpropagation":
+        nodes = data.get("nodes", [])
+        heading = (
+            '<text x="40" y="105" class="head">Graph Node</text>'
+            '<text x="320" y="105" class="head">Forward Output</text>'
+            '<text x="520" y="105" class="head">Local Gradient (dL/d_)</text>'
+            '<line x1="40" y1="115" x2="720" y2="115" class="axis"/>'
+        )
+        rendered = []
+        for i, node in enumerate(nodes):
+            y = 135 + i * 24
+            rendered.append(
+                f'<text x="40" y="{y}" class="row">{_esc(node.get("name", ""))}</text>'
+                f'<text x="320" y="{y}" class="row">{float(node.get("forward", 0.0)):.4g}</text>'
+                f'<text x="520" y="{y}" class="row" fill="#315fbd">{float(node.get("gradient", 0.0)):.4g}</text>'
+                f'<line x1="40" y1="{y + 6}" x2="720" y2="{y + 6}" class="grid"/>'
+            )
+        body = heading + "".join(rendered)
+        height = 150 + len(nodes) * 24
+    elif kind == "embeddings":
+        sim_mat = data.get("similarity_matrix", [])
+        labels = data.get("labels", [])
+        n_v = len(sim_mat)
+        cell = min(28.0, 480.0 / max(n_v, 1))
+        x0, y0 = 100, 105
+        rects = []
+        for i, row in enumerate(sim_mat):
+            for j, val in enumerate(row):
+                ratio = (float(val) + 1.0) / 2.0  # map [-1, 1] to [0, 1]
+                red = round(49 + 190 * ratio)
+                blue = round(189 - 120 * ratio)
+                color = f"rgb({red}, 95, {blue})"
+                lbl_i = labels[i] if i < len(labels) else str(i)
+                lbl_j = labels[j] if j < len(labels) else str(j)
+                rects.append(
+                    f'<rect class="cell" x="{x0 + j * cell:.1f}" y="{y0 + i * cell:.1f}" '
+                    f'width="{cell:.1f}" height="{cell:.1f}" fill="{color}">'
+                    f"<title>{_esc(lbl_i)} · {_esc(lbl_j)}: {float(val):.3f}</title></rect>"
+                )
+        body = "".join(rects)
+        height = int(y0 + n_v * cell + 60)
     else:
         body = f'<text x="32" y="110" class="label">{_esc(view.summary)}</text>'
         height = 210
@@ -525,7 +683,7 @@ def _plotly(view: Visualization) -> Any:
         )
         figure.update_xaxes(title="Column")
         figure.update_yaxes(title="Row", autorange="reversed")
-    elif view.kind == "image":
+    elif view.kind in {"image", "dataset_images"}:
         pixels = data.get("pixels", [])
         if data.get("channels") == 1:
             figure = go.Figure(
@@ -556,7 +714,7 @@ def _plotly(view: Visualization) -> Any:
         )
         figure.update_xaxes(title="Value")
         figure.update_yaxes(title="Count")
-    elif view.kind == "training":
+    elif view.kind in {"training", "history_comparison"}:
         groups = data.get("groups", [])
         figure = make_subplots(
             rows=max(len(groups), 1),
@@ -656,6 +814,216 @@ def _plotly(view: Visualization) -> Any:
         figure.update_yaxes(title="Maximum |gradient|", row=1, col=1)
         figure.update_xaxes(title="Parameter", type="category", row=2, col=1)
         figure.update_yaxes(title="Gradient", row=2, col=1)
+    elif view.kind == "classification_predictions":
+        ranked = data.get("ranked", [])
+        figure = go.Figure(
+            go.Bar(
+                x=[item.get("probability", 0.0) for item in ranked],
+                y=[item.get("class", "") for item in ranked],
+                orientation="h",
+                marker=dict(color="#4b78c2"),
+            )
+        )
+        figure.update_layout(
+            xaxis=dict(title="Probability", tickformat=".0%"),
+            yaxis=dict(autorange="reversed"),
+        )
+    elif view.kind == "prediction_comparison":
+        rows = data.get("rows", [])[:15]
+        figure = go.Figure()
+        figure.add_trace(
+            go.Bar(
+                name=data.get("name_a", "Model A"),
+                x=[r.get("class", "") for r in rows],
+                y=[r.get("score_a", 0.0) for r in rows],
+            )
+        )
+        figure.add_trace(
+            go.Bar(
+                name=data.get("name_b", "Model B"),
+                x=[r.get("class", "") for r in rows],
+                y=[r.get("score_b", 0.0) for r in rows],
+            )
+        )
+        figure.update_layout(barmode="group", yaxis=dict(title="Score", tickformat=".0%"))
+    elif view.kind == "regression_predictions":
+        preds = data.get("predictions", [])
+        targets = data.get("targets")
+        if targets:
+            figure = go.Figure(
+                go.Scatter(
+                    x=targets,
+                    y=preds,
+                    mode="markers",
+                    name="Predictions vs Targets",
+                    marker=dict(color="#4b78c2", size=6),
+                )
+            )
+            figure.update_xaxes(title="Target")
+            figure.update_yaxes(title="Prediction")
+        else:
+            figure = go.Figure(
+                go.Scatter(
+                    y=preds,
+                    mode="lines+markers",
+                    name="Predictions",
+                    marker=dict(color="#4b78c2", size=4),
+                )
+            )
+            figure.update_xaxes(title="Sample Index")
+            figure.update_yaxes(title="Prediction")
+    elif view.kind == "model_comparison":
+        rows = data.get("layer_rows", [])[:50]
+        headers = [
+            "Layer",
+            f"{data.get('name_a', 'Model A')} Type",
+            f"{data.get('name_b', 'Model B')} Type",
+            f"{data.get('name_a', 'Model A')} Params",
+            f"{data.get('name_b', 'Model B')} Params",
+        ]
+        cells = [
+            [r.get("layer", "") for r in rows],
+            [r.get("type_a", "—") for r in rows],
+            [r.get("type_b", "—") for r in rows],
+            [str(r.get("params_a", "—")) for r in rows],
+            [str(r.get("params_b", "—")) for r in rows],
+        ]
+        figure = go.Figure(
+            go.Table(
+                header=dict(values=headers),
+                cells=dict(values=cells, height=27),
+            )
+        )
+    elif view.kind in {"attention", "educational_attention"}:
+        figure = go.Figure(
+            go.Heatmap(
+                z=data.get("matrix", []),
+                x=data.get("tokens"),
+                y=data.get("tokens"),
+                colorscale="Blues",
+            )
+        )
+        figure.update_xaxes(title="Key Token")
+        figure.update_yaxes(title="Query Token", autorange="reversed")
+    elif view.kind == "embeddings":
+        coords = data.get("coords_2d")
+        labels = data.get("labels", [])
+        if coords and len(coords[0]) >= 2:
+            figure = go.Figure(
+                go.Scatter(
+                    x=[c[0] for c in coords],
+                    y=[c[1] for c in coords],
+                    text=labels,
+                    mode="markers+text",
+                    textposition="top center",
+                    marker=dict(color="#4b78c2", size=8),
+                )
+            )
+            figure.update_xaxes(title="Principal Component 1")
+            figure.update_yaxes(title="Principal Component 2")
+        else:
+            figure = go.Figure(
+                go.Heatmap(
+                    z=data.get("similarity_matrix", []),
+                    x=labels,
+                    y=labels,
+                    colorscale="Viridis",
+                )
+            )
+    elif view.kind in {"educational_activations", "educational_losses"}:
+        funcs = data.get("functions", {})
+        if not funcs and "mse" in data:
+            funcs = {k: data[k] for k in ("mse", "mae", "huber") if k in data}
+        x_coords = data.get("x", data.get("errors", []))
+        figure = go.Figure()
+        for k, v in funcs.items():
+            figure.add_trace(go.Scatter(x=x_coords, y=v, mode="lines", name=k))
+        figure.update_xaxes(title="Input")
+        figure.update_yaxes(title="Output")
+    elif view.kind == "educational_gradient_descent":
+        traj = data.get("trajectory", [])
+        figure = go.Figure(
+            go.Scatter(
+                x=[p["step"] for p in traj],
+                y=[p["loss"] for p in traj],
+                mode="lines+markers",
+                name="Loss",
+                line=dict(color="#4b78c2"),
+            )
+        )
+        figure.update_xaxes(title="Optimization Step")
+        figure.update_yaxes(title="Objective Loss")
+    elif view.kind == "educational_backpropagation":
+        nodes = data.get("nodes", [])
+        headers = ["Graph Node", "Forward Value", "Local Gradient"]
+        cells = [
+            [n.get("name", "") for n in nodes],
+            [f"{float(n.get('forward', 0.0)):.4g}" for n in nodes],
+            [f"{float(n.get('gradient', 0.0)):.4g}" for n in nodes],
+        ]
+        figure = go.Figure(
+            go.Table(
+                header=dict(values=headers),
+                cells=dict(values=cells, height=27),
+            )
+        )
+    elif view.kind == "dataset_tabular":
+        f_stats = data.get("feature_stats", [])[:30]
+        headers = ["Feature", "Min", "Max", "Mean"]
+        cells = [
+            [s.get("feature", "") for s in f_stats],
+            [f"{s.get('min', 0.0):.4g}" for s in f_stats],
+            [f"{s.get('max', 0.0):.4g}" for s in f_stats],
+            [f"{s.get('mean', 0.0):.4g}" for s in f_stats],
+        ]
+        figure = go.Figure(
+            go.Table(
+                header=dict(values=headers),
+                cells=dict(values=cells, height=27),
+            )
+        )
+    elif view.kind in {"convolution_simulation", "educational_convolution"}:
+        feat_map = data.get("feature_map", data.get("output", []))
+        figure = go.Figure(
+            go.Heatmap(
+                z=feat_map,
+                colorscale="Viridis",
+            )
+        )
+        figure.update_xaxes(title="Output X")
+        figure.update_yaxes(title="Output Y", autorange="reversed")
+    elif view.kind == "attribution":
+        attr = data.get("attribution", [])
+        if attr and isinstance(attr[0], list):
+            figure = go.Figure(go.Heatmap(z=attr, colorscale="Hot"))
+            figure.update_yaxes(autorange="reversed")
+        else:
+            figure = go.Figure(go.Bar(y=attr, marker=dict(color="#4b78c2")))
+            figure.update_xaxes(title="Feature Index")
+            figure.update_yaxes(title="Attribution")
+    elif view.kind == "educational_dropout":
+        figure = go.Figure(
+            go.Bar(
+                x=list(range(len(data.get("inputs", [])))),
+                y=data.get("train_outputs", []),
+                name="Retained Outputs",
+                marker=dict(color="#4b78c2"),
+            )
+        )
+        figure.update_xaxes(title="Unit Index")
+        figure.update_yaxes(title="Activation Value")
+    elif view.kind == "educational_batch_norm":
+        norm = data.get("normalized", [])
+        figure = go.Figure(
+            go.Scatter(
+                y=norm,
+                mode="lines+markers",
+                name="Standardized Output",
+                marker=dict(color="#4b78c2"),
+            )
+        )
+        figure.update_xaxes(title="Sample Index")
+        figure.update_yaxes(title="Standardized Value")
     else:
         raise SeeDLError(f"The Plotly renderer does not support the {view.kind!r} view.")
     if view.kind in {"activations", "gradients"}:
@@ -787,7 +1155,7 @@ def _matplotlib(view: Visualization) -> Any:
                 ticks = list(range(0, len(indices), max(1, math.ceil(len(indices) / 6))))
                 getattr(axis, f"set_{which}ticks")(ticks, [indices[i] for i in ticks])
         figure.colorbar(axis.images[0], ax=axis, label="Value")
-    elif view.kind == "image":
+    elif view.kind in {"image", "dataset_images"}:
         axis.imshow(
             [[p[0] for p in row] for row in data.get("pixels", [])]
             if data.get("channels") == 1
@@ -802,7 +1170,7 @@ def _matplotlib(view: Visualization) -> Any:
         axis.set(xlabel="Value", ylabel="Count")
         if not _finite(data.get("sample", [])):
             axis.text(0.5, 0.5, "No finite values to plot", transform=axis.transAxes, ha="center")
-    elif view.kind == "training":
+    elif view.kind in {"training", "history_comparison"}:
         plt.close(figure)
         groups = data.get("groups", [])
         figure, axes = plt.subplots(
@@ -890,6 +1258,171 @@ def _matplotlib(view: Visualization) -> Any:
             columns = ["Layer", "Shape", "Status", "Mean", "Std", "Max |value|", "Finite"]
             rows = _stats_rows(data)
         _mpl_table(axis, rows, columns)
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "classification_predictions":
+        ranked = data.get("ranked", [])
+        classes = [r.get("class", "") for r in reversed(ranked)]
+        probs = [r.get("probability", 0.0) for r in reversed(ranked)]
+        axis.barh(classes, probs, color="#4b78c2")
+        axis.set_xlabel("Probability")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "prediction_comparison":
+        rows = data.get("rows", [])[:10]
+        cls_names = [r.get("class", "") for r in rows]
+        sa = [r.get("score_a", 0.0) for r in rows]
+        sb = [r.get("score_b", 0.0) for r in rows]
+        indices = list(range(len(cls_names)))
+        w = 0.35
+        axis.bar(
+            [i - w / 2 for i in indices],
+            sa,
+            w,
+            label=data.get("name_a", "Model A"),
+            color="#4b78c2",
+        )
+        axis.bar(
+            [i + w / 2 for i in indices],
+            sb,
+            w,
+            label=data.get("name_b", "Model B"),
+            color="#ef8734",
+        )
+        axis.set_xticks(indices)
+        axis.set_xticklabels(cls_names, rotation=35, ha="right")
+        axis.legend()
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "regression_predictions":
+        preds = data.get("predictions", [])
+        targets = data.get("targets")
+        if targets:
+            axis.scatter(targets, preds, color="#4b78c2", alpha=0.7)
+            axis.set(xlabel="Target", ylabel="Prediction")
+        else:
+            axis.plot(preds, marker="o", markersize=3, color="#4b78c2")
+            axis.set(xlabel="Sample Index", ylabel="Prediction")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "model_comparison":
+        plt.close(figure)
+        rows = data.get("layer_rows", [])[:50]
+        figure, axis = plt.subplots(figsize=(12, 0.8 + 0.34 * max(1, min(len(rows), 50))))
+        axis.axis("off")
+        cols = [
+            "Layer",
+            f"{data.get('name_a', 'Model A')} Type",
+            f"{data.get('name_b', 'Model B')} Type",
+            f"{data.get('name_a', 'Model A')} Params",
+            f"{data.get('name_b', 'Model B')} Params",
+        ]
+        row_vals = [
+            [
+                r.get("layer", ""),
+                r.get("type_a", "—"),
+                r.get("type_b", "—"),
+                str(r.get("params_a", "—")),
+                str(r.get("params_b", "—")),
+            ]
+            for r in rows
+        ]
+        _mpl_table(axis, row_vals, cols)
+        return _finish_matplotlib(figure, view)
+    elif view.kind in {"attention", "educational_attention"}:
+        mat = data.get("matrix", [])
+        toks = data.get("tokens", [])
+        im = axis.imshow(mat, cmap="Blues", aspect="auto")
+        figure.colorbar(im, ax=axis, label="Attention Weight")
+        if toks:
+            axis.set_xticks(range(len(toks)))
+            axis.set_xticklabels(toks, rotation=45, ha="right")
+            axis.set_yticks(range(len(toks)))
+            axis.set_yticklabels(toks)
+        axis.set(xlabel="Key Token", ylabel="Query Token")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "embeddings":
+        coords = data.get("coords_2d")
+        labels = data.get("labels", [])
+        if coords and len(coords[0]) >= 2:
+            x_vals = [c[0] for c in coords]
+            y_vals = [c[1] for c in coords]
+            axis.scatter(x_vals, y_vals, color="#4b78c2", alpha=0.8)
+            for i, lbl in enumerate(labels):
+                axis.annotate(lbl, (x_vals[i], y_vals[i]), fontsize=8)
+            axis.set(xlabel="Principal Component 1", ylabel="Principal Component 2")
+        else:
+            im = axis.imshow(data.get("similarity_matrix", []), cmap="viridis", aspect="auto")
+            figure.colorbar(im, ax=axis, label="Cosine Similarity")
+        return _finish_matplotlib(figure, view)
+    elif view.kind in {"educational_activations", "educational_losses"}:
+        funcs = data.get("functions", {})
+        if not funcs and "mse" in data:
+            funcs = {k: data[k] for k in ("mse", "mae", "huber") if k in data}
+        x_coords = data.get("x", data.get("errors", []))
+        for k, v in funcs.items():
+            axis.plot(x_coords, v, label=k)
+        axis.legend()
+        axis.set(xlabel="Input", ylabel="Output")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "educational_gradient_descent":
+        traj = data.get("trajectory", [])
+        axis.plot([p["step"] for p in traj], [p["loss"] for p in traj], marker="o", color="#4b78c2")
+        axis.set(xlabel="Optimization Step", ylabel="Objective Loss")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "educational_backpropagation":
+        plt.close(figure)
+        nodes = data.get("nodes", [])
+        figure, axis = plt.subplots(figsize=(10, 0.8 + 0.35 * max(1, len(nodes))))
+        axis.axis("off")
+        cols = ["Graph Node", "Forward Value", "Local Gradient"]
+        row_vals = [
+            [
+                n.get("name", ""),
+                f"{float(n.get('forward', 0.0)):.4g}",
+                f"{float(n.get('gradient', 0.0)):.4g}",
+            ]
+            for n in nodes
+        ]
+        _mpl_table(axis, row_vals, cols)
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "dataset_tabular":
+        plt.close(figure)
+        f_stats = data.get("feature_stats", [])[:30]
+        figure, axis = plt.subplots(figsize=(10, 0.8 + 0.35 * max(1, len(f_stats))))
+        axis.axis("off")
+        cols = ["Feature", "Min", "Max", "Mean"]
+        row_vals = [
+            [
+                s.get("feature", ""),
+                f"{s.get('min', 0.0):.4g}",
+                f"{s.get('max', 0.0):.4g}",
+                f"{s.get('mean', 0.0):.4g}",
+            ]
+            for s in f_stats
+        ]
+        _mpl_table(axis, row_vals, cols)
+        return _finish_matplotlib(figure, view)
+    elif view.kind in {"convolution_simulation", "educational_convolution"}:
+        feat_map = data.get("feature_map", data.get("output", []))
+        im = axis.imshow(feat_map, cmap="viridis", interpolation="nearest")
+        figure.colorbar(im, ax=axis, label="Activation")
+        axis.set(xlabel="Output X", ylabel="Output Y")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "attribution":
+        attr = data.get("attribution", [])
+        if attr and isinstance(attr[0], list):
+            im = axis.imshow(attr, cmap="hot", interpolation="nearest")
+            figure.colorbar(im, ax=axis, label="Attribution")
+        else:
+            axis.bar(range(len(attr)), attr, color="#4b78c2")
+            axis.set(xlabel="Feature Index", ylabel="Attribution")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "educational_dropout":
+        outs = data.get("train_outputs", [])
+        axis.bar(range(len(outs)), outs, color="#4b78c2")
+        axis.set(xlabel="Unit Index", ylabel="Activation Value")
+        return _finish_matplotlib(figure, view)
+    elif view.kind == "educational_batch_norm":
+        norm = data.get("normalized", [])
+        axis.plot(norm, marker="o", color="#4b78c2")
+        axis.set(xlabel="Sample Index", ylabel="Standardized Value")
         return _finish_matplotlib(figure, view)
     else:
         plt.close(figure)

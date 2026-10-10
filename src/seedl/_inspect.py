@@ -844,6 +844,55 @@ def _run_model_observation(
                     observation["tensor_shape"] = tuple(int(size) for size in tensor.shape)
                     observation["module_name"] = name
                     observation["module_type"] = type(module).__name__
+
+                    # Diagnostics: dead units and saturation
+                    dead_fraction = 0.0
+                    sat_note = None
+                    if tensor.numel() > 0:
+                        try:
+                            t_flat = tensor.detach().reshape(-1).to(dtype=torch.float32)
+                            t_fin = t_flat[torch.isfinite(t_flat)]
+                            if t_fin.numel() > 0:
+                                zeros = int((t_fin == 0).sum().item())
+                                dead_fraction = zeros / float(t_fin.numel())
+                                mod_lower = type(module).__name__.lower()
+                                if "relu" in mod_lower and dead_fraction > 0.8:
+                                    sat_note = f"{dead_fraction * 100:.1f}% zero/dead units"
+                                elif "sigmoid" in mod_lower:
+                                    s_cnt = int(((t_fin < 0.05) | (t_fin > 0.95)).sum().item())
+                                    if s_cnt / float(t_fin.numel()) > 0.5:
+                                        sat_note = f"{(s_cnt / float(t_fin.numel())) * 100:.1f}% saturated (<0.05 or >0.95)"
+                                elif "tanh" in mod_lower:
+                                    t_cnt = int(((t_fin < -0.95) | (t_fin > 0.95)).sum().item())
+                                    if t_cnt / float(t_fin.numel()) > 0.5:
+                                        sat_note = f"{(t_cnt / float(t_fin.numel())) * 100:.1f}% saturated (<-0.95 or >0.95)"
+                        except Exception:
+                            pass
+                    observation["dead_fraction"] = dead_fraction
+                    observation["saturation_note"] = sat_note
+
+                    # Feature maps for 4D conv tensors (N, C, H, W)
+                    feat_preview = None
+                    if tensor.ndim == 4 and tensor.shape[1] >= 1 and min(tensor.shape[2:]) >= 4:
+                        try:
+                            from ._tensors import make_image_grid
+
+                            t_det = tensor.detach()
+                            num_c = min(int(tensor.shape[1]), 16)
+                            c_slices = []
+                            for c in range(num_c):
+                                s2d = t_det[0, c].to(dtype=torch.float32)
+                                s_min, s_max = float(s2d.min().item()), float(s2d.max().item())
+                                if s_max > s_min:
+                                    norm = ((s2d - s_min) / (s_max - s_min)).cpu().tolist()
+                                else:
+                                    norm = torch.full_like(s2d, 0.5).cpu().tolist()
+                                c_slices.append(norm)
+                            grid, _, _, _ = make_image_grid(c_slices, 1, max_images=16)
+                            feat_preview = grid
+                        except Exception:
+                            pass
+                    observation["feature_maps"] = feat_preview
                 else:
                     old_sample_count = len(observation.pop("sample", []))
                     remaining_sample_points += old_sample_count
@@ -1027,6 +1076,9 @@ def _activation_data(
                 if stats.get("Non-finite values") == 0
                 else f"no ({stats.get('Non-finite values')})",
                 "status": "available",
+                "dead_fraction": observation.get("dead_fraction", 0.0),
+                "saturation_note": observation.get("saturation_note"),
+                "feature_maps": observation.get("feature_maps"),
             }
         )
     notes = [
@@ -1035,6 +1087,16 @@ def _activation_data(
         "Each row shows the first tensor output from that module; repeated uses show the last "
         "observed output. Sample values share a max_points budget across modules.",
     ]
+    dead_layers = [layer["name"] for layer in layers if layer.get("dead_fraction", 0.0) > 0.8]
+    if dead_layers:
+        notes.append(
+            f"Dead unit alert: {len(dead_layers)} layer(s) have >80% inactive zeros: {', '.join(dead_layers[:5])}"
+        )
+    sat_layers = [layer["name"] for layer in layers if layer.get("saturation_note")]
+    if sat_layers:
+        notes.append(
+            f"Saturation detected in {len(sat_layers)} layer(s): {', '.join(sat_layers[:5])}"
+        )
     if not layers:
         notes.append("No tensor outputs were captured for this input.")
     if len(layers) > 20:
@@ -1054,6 +1116,9 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
     remaining_sample_points = max_points
     present = 0
     sparse_count = 0
+    zero_count = 0
+    vanishing_count = 0
+    exploding_count = 0
     for name, parameter in parameters:
         gradient = parameter.grad
         if gradient is None:
@@ -1091,6 +1156,13 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
         _, _, mean, std, max_abs, nonfinite = _torch_statistics(values)
         if nonfinite == 0 and count:
             mean_value, std_value, max_abs_value = mean, std, max_abs
+            if max_abs_value is not None:
+                if max_abs_value == 0.0:
+                    zero_count += 1
+                elif max_abs_value < 1e-7:
+                    vanishing_count += 1
+                elif max_abs_value > 100.0:
+                    exploding_count += 1
         else:
             mean_value = std_value = max_abs_value = None
         layers.append(
@@ -1118,6 +1190,16 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
             "Gradient inspection is read-only and never calls backward() or an optimizer step. "
             "Sample values share a max_points budget across parameters."
         )
+    if vanishing_count > 0:
+        notes.append(
+            f"Vanishing gradients detected: {vanishing_count} parameter tensor(s) have maximum absolute gradient below 1e-7."
+        )
+    if exploding_count > 0:
+        notes.append(
+            f"Exploding gradients detected: {exploding_count} parameter tensor(s) have maximum absolute gradient exceeding 100."
+        )
+    if zero_count > 0:
+        notes.append(f"{zero_count} parameter tensor(s) have all-zero gradients.")
     if sparse_count:
         notes.append(
             "Sparse gradient summaries use stored values; implicit zeros are not included."
@@ -1127,7 +1209,13 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
             "Gradient plots show the first 20 parameter tensors; tables show the first 100."
         )
     return (
-        {"layers": layers},
+        {
+            "layers": layers,
+            "present_count": present,
+            "zero_count": zero_count,
+            "vanishing_count": vanishing_count,
+            "exploding_count": exploding_count,
+        },
         f"Gradients available for {present} of {len(layers)} parameter tensor(s)",
         notes,
     )

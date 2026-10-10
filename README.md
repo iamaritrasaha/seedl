@@ -1,235 +1,263 @@
 # SeeDL
 
-SeeDL is a small Python library for seeing what tensors, models, and training
-metrics are doing. Start with one call:
+SeeDL is a comprehensive, deep-learning-aware visualization and observability framework for Python.
+Start with one simple, effortless call:
 
 ```python
 import seedl as sd
 
 sd.see(tensor)
+sd.see(model)
+sd.see(history)
+sd.see(predictions)
+sd.see(gradients)
 ```
 
-SeeDL picks a useful view, labels the important details, and gives a static SVG
-fallback when an optional plotting package is not installed. In a notebook the
-view renders as the cell output. In a terminal SeeDL prints a concise summary;
-the returned view can also be opened or inspected directly.
+SeeDL determines the nature of supported objects, chooses a meaningful visualization, displays useful diagnostic information automatically, and provides optional interactive exploration. When optional plotting libraries are absent, SeeDL renders self-contained, publication-ready SVGs with zero required third-party dependencies.
 
-## Install
+---
 
-Python 3.10 or newer is supported. The core package uses only the Python
-standard library:
+## Key Capabilities
+
+- **Multidimensional Tensor Explorer:** Scalars, 1D signals, 2D matrices, image tensors (CHW/HWC), batch grids, channel decomposition, memory footprints, and value distributions.
+- **Model Architecture & Shape Tracing:** Clean module hierarchy, parameter counting (trainable vs frozen), shared parameter deduplication, and hook-based shape tracing.
+- **Activations & Feature Maps:** Layer outputs, convolutional feature map grids, saturation diagnostics, and dead unit alerts (>80% inactive zeros in ReLU/GELU).
+- **Gradient Flow Observability:** Observational, non-intrusive parameter gradient inspection, L2 norm metrics, and vanishing (<1e-7) / exploding (>100) / all-zero alerts without modifying model parameters.
+- **Training Observability & Tracking:** Exponential moving average (EMA) smoothing, multi-metric grouping, divergence/plateau/overfitting alerts, lightweight `Tracker` class, and run comparison (`sd.compare`).
+- **Prediction Analysis:** Top-k classification ranking, logit vs probability calibration detection, regression residuals ($y_{pred} - y_{true}$), MAE/MSE/RMSE metrics, and multi-model comparison (`sd.compare_predictions`).
+- **Dataset & DataLoader Inspection:** Bounded inspection of PyTorch `Dataset` and `DataLoader` batches, image tile grids, tabular column distributions, and class frequencies without exhausting streams or downloading full datasets.
+- **CNNs & Transformers:** Exact 2D discrete convolution simulations (kernel, stride, padding, receptive field) and multi-head self-attention heatmaps with query-key token labels and causal mask detection.
+- **Vector Embeddings:** Pairwise cosine similarity matrix and analytical 2D PCA projections with explained variance ratio.
+- **Explainability & Attribution:** Feature attribution using Vanilla Saliency, Integrated Gradients (with interpolation steps), and Grad-CAM for convolutional networks, with strict state and gradient preservation.
+- **Educational Concept Simulations:** Interactive visual simulations of core deep learning concepts via `sd.learn(...)` (Gradient Descent, Backpropagation chain rule, Attention, Activation functions, Loss functions, Dropout, Batch Normalization, and Convolution).
+- **Flexible Export & Multi-Backend:** Built-in SVG fallback (zero dependencies), interactive Plotly figures, static Matplotlib figures, `.save("path.html" | ".svg" | ".png")`, and interactive switching via `.explore()`.
+
+---
+
+## Installation
+
+Python 3.10 or newer is supported. The core package operates purely on the Python standard library:
 
 ```bash
 pip install seedl
 ```
 
-Install support for the libraries you use:
+Install optional dependencies on demand:
 
 ```bash
-pip install "seedl[torch]"       # PyTorch models and tensors
-pip install "seedl[numpy]"       # NumPy arrays
-pip install "seedl[plotly]"      # interactive charts (recommended)
-pip install "seedl[matplotlib]"  # static plotting backend
-pip install "seedl[all]"         # all optional dependencies
+pip install "seedl[torch]"       # PyTorch models, tensors, activations, explainability
+pip install "seedl[numpy]"       # NumPy arrays and fast SVD
+pip install "seedl[plotly]"      # Interactive web visualizations (recommended)
+pip install "seedl[matplotlib]"  # Static plotting and PNG exports
+pip install "seedl[all]"         # All capabilities and backends
 ```
 
-The optional dependencies are imported only when needed. Importing `seedl`
-does not import PyTorch, NumPy, Plotly, or Matplotlib.
+Optional dependencies are imported strictly on demand. Importing `seedl` does not eagerly load PyTorch, NumPy, Plotly, or Matplotlib.
 
-## Quick start
+---
+
+## Quick Start
 
 ```python
 import seedl as sd
 
-sd.see(0.73)
-sd.see([0.9, 0.62, 0.41, 0.28])
-sd.see({"loss": [1.2, 0.8, 0.5], "val_loss": [1.3, 0.9, 0.7]})
+# 1. Visualize a scalar with custom unit / note
+sd.see(0.0035)
+
+# 2. Visualize a numeric sequence or loss signal
+sd.see([1.2, 2.5, 3.1, 2.8, 4.0, 5.2, 4.9])
+
+# 3. Visualize a 2D matrix or correlation table
+matrix = [
+    [1.0, 0.5, 0.2],
+    [0.5, 2.0, 0.8],
+    [0.2, 0.8, 1.5],
+]
+view = sd.see(matrix)
+
+# 4. Export visualization directly to HTML, SVG, or PNG
+view.save("matrix_view.html")
+view.save("matrix_view.svg")
 ```
 
-Each call returns a `Visualization`. In a notebook it is displayed automatically;
-in a normal Python process, use `view.show()` to open the selected figure, or
-`print(view)` for its text summary.
+In a Jupyter/Colab notebook, visualizations render as rich interactive cell outputs. In a terminal, SeeDL displays a concise, informative text summary.
 
-## Tensors and arrays
+---
+
+## Core Workflows
+
+### 1. PyTorch Model Inspection & Shape Tracing
 
 ```python
 import torch
-import seedl as sd
-
-weights = torch.randn(12, 8)
-view = sd.see(weights)
-```
-
-Scalars are shown as values, vectors as line charts, matrices as heatmaps, and
-image-like arrays as image previews. The view includes shape, element count,
-dtype, device, summary statistics, gradient tracking, and non-finite values.
-Large vectors and images are sampled or downsampled for display, with the
-sampling noted in the view. Vector and matrix indices are zero-based and retain
-their original coordinates. The original tensor or array is not modified.
-
-Three-dimensional data is treated as an image only when a leading or trailing
-axis has 1, 3, or 4 channels and both other dimensions are at least 16. Float
-images in `[0, 1]` are displayed as-is; integer images up to 255 are scaled to
-that range. Other image values are scaled for display and the view states that
-assumption. Other higher-dimensional tensors are shown as sampled value
-distributions; SeeDL does not label these as images.
-
-NumPy arrays are supported when NumPy is installed. Core numeric Python values,
-flat sequences, and rectangular nested sequences do not require NumPy.
-
-## Models
-
-```python
 import torch.nn as nn
 import seedl as sd
 
-model = nn.Sequential(nn.Linear(8, 16), nn.ReLU(), nn.Linear(16, 3))
+model = nn.Sequential(
+    nn.Conv2d(3, 16, 3, padding=1),
+    nn.ReLU(),
+    nn.AdaptiveAvgPool2d((4, 4)),
+    nn.Flatten(),
+    nn.Linear(16 * 4 * 4, 10),
+)
+
+# Hierarchy and parameter counts:
 sd.see(model)
-```
 
-Without an example input, SeeDL shows the module hierarchy and per-layer and
-total parameter counts. To record the shapes observed on one input:
-
-```python
-import torch
-
-example = torch.randn(4, 8)
+# Trace tensor shapes across layers with an example input:
+example = torch.randn(2, 3, 32, 32)
 sd.see(model, input=example)
 ```
 
-The input may be a tensor, a tuple of positional inputs, or a dictionary of
-keyword inputs. SeeDL runs one `eval()`-mode forward pass under `no_grad()`,
-clones tensor inputs, removes its temporary hooks, restores each module's
-training flag, and restores ordinary registered-buffer updates from temporary
-copies. Direct storage or dtype manipulation (such as assigning to a buffer's
-`.data`) can defeat that restoration. This pass can still execute user-defined Python code in `forward`; use it only when that
-behavior is safe. This is a module hierarchy, not a traced execution graph.
-Dynamic control flow is represented only for the supplied example. Reused
-modules show the shapes from their last observed call. Keyword input shapes
-are not captured by the input hooks; output shapes are still recorded.
-Per-layer counts include only directly registered parameters. Shared parameters
-can appear in multiple rows, while total counts deduplicate them.
+### 2. Activations and Convolution Feature Maps
 
-## Training history
+Capture layer activations from an input-driven forward pass:
 
 ```python
-history = {
-    "loss": [1.2, 0.8, 0.5, 0.3],
-    "val_loss": [1.3, 0.9, 0.7, 0.8],
-    "accuracy": [0.45, 0.65, 0.78, 0.86],
-    "val_accuracy": [0.42, 0.61, 0.72],
-}
-sd.see(history)
+act_view = sd.activations(model, input=example)
+# act_view includes intermediate stats, feature map grid previews, and dead-unit diagnostics
 ```
 
-Training and validation series are grouped by metric, with epochs on the
-horizontal axis. Missing validation curves and unequal metric lengths are
-supported. You can provide an `"epoch"` or `"epochs"` sequence; if its length
-does not match a metric, that metric uses its index as the horizontal axis.
-Non-finite values appear as gaps. Epoch labels must be finite real numbers.
-Large series use evenly spaced previews that can miss brief spikes; the full
-metric sequences remain in `view.data["metrics"]`. Metric units are not inferred
-or converted (for example, accuracy fractions remain fractions). Curves are
-diagnostic clues, not guarantees about generalization or model quality.
+### 3. Gradient Flow Diagnostics
 
-## Activations and gradients
-
-Capture intermediate outputs with one explicit forward pass:
+Inspect gradients that already exist on a model after `loss.backward()`:
 
 ```python
-view = sd.activations(model, input=example)
+output = model(example).sum()
+output.backward()
+
+grad_view = sd.gradients(model)
+# Warns automatically about vanishing gradients (<1e-7), exploding gradients (>100), or all-zero layers.
 ```
 
-SeeDL captures the first tensor output from each module and shows its shape and
-sampled values. It removes temporary hooks and restores module flags and
-registered buffers after the pass. Reused modules show their last observed
-output. Exact summaries and sampled distributions are distinguished in the view.
+### 4. Training Observability and Experiment Tracking
 
-Inspect gradients that already exist after your own backward pass:
+Track metrics during training with the lightweight `Tracker`:
 
 ```python
-# Example scalar loss; use your task's own loss during training.
-loss = model(example).square().mean()
-loss.backward()
-sd.gradients(model)
+tracker = sd.watch(name="baseline_run")
+
+for epoch in range(1, 11):
+    # ... training step ...
+    tracker.log(epoch=epoch, loss=train_loss, val_loss=val_loss, accuracy=acc)
+
+# Visualize training curves with exponential moving average (EMA) smoothing:
+sd.see(tracker)
+
+# Compare two runs side by side:
+sd.compare(run_a_history, run_b_history, names=("SGD", "AdamW"))
 ```
 
-This view reports per-parameter gradient summaries. It never runs
-`backward()` or an optimizer step. Parameters with no gradient are called out.
-
-## Backends and views
-
-`backend="auto"` uses Plotly when installed and otherwise the built-in SVG
-renderer. Choose a backend explicitly when needed:
+### 5. Prediction Inspection & Error Residuals
 
 ```python
-view = sd.see(weights, backend="plotly")
-static_view = sd.see(weights, backend="svg")
-matplotlib_view = sd.see(weights, backend="matplotlib")
+# Multiclass classification: Top-k ranking and probability calibration:
+logits = [2.4, 0.2, -1.5, 0.9]
+labels = ["cat", "dog", "bird", "fish"]
+sd.predictions(logits, labels=labels, task="classification")
+
+# Regression: Residual error analysis, MAE, MSE, RMSE:
+sd.predictions(y_pred, targets=y_true, task="regression")
+
+# Model prediction agreement / disagreement comparison:
+sd.compare_predictions(preds_model_a, preds_model_b, labels=labels)
 ```
 
-`interactive=True` selects Plotly and gives an install hint if Plotly is
-missing. The returned `Visualization` exposes `kind`, `title`, `summary`,
-`metadata`, `notes`, `data`, `figure`, `to_figure(backend=...)`, and `show()`.
-The built-in SVG view works without a plotting library.
+### 6. Dataset & DataLoader Batch Inspection
 
-## Limits and troubleshooting
+Safely preview a dataset or DataLoader batch without exhausting generators:
 
-- Complex tensors and arrays are not supported yet. Split real and imaginary
-  components before visualizing them.
-- Quantized PyTorch tensors are not supported yet. Call `tensor.dequantize()`
-  before visualizing one.
-- An input-dependent model view requires PyTorch and an explicit `input=`.
-- Model inspection and activation capture execute the supplied model's forward
-  method. They cannot sandbox arbitrary custom Python side effects. Standard
-  layers leave parameters and existing gradients unchanged, but custom code can
-  mutate parameters, gradients, non-tensor inputs, Python attributes, files, or
-  random-number-generator state. Those effects are not restored. Inspect
-  unfamiliar models without `input=` first.
-- Forward inspection temporarily copies tensor inputs and registered buffers;
-  memory use includes those copies and the model's normal forward allocations.
-  `max_points` limits rendered samples, not forward-pass memory or execution time.
-- Activation and gradient samples share a budget across modules or parameters.
-  Small budgets can leave some rows without samples; exact summaries still
-  appear. Tables show the first 100 rows. Plotly activation plots and gradient
-  plots show the first 20 rows. Full rows remain in `view.data["layers"]`.
-- SVG tables shorten long labels with full text in hover titles. On narrow
-  notebook outputs, horizontal scrolling preserves a minimum readable width.
-- Plotly and Matplotlib raise an actionable optional-dependency error if they
-  are explicitly selected but unavailable.
-- Exact statistics scan the full tensor or array in bounded chunks; on a GPU the
-  reductions can synchronize with the device. Vector/distribution samples,
-  matrix cells, image pixels, and each history series are capped by `max_points`
-  (default 2,048). RGB/RGBA pixels contain three/four components each. Matrix
-  previews also cap each dimension at 80, images at 128. Plain Python sequences
-  and histories are validated in full and can require full-size Python copies.
-  Statistics are unavailable when any non-finite values are present; plots can
-  still show the finite portion. Sparse summaries exclude implicit zeros.
-  Floating-point reductions can round very large integers (above `2**53`);
-  these views are diagnostic summaries, not arbitrary-precision calculations.
-- TensorFlow/Keras adapters, attention maps, convolution filters, graph tracing,
-  and exported reports are planned, not implemented in this release.
+```python
+from torch.utils.data import DataLoader
 
-## Development
+loader = DataLoader(my_dataset, batch_size=16)
+sd.dataset(loader)  # Automatically shows tiled image grid or tabular feature summaries
+```
+
+### 7. Feature Attribution & Explainability
+
+Inspect which input features influenced a model's prediction:
+
+```python
+# Saliency maps (input gradient sensitivity):
+sd.explain(model, input=sample, method="saliency")
+
+# Integrated Gradients (path-integrated attribution satisfying completeness):
+sd.explain(model, input=sample, method="integrated_gradients", steps=25)
+
+# Grad-CAM (coarse spatial activation mapping for convnets):
+sd.explain(conv_model, input=sample_image, method="grad_cam")
+```
+
+*Guaranteed state safety:* `sd.explain` preserves original model training flags, temporary hooks, and pre-existing parameter gradients.
+
+### 8. Convolution & Transformer Attention
+
+```python
+# Exact 2D discrete cross-correlation simulation with arithmetic:
+sd.convolution(image=my_image, kernel=sobel_kernel, stride=1, padding=1)
+
+# Multi-head attention heatmaps with query/key token alignment:
+sd.attention(attention_matrix, tokens=["The", "model", "learns", "fast"])
+```
+
+### 9. Vector Embeddings & PCA
+
+```python
+# Pairwise cosine similarity matrix and analytical 2D PCA projection:
+sd.embeddings(embedding_vectors, labels=["doc_1", "doc_2", "query_1"])
+```
+
+### 10. Educational Concept Simulations (`sd.learn`)
+
+Explore fundamental deep learning mechanisms interactively:
+
+```python
+sd.learn("gradient_descent", lr=0.15, steps=12)
+sd.learn("backpropagation")
+sd.learn("attention")
+sd.learn("activation_functions")
+sd.learn("loss_functions")
+sd.learn("dropout", p=0.5)
+sd.learn("batch_norm")
+sd.learn("convolution")
+```
+
+---
+
+## Visualization Views & Export
+
+Every SeeDL operation returns a `Visualization` instance:
+
+```python
+view = sd.see(obj)
+
+# Switch to interactive Plotly exploration mode:
+fig = view.explore()
+
+# Export to standalone files:
+view.save("report.html")  # Self-contained HTML with embedded graphics
+view.save("figure.svg")  # Clean vector SVG
+view.save("figure.png")  # Raster PNG via Matplotlib
+```
+
+---
+
+## Development & Verification
+
+Run the test suite and quality checks:
 
 ```bash
 uv sync --extra dev --extra all
-uv run --extra dev --extra all pytest
-uv run --extra dev ruff check .
-uv run --extra dev mypy src/seedl
-uv lock --check
-git diff --check
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy src/seedl
 uv build
 ```
 
-The automated tests do not need a GPU, display server, or network. Tests for
-optional packages run only when those packages are installed.
+---
 
-## Project status and license
+## License
 
-SeeDL is an early, functional MVP. Its stable starting point is `sd.see()` and
-the returned `Visualization`; its limitations are listed above. Contributions
-that improve correctness, readability, and the beginner's path from a picture
-to a useful interpretation are welcome.
-
-Released under the MIT License. See [LICENSE](LICENSE).
+Released under the [MIT License](LICENSE).

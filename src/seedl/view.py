@@ -60,6 +60,28 @@ class Visualization:
         else:
             print(self)
 
+    def save(self, filepath: str | Any, *, format: str | None = None) -> Any:
+        """Export the visualization to an HTML, SVG, or PNG file.
+
+        Supported extensions: ``.html``, ``.svg``, ``.png``.
+        """
+        from ._export import save_visualization
+
+        return save_visualization(self, filepath, format=format)
+
+    def explore(self) -> Any:
+        """Switch to interactive Plotly mode and return or display the figure."""
+        try:
+            import importlib.util
+
+            if importlib.util.find_spec("plotly"):
+                self.backend = "plotly"
+                self._cached_figure = None
+                return self.figure
+        except Exception:
+            pass
+        return self.figure
+
     def __str__(self) -> str:
         details = [f"{self.title}: {self.summary}"]
         if self.metadata:

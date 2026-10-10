@@ -529,11 +529,6 @@ def plotly_network(view: Any) -> Any:
     overview_y[idx_outgoing] = []
     overview_y[idx_selected_node] = []
 
-    overview_text = [getattr(t, "text", []) for t in figure.data]
-    overview_text[idx_incoming] = []
-    overview_text[idx_outgoing] = []
-    overview_text[idx_selected_node] = []
-
     overview_visible = [
         t.meta.get("role") not in ("highlight_incoming", "highlight_outgoing", "highlight_node")
         for t in figure.data
@@ -556,7 +551,6 @@ def plotly_network(view: Any) -> Any:
         opacity=overview_opacities,
         x=overview_x,
         y=overview_y,
-        text=overview_text,
         visible=overview_visible,
     )
     if spatial:
@@ -574,7 +568,17 @@ def plotly_network(view: Any) -> Any:
         )
     ]
 
-    for n in graph["nodes"]:
+    # For compact models (<= 36 nodes), provide buttons for all individual neurons.
+    # For large models (> 36 nodes), provide Overview and the selected neuron (if chosen),
+    # preventing megabytes of redundant trace coordinate payloads across 80+ buttons.
+    if len(graph["nodes"]) <= 36:
+        nodes_for_buttons = graph["nodes"]
+    elif selected_node is not None:
+        nodes_for_buttons = [selected_node]
+    else:
+        nodes_for_buttons = []
+
+    for n in nodes_for_buttons:
         n_in_x, n_in_y, n_in_z, n_in_text = _edge_line_coords(n.get("incoming_edges", []))
         n_out_x, n_out_y, n_out_z, n_out_text = _edge_line_coords(n.get("outgoing_edges", []))
         n_opacities = []
@@ -604,11 +608,6 @@ def plotly_network(view: Any) -> Any:
         n_y[idx_outgoing] = n_out_y
         n_y[idx_selected_node] = [n["y3"] if spatial else n["y"]]
 
-        n_text = list(overview_text)
-        n_text[idx_incoming] = n_in_text
-        n_text[idx_outgoing] = n_out_text
-        n_text[idx_selected_node] = [html.escape(_node_text(n, graph)).replace("\n", "<br>")]
-
         n_vis = list(overview_visible)
         n_vis[idx_incoming] = bool(n_in_x)
         n_vis[idx_outgoing] = bool(n_out_x)
@@ -634,7 +633,6 @@ def plotly_network(view: Any) -> Any:
             opacity=n_opacities,
             x=n_x,
             y=n_y,
-            text=n_text,
             visible=n_vis,
         )
         if spatial:
@@ -654,23 +652,26 @@ def plotly_network(view: Any) -> Any:
 
     active_idx = 0
     if selected_id:
-        node_ids = [n["id"] for n in graph["nodes"]]
-        if selected_id in node_ids:
-            active_idx = 1 + node_ids.index(selected_id)
+        button_node_ids = [n["id"] for n in nodes_for_buttons]
+        if selected_id in button_node_ids:
+            active_idx = 1 + button_node_ids.index(selected_id)
 
-    neuron_menu = dict(
-        type="dropdown",
-        direction="down",
-        active=active_idx,
-        buttons=neuron_buttons,
-        x=0.28 if spatial else 0.0,
-        y=1.09,
-        xanchor="left",
-        yanchor="top",
-        bgcolor=bg,
-        bordercolor=border,
-        font=dict(size=11, color=fg),
-    )
+    show_neuron_menu = len(neuron_buttons) > 1 or has_selection
+    neuron_menu: dict[str, Any] | None = None
+    if show_neuron_menu:
+        neuron_menu = dict(
+            type="dropdown",
+            direction="down",
+            active=active_idx,
+            buttons=neuron_buttons,
+            x=0.28 if spatial else 0.0,
+            y=1.09,
+            xanchor="left",
+            yanchor="top",
+            bgcolor=bg,
+            bordercolor=border,
+            font=dict(size=11, color=fg),
+        )
 
     subtitle = graph["caption"]
     if graph["sampled"]:
@@ -744,11 +745,11 @@ def plotly_network(view: Any) -> Any:
                         ),
                     ],
                 ),
-                neuron_menu,
+                *([neuron_menu] if neuron_menu is not None else []),
             ],
         )
     else:
-        figure.update_layout(updatemenus=[neuron_menu])
+        figure.update_layout(updatemenus=[neuron_menu] if neuron_menu is not None else [])
         figure.update_xaxes(
             visible=False, range=[-1.2, (len(graph["layers"]) - 1) * 3.5 + 1.2], fixedrange=False
         )

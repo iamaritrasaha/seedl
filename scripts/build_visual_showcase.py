@@ -230,10 +230,6 @@ nbformat.validate(notebook)
 NotebookClient(
     notebook, timeout=180, kernel_name="python3", resources={"metadata": {"path": str(ROOT)}}
 ).execute()
-path = ROOT / "examples" / "neural_network_explorer.ipynb"
-nbformat.write(notebook, path)
-# nbconvert does not natively render Plotly MIME; give the HTML preview real figures.
-
 preview = copy.deepcopy(notebook)
 first_plot = True
 for cell in preview.cells:
@@ -254,4 +250,17 @@ body = body.replace(
     "</head>", "<style>pre{white-space:pre-wrap!important;overflow-wrap:anywhere}</style></head>"
 )
 (DEST / "showcase.html").write_text(body, encoding="utf-8")
+
+# For the version-controlled notebook in examples/, retain clean outputs and
+# metadata while stripping heavyweight Plotly MIME payloads. Heavyweight
+# interactive visualizations are preserved as generated artifacts in docs/visuals/
+# (individual .html files and showcase.html), keeping the git repository compact.
+for cell in notebook.cells:
+    if cell.get("cell_type") == "code":
+        for output in cell.get("outputs", []):
+            if "data" in output:
+                output["data"].pop("application/vnd.plotly.v1+json", None)
+
+path = ROOT / "examples" / "neural_network_explorer.ipynb"
+nbformat.write(notebook, path)
 print(f"Executed {sum(c.cell_type == 'code' for c in notebook.cells)} cells: {path}")

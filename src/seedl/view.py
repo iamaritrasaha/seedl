@@ -90,6 +90,9 @@ class Visualization:
             pass
         return self.figure
 
+    def __repr__(self) -> str:
+        return f"Visualization(kind={self.kind!r}, title={self.title!r}, summary={self.summary!r})"
+
     def __str__(self) -> str:
         details = [f"{self.title}: {self.summary}"]
         if self.metadata:
@@ -107,7 +110,9 @@ class Visualization:
                 if isinstance(bundle, tuple):
                     bundle = bundle[0]
                 if isinstance(bundle, dict) and bundle:
-                    return bundle
+                    res = dict(bundle)
+                    res["text/plain"] = str(self)
+                    return res
             if hasattr(figure, "_repr_html_"):
                 html = figure._repr_html_()
                 if html:

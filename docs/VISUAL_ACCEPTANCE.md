@@ -31,16 +31,22 @@ and the Codex in-app browser. No publishing workflow or release version was chan
 - 3D PCA scatter with category coloring, bounded sampling and variance reporting.
 - Bounded 3D loss Surface with explicitly named parameter coordinates, evaluation consent,
   state isolation, and optional user-supplied slice trajectory.
-- Offline self-contained Plotly HTML exports. Large generated HTML files are ignored by
-  Git and reproducible from the checked-in notebook builder; screenshots, SVGs and the
-  executed notebook remain reviewable artifacts.
+- Offline self-contained Plotly HTML exports: Large generated interactive HTML files
+  (`docs/visuals/*.html` and `docs/visuals/showcase.html`) are reproducible from the checked-in
+  notebook builder (`scripts/build_visual_showcase.py`) and ignored by Git.
+- Lightweight version-controlled notebook: `examples/neural_network_explorer.ipynb` (~30 KB)
+  preserves all demonstration code, mathematical explanations, and clean textual outputs without
+  duplicating heavyweight Plotly MIME payloads in Git. Any developer can execute it from top to bottom
+  in a clean environment.
+- Committed visual artifacts: Useful SVGs (`docs/visuals/*.svg`, including `neuron-selected.svg`)
+  and representative screenshots (`docs/visuals/*.jpg`) remain tracked in version control for immediate visual inspection.
 
 ## Visual and interaction evidence
 
-The notebook was executed top-to-bottom (12 code cells), retained Plotly MIME outputs,
-and converted into an HTML preview with embedded Plotly figures. Its title/setup and first
-rendered figure were inspected; each visualization family was also opened directly as its
-exported HTML/SVG in the real browser.
+The visual test harness was executed top-to-bottom (15 code cells) via `scripts/build_visual_showcase.py`
+in a real Jupyter kernel. During execution, it tests numerical and structural assertions, captures all
+interactive figures, and compiles `docs/visuals/showcase.html` with real embedded Plotly figures. Each
+visualization was also opened directly as its exported HTML/SVG in the browser.
 
 | Example | Evidence and observation |
 | --- | --- |

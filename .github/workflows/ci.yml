@@ -36,6 +36,11 @@ jobs:
         with:
           python-version: "3.10"
 
+      - name: Verify active Python interpreter version
+        run: |
+          python --version
+          uv run python -c "import sys; print('uv python interpreter:', sys.version)"
+
       - name: Verify lockfile consistency
         run: uv lock --check
 
@@ -80,6 +85,11 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      - name: Verify active Python interpreter version
+        run: |
+          python --version
+          uv run python -c "import sys; print('uv python interpreter:', sys.version)"
+
       - name: Install dependencies with all extras
         run: uv sync --extra dev --extra all
 
@@ -121,6 +131,11 @@ jobs:
         uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
         with:
           python-version: "3.10"
+
+      - name: Verify active Python interpreter version
+        run: |
+          python --version
+          uv run python -c "import sys; print('uv python interpreter:', sys.version)"
 
       - name: Build distributions
         run: uv build --no-sources

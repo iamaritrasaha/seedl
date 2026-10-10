@@ -16,7 +16,14 @@ and the Codex in-app browser. No publishing workflow or release version was chan
 - Plotly 2D and real Scatter3d 3D, light/dark themes, deterministic layer layouts,
   signed/magnitude-weighted edges, SVG fallback and Matplotlib 2D compatibility.
 - Captured forward-pass exploration via an operational layer slider with backward selection
-  and Reset. No additional forward/backward calls during exploration.
+  and Reset, plus animated playback (**▶ Play**, **⏸ Pause**, **⏮ Reset**) with speed controls
+  (**0.5x**, **1x**, **2x**). No additional forward/backward calls during exploration.
+- Interactive neuron selection and inspection: isolate any neuron via `select_neuron=(layer, idx)`
+  or the in-plot dropdown menu; incoming connections highlight in cyan, outgoing connections highlight
+  in amber, unrelated edges dim, and a dedicated inspection panel displays exact layer identity, operation,
+  bias, trainability, activation, pre-activation, and parameter gradients.
+- SVG neuron selection support with cyan incoming and amber outgoing connections, outer highlight ring,
+  and footer inspection summary.
 - Sequential CNN operation blocks with channels/kernel/stride and observed tensor shapes.
   Transformer/custom/residual modules use an explicitly labeled containment hierarchy.
 - Bounded edge sampling/filtering; architecture collapse before weight extraction for
@@ -63,7 +70,7 @@ and [3D camera controls](https://plotly.com/python/3d-camera-controls/).
 
 ## Verification
 
-Baseline: **118 passed, 1 skipped**. Final: **148 passed, 1 skipped** (149 collected).
+Baseline: **118 passed, 1 skipped**. Latest: **181 passed, 1 skipped** (182 collected).
 The skip is the existing CUDA/ROCm-only test because this execution has no available accelerator.
 All existing tests were retained.
 

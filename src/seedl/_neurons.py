@@ -69,6 +69,39 @@ def _number(value: Any) -> float | None:
     return number if math.isfinite(number) else None
 
 
+def _normalize_select_neuron(select_neuron: Any, widths: list[int]) -> str | None:
+    if select_neuron is None:
+        return None
+    if isinstance(select_neuron, (tuple, list)) and len(select_neuron) == 2:
+        layer_val, neuron_val = select_neuron
+        if isinstance(layer_val, bool) or isinstance(neuron_val, bool):
+            raise ValueError(f"select_neuron indices must be integers, got {select_neuron!r}.")
+        if not isinstance(layer_val, int) or not isinstance(neuron_val, int):
+            raise ValueError(f"select_neuron indices must be integers, got {select_neuron!r}.")
+        layer_idx, neuron_idx = layer_val, neuron_val
+    elif isinstance(select_neuron, str) and ":" in select_neuron:
+        parts = select_neuron.strip().split(":")
+        if len(parts) != 2 or not parts[0].isdigit() or not parts[1].isdigit():
+            raise ValueError(
+                f"select_neuron string must be formatted as 'layer:neuron', got {select_neuron!r}."
+            )
+        layer_idx, neuron_idx = int(parts[0]), int(parts[1])
+    else:
+        raise ValueError(
+            f"select_neuron must be (layer_idx, neuron_idx) or 'layer:neuron', got {select_neuron!r}."
+        )
+
+    if not 0 <= layer_idx < len(widths):
+        raise ValueError(
+            f"select_neuron layer index {layer_idx} is out of bounds (model has {len(widths)} layers: 0..{len(widths) - 1})."
+        )
+    if not 0 <= neuron_idx < widths[layer_idx]:
+        raise ValueError(
+            f"select_neuron neuron index {neuron_idx} is out of bounds for layer {layer_idx} (width: {widths[layer_idx]})."
+        )
+    return f"{layer_idx}:{neuron_idx}"
+
+
 def inspect_visual_model(
     model: Any,
     example_input: Any,
@@ -82,6 +115,7 @@ def inspect_visual_model(
     min_weight: float,
     edge_opacity: float,
     detail: str,
+    select_neuron: tuple[int, int] | str | None = None,
 ) -> tuple[dict[str, Any], dict[str, Any], list[str]]:
     import torch
 
@@ -104,6 +138,9 @@ def inspect_visual_model(
                 sample=sample,
                 dimensions=3 if view == "3d" else 2,
                 edge_opacity=edge_opacity,
+                selected_neuron=_normalize_select_neuron(select_neuron, widths)
+                if select_neuron is not None
+                else None,
             )
     elif view in {"neurons", "3d"}:
         reason = "Neuron wiring unavailable: requires exact Linear/Sequential layers with supported activations and no custom hooks. Showing architecture."
@@ -262,6 +299,8 @@ def _build_graph(
                 bias_trainable=bool(module.bias.requires_grad)
                 if module is not None and module.bias is not None
                 else None,
+                incoming_edges=[],
+                outgoing_edges=[],
             )
             current.append(node)
             nodes.append(node)
@@ -324,8 +363,17 @@ def _build_graph(
                 )
             )
         offset += size
+
+    node_map = {n["id"]: n for n in nodes}
+    for edge in edges:
+        if edge["target"] in node_map:
+            node_map[edge["target"]]["incoming_edges"].append(edge)
+        if edge["source"] in node_map:
+            node_map[edge["source"]]["outgoing_edges"].append(edge)
+
     return dict(
         nodes=nodes,
+        node_map=node_map,
         layers=layers,
         edges=edges,
         widths=widths,

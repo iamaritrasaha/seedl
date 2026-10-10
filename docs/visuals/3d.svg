@@ -366,120 +366,120 @@ Weight gradient: unavailable (missing)</title></line><line x1="585.0" y1="430.0"
 Weight: -0.25727
 Parameter: 4.weight [destination, source]
 Trainable: True
-Weight gradient: unavailable (missing)</title></line><circle cx="85.0" cy="270.0" r="16" fill="#101827"/><circle cx="85.0" cy="270.0" r="13" fill="rgb(163,208,214)" stroke="#e5edf7" stroke-width="0.5"><title>Input · neuron 0 · sample 0
+Weight gradient: unavailable (missing)</title></line><circle cx="85.0" cy="270.0" r="16" fill="#101827"/><circle cx="85.0" cy="270.0" r="13" fill="rgb(163,208,214)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Input · neuron 0 · sample 0
 Input feature: 0.3 (available)
-Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="85.0" cy="310.0" r="16" fill="#101827"/><circle cx="85.0" cy="310.0" r="13" fill="rgb(59,170,171)" stroke="#e5edf7" stroke-width="0.5"><title>Input · neuron 1 · sample 0
+Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="85.0" cy="310.0" r="16" fill="#101827"/><circle cx="85.0" cy="310.0" r="13" fill="rgb(59,170,171)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Input · neuron 1 · sample 0
 Input feature: 0.8 (available)
-Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="85.0" cy="350.0" r="16" fill="#101827"/><circle cx="85.0" cy="350.0" r="13" fill="rgb(225,208,212)" stroke="#e5edf7" stroke-width="0.5"><title>Input · neuron 2 · sample 0
+Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="85.0" cy="350.0" r="16" fill="#101827"/><circle cx="85.0" cy="350.0" r="13" fill="rgb(225,208,212)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Input · neuron 2 · sample 0
 Input feature: -0.2 (available)
-Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="85.0" cy="390.0" r="16" fill="#101827"/><circle cx="85.0" cy="390.0" r="13" fill="rgb(17,155,154)" stroke="#e5edf7" stroke-width="0.5"><title>Input · neuron 3 · sample 0
+Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="85.0" cy="390.0" r="16" fill="#101827"/><circle cx="85.0" cy="390.0" r="13" fill="rgb(17,155,154)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Input · neuron 3 · sample 0
 Input feature: 1 (available)
-Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="335.0" cy="190.0" r="16" fill="#101827"/><circle cx="335.0" cy="190.0" r="13" fill="rgb(221,229,238)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 0 · sample 0
+Input features have no bias or parameter gradient.</title></circle><text x="103.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="335.0" cy="190.0" r="16" fill="#101827"/><circle cx="335.0" cy="190.0" r="13" fill="rgb(221,229,238)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 0 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0.021218 (available)
 Pre-activation: 0.021218
 Bias: 0.12665
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="193.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="335.0" cy="230.0" r="16" fill="#101827"/><circle cx="335.0" cy="230.0" r="13" fill="rgb(201,222,230)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 1 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="193.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="335.0" cy="230.0" r="16" fill="#101827"/><circle cx="335.0" cy="230.0" r="13" fill="rgb(201,222,230)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 1 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0.11727 (available)
 Pre-activation: 0.11727
 Bias: 0.069073
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="233.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="335.0" cy="270.0" r="16" fill="#101827"/><circle cx="335.0" cy="270.0" r="13" fill="rgb(128,196,200)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 2 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="233.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="335.0" cy="270.0" r="16" fill="#101827"/><circle cx="335.0" cy="270.0" r="13" fill="rgb(128,196,200)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 2 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0.46429 (available)
 Pre-activation: 0.46429
 Bias: 0.24373
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="335.0" cy="310.0" r="16" fill="#101827"/><circle cx="335.0" cy="310.0" r="13" fill="rgb(219,229,237)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 3 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="335.0" cy="310.0" r="16" fill="#101827"/><circle cx="335.0" cy="310.0" r="13" fill="rgb(219,229,237)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 3 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0.030592 (available)
 Pre-activation: 0.030592
 Bias: 0.45922
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="335.0" cy="350.0" r="16" fill="#101827"/><circle cx="335.0" cy="350.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 4 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="335.0" cy="350.0" r="16" fill="#101827"/><circle cx="335.0" cy="350.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 4 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.8729
 Bias: -0.11126
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">4</text><circle cx="335.0" cy="390.0" r="16" fill="#101827"/><circle cx="335.0" cy="390.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 5 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">4</text><circle cx="335.0" cy="390.0" r="16" fill="#101827"/><circle cx="335.0" cy="390.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 5 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.089743
 Bias: -0.27855
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">5</text><circle cx="335.0" cy="430.0" r="16" fill="#101827"/><circle cx="335.0" cy="430.0" r="13" fill="rgb(223,230,239)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 6 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">5</text><circle cx="335.0" cy="430.0" r="16" fill="#101827"/><circle cx="335.0" cy="430.0" r="13" fill="rgb(223,230,239)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 6 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0.0077143 (available)
 Pre-activation: 0.0077143
 Bias: -0.1258
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="433.0" fill="#a5b5ce" font-size="10" text-anchor="start">6</text><circle cx="335.0" cy="470.0" r="16" fill="#101827"/><circle cx="335.0" cy="470.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 1 · neuron 7 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="433.0" fill="#a5b5ce" font-size="10" text-anchor="start">6</text><circle cx="335.0" cy="470.0" r="16" fill="#101827"/><circle cx="335.0" cy="470.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 1 · neuron 7 · sample 0
 Module: 0
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.43369
 Bias: -0.30474
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="473.0" fill="#a5b5ce" font-size="10" text-anchor="start">7</text><circle cx="585.0" cy="230.0" r="16" fill="#101827"/><circle cx="585.0" cy="230.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 0 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="353.0" y="473.0" fill="#a5b5ce" font-size="10" text-anchor="start">7</text><circle cx="585.0" cy="230.0" r="16" fill="#101827"/><circle cx="585.0" cy="230.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 0 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.075972
 Bias: 0.019659
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="233.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="585.0" cy="270.0" r="16" fill="#101827"/><circle cx="585.0" cy="270.0" r="13" fill="rgb(195,220,228)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 1 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="233.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="585.0" cy="270.0" r="16" fill="#101827"/><circle cx="585.0" cy="270.0" r="13" fill="rgb(195,220,228)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 1 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0.14518 (available)
 Pre-activation: 0.14518
 Bias: 0.30801
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="585.0" cy="310.0" r="16" fill="#101827"/><circle cx="585.0" cy="310.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 2 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="273.0" fill="#a5b5ce" font-size="10" text-anchor="start">1</text><circle cx="585.0" cy="310.0" r="16" fill="#101827"/><circle cx="585.0" cy="310.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 2 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.16732
 Bias: -0.24963
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="585.0" cy="350.0" r="16" fill="#101827"/><circle cx="585.0" cy="350.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 3 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">2</text><circle cx="585.0" cy="350.0" r="16" fill="#101827"/><circle cx="585.0" cy="350.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 3 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.31009
 Bias: -0.21082
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="585.0" cy="390.0" r="16" fill="#101827"/><circle cx="585.0" cy="390.0" r="13" fill="rgb(201,222,230)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 4 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="353.0" fill="#a5b5ce" font-size="10" text-anchor="start">3</text><circle cx="585.0" cy="390.0" r="16" fill="#101827"/><circle cx="585.0" cy="390.0" r="13" fill="rgb(201,222,230)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 4 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0.11371 (available)
 Pre-activation: 0.11371
 Bias: 0.15974
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">4</text><circle cx="585.0" cy="430.0" r="16" fill="#101827"/><circle cx="585.0" cy="430.0" r="13" fill="rgb(225,231,240)" stroke="#e5edf7" stroke-width="0.5"><title>Hidden 2 · neuron 5 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="393.0" fill="#a5b5ce" font-size="10" text-anchor="start">4</text><circle cx="585.0" cy="430.0" r="16" fill="#101827"/><circle cx="585.0" cy="430.0" r="13" fill="rgb(225,231,240)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Hidden 2 · neuron 5 · sample 0
 Module: 2
 Operation: z = W @ a + b → ReLU()
 Activation: 0 (available)
 Pre-activation: -0.091735
 Bias: -0.019003
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="433.0" fill="#a5b5ce" font-size="10" text-anchor="start">5</text><circle cx="835.0" cy="310.0" r="16" fill="#101827"/><circle cx="835.0" cy="310.0" r="13" fill="rgb(167,210,216)" stroke="#e5edf7" stroke-width="0.5"><title>Output · neuron 0 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="603.0" y="433.0" fill="#a5b5ce" font-size="10" text-anchor="start">5</text><circle cx="835.0" cy="310.0" r="16" fill="#101827"/><circle cx="835.0" cy="310.0" r="13" fill="rgb(167,210,216)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Output · neuron 0 · sample 0
 Module: 4
 Operation: z = W @ a + b
 Activation: 0.27719 (available)
 Pre-activation: 0.27719
 Bias: 0.29719
 Weight trainable: True · bias trainable: True
-Bias gradient: unavailable (missing)</title></circle><text x="853.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="835.0" cy="350.0" r="16" fill="#101827"/><circle cx="835.0" cy="350.0" r="13" fill="rgb(225,208,212)" stroke="#e5edf7" stroke-width="0.5"><title>Output · neuron 1 · sample 0
+Bias gradient: unavailable (missing)</title></circle><text x="853.0" y="313.0" fill="#a5b5ce" font-size="10" text-anchor="start">0</text><circle cx="835.0" cy="350.0" r="16" fill="#101827"/><circle cx="835.0" cy="350.0" r="13" fill="rgb(225,208,212)" fill-opacity="1.0" stroke="#e5edf7" stroke-opacity="1.0" stroke-width="0.5"><title>Output · neuron 1 · sample 0
 Module: 4
 Operation: z = W @ a + b
 Activation: -0.19861 (available)

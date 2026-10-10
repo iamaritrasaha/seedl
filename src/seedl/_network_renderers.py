@@ -127,6 +127,89 @@ def _step_text(graph: dict[str, Any], index: int) -> str:
     )
 
 
+def _neuron_detail_card(node: dict[str, Any] | None, graph: dict[str, Any]) -> str:
+    if node is None:
+        return _footer(graph) + (
+            "<br>Dotted outlines mark layer planes, not connections."
+            if graph.get("dimensions") == 3
+            else ""
+        )
+    layer = graph["layers"][node["layer"]]
+    heading = (
+        f"<b>NEURON INSPECTION: {layer['label']} · Neuron #{node['index']}</b> (id: {node['id']})"
+    )
+    if graph.get("captured"):
+        heading += f" · Sample {graph['sample']}"
+
+    lines = [heading]
+    mod_name = layer["module"]
+    op_str = html.escape(_operation(layer))
+    lines.append(f"<b>Module:</b> {mod_name} · <b>Operation:</b> {op_str}")
+
+    details = []
+    if node["layer"] == 0:
+        act_val = _fmt(node.get("activation"))
+        details.append(
+            f"<b>Input feature:</b> {act_val} ({node.get('activation_status', 'not captured')})"
+        )
+        details.append("No bias or parameter gradients (input features)")
+    else:
+        act_val = _fmt(node.get("activation"))
+        pre_val = _fmt(node.get("preactivation"))
+        bias_val = _fmt(node.get("bias"))
+        bias_tr = (
+            "trainable"
+            if node.get("bias_trainable")
+            else "frozen"
+            if node.get("bias_trainable") is False
+            else "none"
+        )
+        grad_val = _fmt(node.get("gradient"))
+        grad_st = node.get("gradient_status", "missing")
+
+        details.append(
+            f"<b>Activation:</b> {act_val} ({node.get('activation_status', 'not captured')})"
+        )
+        details.append(f"<b>Pre-activation:</b> {pre_val}")
+        details.append(f"<b>Bias:</b> {bias_val} ({bias_tr})")
+        details.append(f"<b>Bias grad:</b> {grad_val} ({grad_st})")
+    lines.append(" · ".join(details))
+
+    # Incoming connections
+    in_edges = node.get("incoming_edges", [])
+    if in_edges:
+        in_strs = []
+        for e in in_edges[:6]:
+            w_str = f"w={e['weight']:+.3g}"
+            if e.get("gradient") is not None:
+                w_str += f", ∇={e['gradient']:+.2g}"
+            in_strs.append(f"[{e['source']}] {w_str}")
+        in_desc = f"<b>Incoming ({len(in_edges)}):</b> " + ", ".join(in_strs)
+        if len(in_edges) > 6:
+            in_desc += f", … (+{len(in_edges) - 6} more; hover for each)"
+    else:
+        in_desc = "<b>Incoming:</b> None (input features)"
+    lines.append(in_desc)
+
+    # Outgoing connections
+    out_edges = node.get("outgoing_edges", [])
+    if out_edges:
+        out_strs = []
+        for e in out_edges[:6]:
+            w_str = f"w={e['weight']:+.3g}"
+            if e.get("gradient") is not None:
+                w_str += f", ∇={e['gradient']:+.2g}"
+            out_strs.append(f"[{e['target']}] {w_str}")
+        out_desc = f"<b>Outgoing ({len(out_edges)}):</b> " + ", ".join(out_strs)
+        if len(out_edges) > 6:
+            out_desc += f", … (+{len(out_edges) - 6} more; hover for each)"
+    else:
+        out_desc = "<b>Outgoing:</b> None (output layer)"
+    lines.append(out_desc)
+
+    return "<br>".join(lines)
+
+
 def plotly_network(view: Any) -> Any:
     try:
         import plotly.graph_objects as go
@@ -299,19 +382,296 @@ def plotly_network(view: Any) -> Any:
                     font=dict(size=13, color=fg),
                 )
             )
-    annotations.append(
+
+    # Highlight traces for interactive neuron selection
+    def _edge_line_coords(
+        edge_list: list[dict[str, Any]],
+    ) -> tuple[list[Any], list[Any], list[Any], list[str]]:
+        x_coords: list[Any] = []
+        y_coords: list[Any] = []
+        z_coords: list[Any] = []
+        text_list: list[str] = []
+        for edge in edge_list:
+            a, b = lookup[edge["source"]], lookup[edge["target"]]
+            coords_a = (a["x"], a["y3"] if spatial else a["y"], a["z3"])
+            coords_b = (b["x"], b["y3"] if spatial else b["y"], b["z3"])
+            for vals, start, end in zip(
+                (x_coords, y_coords, z_coords), coords_a, coords_b, strict=True
+            ):
+                vals.extend([start, (start + end) / 2, end, None])
+            text_list.extend([html.escape(_edge_text(edge)).replace("\n", "<br>")] * 3 + [""])
+        return x_coords, y_coords, z_coords, text_list
+
+    selected_id = graph.get("selected_neuron")
+    selected_node = lookup.get(selected_id) if selected_id else None
+    has_selection = selected_node is not None
+
+    if selected_node is not None:
+        init_in_x, init_in_y, init_in_z, init_in_text = _edge_line_coords(
+            selected_node.get("incoming_edges", [])
+        )
+        init_out_x, init_out_y, init_out_z, init_out_text = _edge_line_coords(
+            selected_node.get("outgoing_edges", [])
+        )
+        init_node_x = [selected_node["x"]]
+        init_node_y = [selected_node["y3"] if spatial else selected_node["y"]]
+        init_node_z = [selected_node["z3"]]
+        init_node_text = [html.escape(_node_text(selected_node, graph)).replace("\n", "<br>")]
+    else:
+        init_in_x, init_in_y, init_in_z, init_in_text = [], [], [], []
+        init_out_x, init_out_y, init_out_z, init_out_text = [], [], [], []
+        init_node_x, init_node_y, init_node_z, init_node_text = [], [], [], []
+
+    highlight_incoming_kw: dict[str, Any] = dict(
+        x=init_in_x,
+        y=init_in_y,
+        mode="lines",
+        line=dict(color="#00e5ff", width=3.5),
+        opacity=0.95,
+        name="Incoming to selected",
+        hoverinfo="text",
+        text=init_in_text,
+        showlegend=False,
+        visible=bool(init_in_x) if has_selection else False,
+        meta=dict(role="highlight_incoming"),
+    )
+    if spatial:
+        highlight_incoming_kw["z"] = init_in_z
+    figure.add_trace(trace_type(**highlight_incoming_kw))
+
+    highlight_outgoing_kw: dict[str, Any] = dict(
+        x=init_out_x,
+        y=init_out_y,
+        mode="lines",
+        line=dict(color="#fbbf24", width=3.5),
+        opacity=0.95,
+        name="Outgoing from selected",
+        hoverinfo="text",
+        text=init_out_text,
+        showlegend=False,
+        visible=bool(init_out_x) if has_selection else False,
+        meta=dict(role="highlight_outgoing"),
+    )
+    if spatial:
+        highlight_outgoing_kw["z"] = init_out_z
+    figure.add_trace(trace_type(**highlight_outgoing_kw))
+
+    highlight_node_kw: dict[str, Any] = dict(
+        x=init_node_x,
+        y=init_node_y,
+        mode="markers",
+        marker=dict(
+            size=16 if spatial else 22,
+            color="#fbbf24",
+            line=dict(color="#ffffff", width=2.5),
+        ),
+        opacity=1.0,
+        name="Selected neuron",
+        hoverinfo="text",
+        text=init_node_text,
+        showlegend=False,
+        visible=has_selection,
+        meta=dict(role="highlight_node"),
+    )
+    if spatial:
+        highlight_node_kw["z"] = init_node_z
+    figure.add_trace(trace_type(**highlight_node_kw))
+
+    if has_selection:
+        for t in figure.data:
+            role = t.meta.get("role") if t.meta else None
+            if role == "edges":
+                t.opacity = 0.04
+            elif role == "nodes":
+                t.opacity = 0.25
+
+    footer_annot = dict(
+        x=0,
+        y=-0.23 if spatial and graph.get("explore") else -0.17,
+        xref="paper",
+        yref="paper",
+        text=_neuron_detail_card(selected_node, graph),
+        showarrow=False,
+        xanchor="left",
+        align="left",
+        font=dict(size=11, color=fg if has_selection else muted),
+        bgcolor=bg if has_selection else None,
+        bordercolor=border if has_selection else None,
+        borderpad=8 if has_selection else 0,
+    )
+    annotations.append(footer_annot)
+
+    # Build Neuron Selection dropdown menu
+    idx_incoming = len(figure.data) - 3
+    idx_outgoing = len(figure.data) - 2
+    idx_selected_node = len(figure.data) - 1
+
+    overview_opacities = []
+    for trace in figure.data:
+        meta = trace.meta or {}
+        role = meta.get("role")
+        if role in ("highlight_incoming", "highlight_outgoing", "highlight_node"):
+            overview_opacities.append(0.0)
+        elif role == "edges":
+            overview_opacities.append(graph["edge_opacity"])
+        elif role == "guide":
+            overview_opacities.append(0.35)
+        else:
+            overview_opacities.append(1.0)
+
+    overview_x = [t.x for t in figure.data]
+    overview_x[idx_incoming] = []
+    overview_x[idx_outgoing] = []
+    overview_x[idx_selected_node] = []
+
+    overview_y = [t.y for t in figure.data]
+    overview_y[idx_incoming] = []
+    overview_y[idx_outgoing] = []
+    overview_y[idx_selected_node] = []
+
+    overview_text = [getattr(t, "text", []) for t in figure.data]
+    overview_text[idx_incoming] = []
+    overview_text[idx_outgoing] = []
+    overview_text[idx_selected_node] = []
+
+    overview_visible = [
+        t.meta.get("role") not in ("highlight_incoming", "highlight_outgoing", "highlight_node")
+        for t in figure.data
+    ]
+
+    overview_annots = annotations[:-1] + [
         dict(
             x=0,
             y=-0.23 if spatial and graph.get("explore") else -0.17,
             xref="paper",
             yref="paper",
-            text=_footer(graph)
-            + ("<br>Dotted outlines mark layer planes, not connections." if spatial else ""),
+            text=_neuron_detail_card(None, graph),
             showarrow=False,
             xanchor="left",
             font=dict(size=11, color=muted),
         )
+    ]
+
+    overview_args_data: dict[str, Any] = dict(
+        opacity=overview_opacities,
+        x=overview_x,
+        y=overview_y,
+        text=overview_text,
+        visible=overview_visible,
     )
+    if spatial:
+        overview_z = [getattr(t, "z", []) for t in figure.data]
+        overview_z[idx_incoming] = []
+        overview_z[idx_outgoing] = []
+        overview_z[idx_selected_node] = []
+        overview_args_data["z"] = overview_z
+
+    neuron_buttons = [
+        dict(
+            label="Overview (All Neurons)",
+            method="update",
+            args=[overview_args_data, dict(annotations=overview_annots)],
+        )
+    ]
+
+    for n in graph["nodes"]:
+        n_in_x, n_in_y, n_in_z, n_in_text = _edge_line_coords(n.get("incoming_edges", []))
+        n_out_x, n_out_y, n_out_z, n_out_text = _edge_line_coords(n.get("outgoing_edges", []))
+        n_opacities = []
+        for trace in figure.data:
+            meta = trace.meta or {}
+            role = meta.get("role")
+            if role == "edges":
+                n_opacities.append(0.04)
+            elif role == "nodes":
+                n_opacities.append(0.25)
+            elif role == "guide":
+                n_opacities.append(0.1)
+            elif role == "label":
+                n_opacities.append(1.0)
+            elif role in ("highlight_incoming", "highlight_outgoing", "highlight_node"):
+                n_opacities.append(1.0)
+            else:
+                n_opacities.append(1.0)
+
+        n_x = list(overview_x)
+        n_x[idx_incoming] = n_in_x
+        n_x[idx_outgoing] = n_out_x
+        n_x[idx_selected_node] = [n["x"]]
+
+        n_y = list(overview_y)
+        n_y[idx_incoming] = n_in_y
+        n_y[idx_outgoing] = n_out_y
+        n_y[idx_selected_node] = [n["y3"] if spatial else n["y"]]
+
+        n_text = list(overview_text)
+        n_text[idx_incoming] = n_in_text
+        n_text[idx_outgoing] = n_out_text
+        n_text[idx_selected_node] = [html.escape(_node_text(n, graph)).replace("\n", "<br>")]
+
+        n_vis = list(overview_visible)
+        n_vis[idx_incoming] = bool(n_in_x)
+        n_vis[idx_outgoing] = bool(n_out_x)
+        n_vis[idx_selected_node] = True
+
+        n_card_annot = annotations[:-1] + [
+            dict(
+                x=0,
+                y=-0.23 if spatial and graph.get("explore") else -0.17,
+                xref="paper",
+                yref="paper",
+                text=_neuron_detail_card(n, graph),
+                showarrow=False,
+                xanchor="left",
+                align="left",
+                font=dict(size=11, color=fg),
+                bgcolor=bg,
+                bordercolor=border,
+                borderpad=8,
+            )
+        ]
+        n_args_data: dict[str, Any] = dict(
+            opacity=n_opacities,
+            x=n_x,
+            y=n_y,
+            text=n_text,
+            visible=n_vis,
+        )
+        if spatial:
+            n_z_coords = list(overview_z)
+            n_z_coords[idx_incoming] = n_in_z
+            n_z_coords[idx_outgoing] = n_out_z
+            n_z_coords[idx_selected_node] = [n["z3"]]
+            n_args_data["z"] = n_z_coords
+
+        neuron_buttons.append(
+            dict(
+                label=f"Neuron [{n['id']}] · {graph['layers'][n['layer']]['label']} #{n['index']}",
+                method="update",
+                args=[n_args_data, dict(annotations=n_card_annot)],
+            )
+        )
+
+    active_idx = 0
+    if selected_id:
+        node_ids = [n["id"] for n in graph["nodes"]]
+        if selected_id in node_ids:
+            active_idx = 1 + node_ids.index(selected_id)
+
+    neuron_menu = dict(
+        type="dropdown",
+        direction="down",
+        active=active_idx,
+        buttons=neuron_buttons,
+        x=0.28 if spatial else 0.0,
+        y=1.09,
+        xanchor="left",
+        yanchor="top",
+        bgcolor=bg,
+        bordercolor=border,
+        font=dict(size=11, color=fg),
+    )
+
     subtitle = graph["caption"]
     if graph["sampled"]:
         subtitle += " · sampled edges"
@@ -329,12 +689,12 @@ def plotly_network(view: Any) -> Any:
         paper_bgcolor=bg,
         plot_bgcolor=bg,
         font=dict(family="Inter, system-ui, sans-serif", color=fg),
-        height=700,
+        height=720,
         margin=dict(
             l=45,
             r=75 if field else 40,
             t=(110 if spatial else 175) + (50 if view.data.get("visual_notes") else 0),
-            b=125,
+            b=135,
         ),
         legend=dict(
             orientation="h",
@@ -349,9 +709,10 @@ def plotly_network(view: Any) -> Any:
         hoverlabel=dict(bgcolor=bg, font=dict(color=fg)),
         uirevision="seedl-network",
     )
+
+    camera = dict(eye=dict(x=-1.8, y=-2.4, z=0.85), up=dict(x=0, y=0, z=1))
     if spatial:
         axis = dict(visible=False, showbackground=False)
-        camera = dict(eye=dict(x=-1.6, y=-2.6, z=0.55), up=dict(x=0, y=0, z=1))
         figure.update_layout(
             scene=dict(
                 xaxis=axis,
@@ -382,10 +743,12 @@ def plotly_network(view: Any) -> Any:
                             args=[{"scene.camera": camera, "scene.dragmode": "orbit"}],
                         ),
                     ],
-                )
+                ),
+                neuron_menu,
             ],
         )
     else:
+        figure.update_layout(updatemenus=[neuron_menu])
         figure.update_xaxes(
             visible=False, range=[-1.2, (len(graph["layers"]) - 1) * 3.5 + 1.2], fixedrange=False
         )
@@ -394,6 +757,7 @@ def plotly_network(view: Any) -> Any:
             range=[-max(graph["widths"]) / 2 - 0.7, max(graph["widths"]) / 2 + 0.7],
             fixedrange=False,
         )
+
     if graph.get("explore"):
         if not graph["captured"]:
             figure.add_annotation(
@@ -407,6 +771,7 @@ def plotly_network(view: Any) -> Any:
                 font=dict(color=muted, size=12),
             )
             return figure
+
         steps = []
 
         def detail(index: int) -> dict[str, Any]:
@@ -426,36 +791,156 @@ def plotly_network(view: Any) -> Any:
                 borderpad=10,
             )
 
+        frames = []
         for current_layer in range(-1, len(graph["layers"])):
             opacities = []
             for trace in figure.data:
                 meta = trace.meta or {}
                 role = meta.get("role")
+                if role in ("highlight_incoming", "highlight_outgoing", "highlight_node"):
+                    opacities.append(0.0)
+                    continue
                 active = meta.get("layer") == current_layer or (
                     role == "nodes" and meta.get("layer") == current_layer - 1
                 )
                 normal = (
-                    graph["edge_opacity"] if role == "edges" else 0.35 if role == "guide" else 1
+                    graph["edge_opacity"] if role == "edges" else 0.35 if role == "guide" else 1.0
                 )
                 opacities.append(
                     normal
                     if current_layer == -1 or role == "label"
-                    else (0.8 if role in ("edges", "guide") else 1)
+                    else (0.8 if role in ("edges", "guide") else 1.0)
                     if active
                     else (0.04 if role == "edges" else 0.22)
                 )
+
+            frame_name = "reset" if current_layer < 0 else f"step_{current_layer}"
+            frames.append(
+                go.Frame(
+                    data=[dict(opacity=op) for op in opacities],
+                    name=frame_name,
+                    layout=dict(annotations=annotations[:-1] + [detail(current_layer)]),
+                )
+            )
+
             steps.append(
                 dict(
                     method="update",
                     label="Reset" if current_layer < 0 else graph["layers"][current_layer]["label"],
                     args=[
                         {"opacity": opacities},
-                        {"annotations": annotations + [detail(current_layer)]},
+                        {"annotations": annotations[:-1] + [detail(current_layer)]},
                     ],
                 )
             )
+
+        figure.frames = frames
+
+        anim_menu = dict(
+            type="buttons",
+            direction="right",
+            x=0.56 if spatial else 0.34,
+            y=1.09,
+            xanchor="left",
+            showactive=False,
+            bgcolor=bg,
+            bordercolor=border,
+            buttons=[
+                dict(
+                    label="▶ Play",
+                    method="animate",
+                    args=[
+                        [f"step_{i}" for i in range(len(graph["layers"]))],
+                        dict(
+                            frame=dict(duration=1400, redraw=True),
+                            transition=dict(duration=350),
+                            fromcurrent=True,
+                            mode="immediate",
+                        ),
+                    ],
+                ),
+                dict(
+                    label="⏸ Pause",
+                    method="animate",
+                    args=[
+                        [None],
+                        dict(
+                            frame=dict(duration=0, redraw=False),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
+                dict(
+                    label="⏮ Reset",
+                    method="animate",
+                    args=[
+                        ["reset"],
+                        dict(
+                            frame=dict(duration=0, redraw=True),
+                            mode="immediate",
+                            transition=dict(duration=0),
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        speed_menu = dict(
+            type="buttons",
+            direction="right",
+            x=0.86 if spatial else 0.68,
+            y=1.09,
+            xanchor="left",
+            showactive=False,
+            bgcolor=bg,
+            bordercolor=border,
+            buttons=[
+                dict(
+                    label="1x",
+                    method="animate",
+                    args=[
+                        None,
+                        dict(
+                            frame=dict(duration=1400, redraw=True),
+                            transition=dict(duration=350),
+                            mode="afterall",
+                        ),
+                    ],
+                ),
+                dict(
+                    label="2x",
+                    method="animate",
+                    args=[
+                        None,
+                        dict(
+                            frame=dict(duration=700, redraw=True),
+                            transition=dict(duration=175),
+                            mode="afterall",
+                        ),
+                    ],
+                ),
+                dict(
+                    label="0.5x",
+                    method="animate",
+                    args=[
+                        None,
+                        dict(
+                            frame=dict(duration=2800, redraw=True),
+                            transition=dict(duration=700),
+                            mode="afterall",
+                        ),
+                    ],
+                ),
+            ],
+        )
+
+        current_menus = list(figure.layout.updatemenus or [])
+        current_menus.extend([anim_menu, speed_menu])
+
         figure.update_layout(
-            annotations=annotations + [detail(-1)],
+            updatemenus=current_menus,
+            annotations=annotations[:-1] + [detail(-1)],
             sliders=[
                 dict(
                     active=0,
@@ -471,8 +956,8 @@ def plotly_network(view: Any) -> Any:
                     transition=dict(duration=0),
                 )
             ],
-            margin=dict(t=260 if view.data.get("visual_notes") else 210, b=230),
-            height=790 if view.data.get("visual_notes") else 740,
+            margin=dict(t=260 if view.data.get("visual_notes") else 210, b=240),
+            height=820 if view.data.get("visual_notes") else 760,
         )
     return figure
 
@@ -482,13 +967,21 @@ def svg_network(view: Any) -> str:
     if graph is None:
         return _svg_architecture(view)
     bg, fg, muted, border = _theme(graph)
+    selected_id = graph.get("selected_neuron")
+    selected_node = next((n for n in graph["nodes"] if n["id"] == selected_id), None)
+    has_selection = selected_node is not None
+
+    extra_h = 30 if has_selection else 0
     width = max(920, len(graph["layers"]) * 180)
-    height = max(620, max(graph["widths"]) * 21 + 260)
+    height = max(620 + extra_h, max(graph["widths"]) * 21 + 260 + extra_h)
     left, top = 85, 170
     gap = (width - 2 * left) / max(1, len(graph["layers"]) - 1)
-    spacing = (height - 300) / max(8, max(graph["widths"]) - 1)
+    spacing = (height - (320 if has_selection else 300)) / max(8, max(graph["widths"]) - 1)
     positions = {
-        n["id"]: (left + n["layer"] * gap, top + (height - 300) / 2 - n["y"] * spacing)
+        n["id"]: (
+            left + n["layer"] * gap,
+            top + (height - (320 if has_selection else 300)) / 2 - n["y"] * spacing,
+        )
         for n in graph["nodes"]
     }
     body = [
@@ -501,37 +994,107 @@ def svg_network(view: Any) -> str:
     for edge in graph["edges"]:
         x1, y1 = positions[edge["source"]]
         x2, y2 = positions[edge["target"]]
-        body.append(
-            f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{POSITIVE if edge["weight"] > 0 else NEGATIVE if edge["weight"] < 0 else "#8390a6"}" stroke-width="{0.6 + _weight_bin(edge["weight"], scale) * 0.65}" stroke-opacity="{graph["edge_opacity"]}"><title>{html.escape(_edge_text(edge))}</title></line>'
-        )
+        if has_selection:
+            if edge["target"] == selected_id:
+                body.append(
+                    f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#00e5ff" stroke-width="2.5" stroke-opacity="0.95"><title>{html.escape(_edge_text(edge))}</title></line>'
+                )
+            elif edge["source"] == selected_id:
+                body.append(
+                    f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="#fbbf24" stroke-width="2.5" stroke-opacity="0.95"><title>{html.escape(_edge_text(edge))}</title></line>'
+                )
+            else:
+                color = (
+                    POSITIVE
+                    if edge["weight"] > 0
+                    else NEGATIVE
+                    if edge["weight"] < 0
+                    else "#8390a6"
+                )
+                body.append(
+                    f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="{0.5 + _weight_bin(edge["weight"], scale) * 0.4}" stroke-opacity="0.06"><title>{html.escape(_edge_text(edge))}</title></line>'
+                )
+        else:
+            body.append(
+                f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{POSITIVE if edge["weight"] > 0 else NEGATIVE if edge["weight"] < 0 else "#8390a6"}" stroke-width="{0.6 + _weight_bin(edge["weight"], scale) * 0.65}" stroke-opacity="{graph["edge_opacity"]}"><title>{html.escape(_edge_text(edge))}</title></line>'
+            )
     for node in graph["nodes"]:
         x, y = positions[node["id"]]
         radius = max(4, min(13, spacing * 0.36))
-        body.append(f'<circle cx="{x}" cy="{y}" r="{radius + 3}" fill="{bg}"/>')
-        body.append(
-            f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{_color(node, graph)}" stroke="{fg}" stroke-width="0.5"><title>{html.escape(_node_text(node, graph))}</title></circle>'
-        )
+        is_this_selected = has_selection and node["id"] == selected_id
+        if is_this_selected:
+            body.append(
+                f'<circle cx="{x}" cy="{y}" r="{radius + 5}" fill="none" stroke="#fbbf24" stroke-width="2.5"/>'
+            )
+            body.append(f'<circle cx="{x}" cy="{y}" r="{radius + 2}" fill="{bg}"/>')
+            body.append(
+                f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{_color(node, graph)}" stroke="#ffffff" stroke-width="1.5"><title>{html.escape(_node_text(node, graph))}</title></circle>'
+            )
+        else:
+            node_opacity = "0.35" if has_selection else "1.0"
+            body.append(f'<circle cx="{x}" cy="{y}" r="{radius + 3}" fill="{bg}"/>')
+            body.append(
+                f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{_color(node, graph)}" fill-opacity="{node_opacity}" stroke="{fg}" stroke-opacity="{node_opacity}" stroke-width="0.5"><title>{html.escape(_node_text(node, graph))}</title></circle>'
+            )
         if max(graph["widths"]) <= 12:
-            body.append(_text(x + radius + 5, y + 3, str(node["index"]), muted, 10))
+            lbl_color = fg if is_this_selected else muted
+            body.append(_text(x + radius + 5, y + 3, str(node["index"]), lbl_color, 10))
     for i, layer in enumerate(graph["layers"]):
         x = left + i * gap
         body += [
             _text(x, 140, f"{layer['label']} · {layer['width']}", fg, 14, anchor="middle"),
-            _text(x, height - 100, layer["operation"], muted, 11, anchor="middle"),
+            _text(
+                x,
+                height - (120 if has_selection else 100),
+                layer["operation"],
+                muted,
+                11,
+                anchor="middle",
+            ),
         ]
-    body += [
-        _text(
-            35,
-            height - 60,
-            "Positive weights (teal) · Negative weights (coral) · " + _footer(graph),
-            muted,
-            11,
+    if has_selection and selected_node is not None:
+        sel_layer = graph["layers"][selected_node["layer"]]
+        in_count = len(selected_node.get("incoming_edges", []))
+        out_count = len(selected_node.get("outgoing_edges", []))
+        act_str = (
+            f"Act: {_fmt(selected_node.get('activation'))}"
+            if graph.get("captured")
+            else "Act: not captured"
         )
-    ]
+        bias_str = (
+            f"Bias: {_fmt(selected_node.get('bias'))}"
+            if selected_node["layer"] > 0
+            else "Input feature"
+        )
+        sel_summary = (
+            f"Selected Neuron [{selected_node['id']}] · {sel_layer['label']} (#{selected_node['index']}) · "
+            f"{act_str} · {bias_str} · Incoming (cyan): {in_count} · Outgoing (amber): {out_count}"
+        )
+        body += [
+            _text(35, height - 76, sel_summary, fg, 12),
+            _text(
+                35,
+                height - 56,
+                "Highlighted connections: cyan = incoming, amber = outgoing · Dimmed = unrelated · "
+                + _footer(graph),
+                muted,
+                11,
+            ),
+        ]
+    else:
+        body += [
+            _text(
+                35,
+                height - 60,
+                "Positive weights (teal) · Negative weights (coral) · " + _footer(graph),
+                muted,
+                11,
+            )
+        ]
     note = " · ".join(view.data.get("visual_notes", []))
     if graph["dimensions"] == 3:
         note = "2D projection of the 3D network. Export HTML for rotation. " + note
-    body.append(_text(35, height - 30, note, muted, 10))
+    body.append(_text(35, height - 25 if has_selection else height - 30, note, muted, 10))
     return "".join(body) + "</svg>"
 
 

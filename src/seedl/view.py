@@ -69,10 +69,16 @@ class Visualization:
 
         return save_visualization(self, filepath, format=format)
 
-    def explore(self) -> Any:
-        """Return an interactive figure; captured neuron graphs gain a layer-step slider."""
+    def explore(self, *, select_neuron: tuple[int, int] | str | None = None) -> Any:
+        """Return an interactive figure with layer stepping, forward animation, and neuron inspection."""
         if self.data.get("neuron_graph"):
             self.data["neuron_graph"]["explore"] = True
+            if select_neuron is not None:
+                from ._neurons import _normalize_select_neuron
+
+                self.data["neuron_graph"]["selected_neuron"] = _normalize_select_neuron(
+                    select_neuron, self.data["neuron_graph"]["widths"]
+                )
         try:
             import importlib.util
 

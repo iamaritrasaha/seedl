@@ -1,19 +1,175 @@
 # SeeDL
 
-SeeDL is a comprehensive, deep-learning-aware visualization and observability framework for Python.
-Start with one simple, effortless call:
+SeeDL turns a PyTorch model into a visual network you can inspect.
 
 ```python
 import seedl as sd
 
-sd.see(tensor)
 sd.see(model)
-sd.see(history)
-sd.see(predictions)
-sd.see(gradients)
 ```
 
-SeeDL determines the nature of supported objects, chooses a meaningful visualization, displays useful diagnostic information automatically, and provides optional interactive exploration. When optional plotting libraries are absent, SeeDL renders self-contained, publication-ready SVGs with zero required third-party dependencies.
+For a supported small MLP, this draws actual neurons and connections from the model's weights.
+Rotate the network in three dimensions with:
+
+```python
+sd.see(model, view="3d")
+```
+
+![Actual 2D neuron diagram with captured activations](docs/visuals/network-2d.jpg)
+![Actual interactive 3D neuron diagram](docs/visuals/network-3d.jpg)
+
+These screenshots show an initialized 4 → 8 → 6 → 2 PyTorch model, not an artist's mockup.
+See the [executed visual showcase](examples/neural_network_explorer.ipynb),
+[visual acceptance record](docs/VISUAL_ACCEPTANCE.md), and
+[reproduction script](scripts/build_visual_showcase.py).
+
+The zero-dependency core still supports SVG. Plotly, PyTorch, NumPy and Matplotlib remain
+optional extras. Existing tensor, training, prediction, gradient, activation, attention,
+explainability and educational APIs remain available.
+
+## Explore a network
+
+```python
+import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(
+    nn.Linear(4, 8),
+    nn.ReLU(),
+    nn.Linear(8, 6),
+    nn.ReLU(),
+    nn.Linear(6, 2),
+)
+x = torch.tensor([[0.3, 0.8, -0.2, 1.0]])
+
+sd.see(model)  # Neurons and actual weighted edges
+sd.see(model, view="3d")  # Plotly: orbit, zoom, pan
+sd.see(model, input=x, theme="dark")  # Actual post-activation node values
+sd.see(model, input=x).explore()  # Layer-step slider, including Reset
+sd.see(model, view="architecture")  # Operation blocks or module hierarchy
+sd.see(model, view="summary")  # Existing detailed inspection tables
+
+view = sd.see(model, view="3d", input=x)
+view.save("network.html")  # Self-contained Plotly JS; opens offline
+```
+
+In notebooks, return the view as the last expression in a cell. In a script, call
+`sd.see(model).show()` to open Plotly; the initial `see()` call prints a summary in terminals.
+
+### What the picture means
+
+- **Neurons:** Exact built-in `nn.Linear` and nested `nn.Sequential` networks are supported.
+  Supported intervening operations are ReLU, Tanh, Sigmoid, GELU, SiLU, LeakyReLU, ELU and
+  Identity. Activations annotate the preceding transformation instead of adding neuron layers.
+  Custom subclasses, hooks, functional operations inside custom `forward` methods and other
+  structures fall back to architecture inspection.
+- **Connections:** An edge from input `i` to output `j` reads `weight[j, i]`. Teal means positive,
+  coral means negative, gray means exactly zero. Four line-width bins encode absolute weight
+  magnitude relative to the displayed edges. Hover includes the exact weight, parameter name,
+  trainability and existing weight gradient. Biases appear on neuron hover.
+- **Activations:** `input=x` explicitly requests one eval/no-grad forward pass with a cloned
+  input. `sample=0` selects a zero-based batch row. Supported activation inputs have shape
+  `[features]` or `[batch, features]`. Each node shows the actual output after its activation;
+  hover also includes the Linear pre-activation. No input means no activation values.
+  Training flags, hooks and ordinary buffers are restored. Custom forward side effects are
+  not sandboxed in general architecture inspection.
+- **Sharing and gradients:** Reused Linear modules appear at each Sequential occurrence;
+  parameter totals remain deduplicated. Missing gradients differ from zero gradients.
+  `color_by="gradient"` colors nodes by their existing **bias gradients**, with missing values
+  gray; edge colors still represent weights. SeeDL never calls backward automatically.
+- **Coordinates:** Layer positions are deterministic layout coordinates, not learned embeddings.
+  In 3D each layer occupies a grid in a plane, making depth visible and the network rotatable.
+
+### Model types and bounds
+
+| Model | Automatic representation |
+| --- | --- |
+| Small supported MLP | Neurons and weighted connections |
+| Sequential CNN | Connected operation blocks, channels, kernels, captured spatial dimensions |
+| Transformer or custom/residual model | Module hierarchy; connectors mean containment |
+| Large MLP | Architecture blocks, with explicit collapse disclosure |
+| Other unsupported model | Existing informative inspection fallback |
+
+Registration order does **not** establish custom execution order. SeeDL does not invent residual
+or attention wiring, nor represent convolutional feature maps as fully connected neurons.
+Architecture views show up to 40 blocks; use `view="summary"` for table inspection and `view.data`
+for all rows. Progressive clickable module expansion is not implemented.
+
+Defaults are **100 total neurons**, **48 per layer**, **12 layers**, and **1,500 connections**.
+Models exceeding a neuron or layer limit fall back before extracting weight values. Configure
+`max_neurons` (1–1,000) and `max_connections` (1–20,000); the per-layer and layer-count limits
+remain in force. Edges are sampled evenly across flattened matrices using a deterministic
+stride, then `min_weight` filters by absolute magnitude. This is a preview, not a strongest-edge
+ranking. The plot discloses displayed versus total connections. Connections are batched into
+sign/magnitude/layer traces, rather than creating a Plotly trace per edge.
+
+```python
+sd.see(model, max_neurons=100, max_connections=500, min_weight=0.1, edge_opacity=0.4)
+sd.see(model, color_by="layer", theme="light")
+sd.see(model, input=x, sample=0, color_by="activation")
+```
+
+### Interactive and static output
+
+Install `pip install "seedl[torch,plotly]"` for interactive model exploration. Plotly 3D uses
+actual `Scatter3d` traces and a WebGL browser. Hover, sign-legend toggles, orbit, zoom and pan
+are supported. **Reset camera to last save** restores the designed camera; Plotly's default
+camera button uses its own default. Edge-on camera angles can overlap labels.
+
+`.explore()` adds a layer-step slider when activations were captured. It highlights the current
+transformation and adjacent nodes and displays its operation; values remain available on hover.
+It reuses captured values without rerunning the model. There is no click-to-expand behavior,
+notebook widget dependency or fabricated propagation animation.
+
+Without Plotly, `sd.see(model)` renders SVG circles, edges, labels and native title tooltips.
+Explicit `view="3d"` requires Plotly and raises an installation hint if it is absent. Unsupported
+3D model requests use an explicitly disclosed 2D architecture fallback. SVG/Matplotlib export
+of a 3D neuron network is labeled as a **2D projection**. Genuine 3D raster export requires
+Plotly's optional Kaleido setup; HTML is the portable interactive export.
+
+Notebooks must trust the output and support Plotly MIME rendering. GitHub's notebook viewer
+may not execute interactive output; use Jupyter or generated HTML. Small panels can require
+scrolling. Browser inspection was completed in the Codex in-app browser; other frontends and
+GPU/WebGL configurations have not all been tested.
+
+### More spatial views
+
+```python
+sd.embeddings(vectors, dimensions=3, labels=names, categories=groups)
+```
+
+Three-component PCA requires NumPy and Plotly, at least three vectors and three features.
+It fits an evenly sampled preview (default 128 vectors; configurable up to 5,000), reports
+per-component explained variance, and handles rank-deficient data explicitly. Labels and
+categories refer to the original rows. Coordinates use a disclosed common input scale to avoid
+numeric overflow; `view.data["coordinate_scale"]` records it. These coordinates can distort
+high-dimensional distances. Existing `dimensions=2` behavior is preserved.
+
+```python
+regressor = nn.Linear(1, 1)
+features = torch.linspace(-1, 1, 20).reshape(-1, 1)
+targets = 2 * features + 0.5
+sd.loss_landscape(
+    regressor,
+    (features, targets),
+    loss_fn=nn.functional.mse_loss,
+    axes=(("weight", 0), ("bias", 0)),
+    radius=1.5,
+    steps=15,
+    evaluate=True,
+)
+```
+
+This is a **sampled two-dimensional coordinate slice of parameter space**, rendered with a
+Plotly `Surface`. Axis indices address flattened parameter coordinates; all other parameters
+stay fixed. `evaluate=True` is required because the call runs repeated forward evaluations on
+a deep copy. CPU models up to 250,000 parameters and grids of 3–31 steps per axis are supported
+(default 225 grid evaluations, maximum 961). A scalar `loss_fn` is required. Optional
+`trajectory=[(axis1_offset, axis2_offset), ...]` evaluates up to 100 extra points in the same
+slice; this does not capture an optimizer automatically. Original model parameters, gradients,
+buffers, training flags and CPU RNG are preserved. External side effects of arbitrary custom
+Python callbacks cannot be sandboxed. The cost also depends on the supplied input and model.
 
 ---
 

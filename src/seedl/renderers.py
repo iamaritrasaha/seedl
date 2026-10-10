@@ -34,6 +34,20 @@ def resolve_backend(backend: str) -> str:
 
 def render(view: Visualization, backend: str) -> Any:
     """Build a backend figure from a ``Visualization`` without changing its data."""
+    if view.kind in {"embeddings", "loss_landscape"} and view.data.get("dimensions") == 3:
+        if backend != "plotly":
+            raise SeeDLError("This spatial view requires Plotly; export HTML for interactive 3D.")
+        from ._spatial import render_spatial
+
+        resolve_backend("plotly")
+        return render_spatial(view)
+    if view.kind == "model" and view.data.get("presentation") in {"neurons", "architecture"}:
+        from ._network_renderers import matplotlib_network, plotly_network, svg_network
+
+        resolve_backend(backend)
+        return {"svg": svg_network, "plotly": plotly_network, "matplotlib": matplotlib_network}[
+            backend
+        ](view)
     if backend == "svg":
         return _svg(view)
     if backend == "plotly":

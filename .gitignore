@@ -8,3 +8,6 @@ wheels/
 
 # Virtual environments
 .venv
+
+# Reproducible, self-contained browser artifacts (run scripts/build_visual_showcase.py)
+docs/visuals/*.html

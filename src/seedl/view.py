@@ -70,7 +70,9 @@ class Visualization:
         return save_visualization(self, filepath, format=format)
 
     def explore(self) -> Any:
-        """Switch to interactive Plotly mode and return or display the figure."""
+        """Return an interactive figure; captured neuron graphs gain a layer-step slider."""
+        if self.data.get("neuron_graph"):
+            self.data["neuron_graph"]["explore"] = True
         try:
             import importlib.util
 

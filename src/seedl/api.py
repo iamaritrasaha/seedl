@@ -81,6 +81,14 @@ def see(
     backend: str = "auto",
     interactive: bool | None = None,
     max_points: int = 2_048,
+    view: str = "auto",
+    theme: str = "light",
+    color_by: str = "auto",
+    sample: int = 0,
+    max_neurons: int = 100,
+    max_connections: int = 1_500,
+    min_weight: float = 0.0,
+    edge_opacity: float = 0.32,
 ) -> Visualization:
     """Automatically visualize a supported deep-learning or numeric object.
 
@@ -99,8 +107,44 @@ def see(
         backend: 'auto' (Plotly when installed, otherwise SVG), 'plotly', 'matplotlib', or 'svg'.
         interactive: True (forces Plotly), False (forces SVG if auto), or None.
         max_points: Bounded sampling limit for large arrays and sequences.
+        view: Model display: auto, neurons, 3d (requires Plotly), architecture, summary.
+        theme: Light or dark model graph theme.
+        color_by: auto (activations when captured), layer, activation, or bias gradient.
+        sample: Zero-based batch sample for neuron activations; accepts 1D or 2D input.
+        max_neurons: Total neuron limit before architecture fallback (default 100).
+        max_connections: Deterministic connection preview budget (default 1500).
+        min_weight: Hide sampled connections below this absolute weight.
+        edge_opacity: Connection opacity between zero and one.
     """
     _validate_max_points(max_points)
+    if view not in {"auto", "neurons", "3d", "architecture", "summary"}:
+        raise ValueError("view must be auto, neurons, 3d, architecture, or summary.")
+    if theme not in {"light", "dark"}:
+        raise ValueError("theme must be light or dark.")
+    if color_by not in {"auto", "layer", "activation", "gradient"}:
+        raise ValueError("color_by must be auto, layer, activation, or gradient.")
+    if detail not in {"summary", "full", "leaves"}:
+        raise ValueError("detail must be summary, full, or leaves.")
+    for name, value, upper in (
+        ("max_neurons", max_neurons, 1000),
+        ("max_connections", max_connections, 20000),
+    ):
+        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= upper:
+            raise ValueError(f"{name} must be an integer between 1 and {upper}.")
+    if isinstance(sample, bool) or not isinstance(sample, int) or sample < 0:
+        raise ValueError("sample must be a nonnegative integer.")
+    import math
+
+    if not math.isfinite(min_weight) or min_weight < 0:
+        raise ValueError("min_weight must be finite and nonnegative.")
+    if not math.isfinite(edge_opacity) or not 0 <= edge_opacity <= 1:
+        raise ValueError("edge_opacity must be between 0 and 1.")
+    if view != "auto" and (not is_torch_module(obj) or compare is not None):
+        raise ValueError("Explicit view options require a model without compare=.")
+    if view == "3d":
+        if backend not in {"auto", "plotly"} or interactive is False:
+            raise ValueError("view='3d' requires Plotly and interactive rendering.")
+        backend = "plotly"
     if interactive is not None and not isinstance(interactive, bool):
         raise TypeError("interactive must be True, False, or None.")
     if interactive is True:
@@ -117,7 +161,7 @@ def see(
         from ._compare import compare_objects
 
         kind, data, summary_text, notes = compare_objects(obj, compare, max_points=max_points)
-        view = Visualization(
+        result = Visualization(
             kind=kind,
             title="Comparison",
             summary=summary_text,
@@ -125,8 +169,8 @@ def see(
             notes=notes,
             backend=selected_backend,
         )
-        _show_result(view)
-        return view
+        _show_result(result)
+        return result
 
     # Handle tracker instances
     if isinstance(obj, Tracker):
@@ -145,13 +189,33 @@ def see(
         except Exception as exc:
             raise SeeDLError(f"Failed to slice object with {slice}: {exc}") from exc
 
-    kind, title, data, metadata, notes = inspect_object(
-        obj, example_input=input, max_points=max_points
-    )
+    if is_torch_module(obj):
+        from ._neurons import inspect_visual_model
+
+        data, metadata, notes = inspect_visual_model(
+            obj,
+            input,
+            view=view,
+            theme=theme,
+            color_by=color_by,
+            sample=sample,
+            max_neurons=max_neurons,
+            max_connections=max_connections,
+            min_weight=min_weight,
+            edge_opacity=edge_opacity,
+            detail=detail,
+        )
+        kind, title = "model", f"{type(obj).__name__} architecture"
+        if data.get("neuron_graph"):
+            title = "Neural network" + (" · 3D" if view == "3d" else "")
+    else:
+        kind, title, data, metadata, notes = inspect_object(
+            obj, example_input=input, max_points=max_points
+        )
     if slice_note:
         notes.insert(0, slice_note)
 
-    view = Visualization(
+    result = Visualization(
         kind=kind,
         title=title,
         summary=_summary(kind, data, metadata),
@@ -160,8 +224,8 @@ def see(
         notes=notes,
         backend=selected_backend,
     )
-    _show_result(view)
-    return view
+    _show_result(result)
+    return result
 
 
 def activations(
@@ -413,8 +477,33 @@ def embeddings(
     method: str = "pca",
     backend: str = "auto",
     max_vectors: int = 128,
+    dimensions: int = 2,
+    categories: list[str] | None = None,
 ) -> Visualization:
     """Visualize vector embeddings, pairwise cosine similarity matrix, and 2D PCA projection."""
+    if dimensions not in {2, 3} or isinstance(dimensions, bool):
+        raise ValueError("dimensions must be 2 or 3.")
+    if dimensions == 3:
+        if backend not in {"auto", "plotly"}:
+            raise ValueError("3D embeddings require the Plotly backend.")
+        selected_backend = resolve_backend("plotly")
+        if method != "pca":
+            raise ValueError("3D embeddings support method='pca'.")
+        from ._spatial import embeddings_3d
+
+        data, notes = embeddings_3d(vectors, labels, categories, max_vectors)
+        result = Visualization(
+            kind="embeddings",
+            title="Embeddings · 3D PCA",
+            summary=data["summary"],
+            data=data,
+            notes=notes,
+            backend=selected_backend,
+        )
+        _show_result(result)
+        return result
+    if categories is not None:
+        raise ValueError("categories currently requires dimensions=3.")
     selected_backend = resolve_backend(backend)
     from ._embeddings import inspect_embeddings
 
@@ -492,3 +581,37 @@ def convolution(
     )
     _show_result(view)
     return view
+
+
+def loss_landscape(
+    model: Any,
+    data: Any,
+    *,
+    loss_fn: Any,
+    axes: tuple[tuple[str, int], tuple[str, int]],
+    radius: float = 1.0,
+    steps: int = 15,
+    evaluate: bool = False,
+    trajectory: Any = None,
+) -> Visualization:
+    """Evaluate a bounded 2D parameter-coordinate slice and render a 3D loss surface.
+
+    Requires explicit evaluate=True, a scalar loss_fn, and two distinct named
+    parameter coordinates. CPU models up to 250,000 parameters; 3–31 grid steps.
+    Original model is preserved by evaluation on a deep copy. Trajectory points
+    are optional (axis-1 offset, axis-2 offset) pairs in this same slice.
+    """
+    backend = resolve_backend("plotly")
+    from ._spatial import loss_slice
+
+    payload, notes = loss_slice(model, data, loss_fn, axes, radius, steps, evaluate, trajectory)
+    result = Visualization(
+        kind="loss_landscape",
+        title="Loss landscape · coordinate slice",
+        summary=payload["summary"],
+        data=payload,
+        notes=notes,
+        backend=backend,
+    )
+    _show_result(result)
+    return result

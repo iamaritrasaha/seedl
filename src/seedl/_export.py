@@ -48,7 +48,9 @@ def _save_html(view: Visualization, path: Path) -> None:
     if view.backend == "plotly":
         fig = view.figure
         if hasattr(fig, "write_html"):
-            fig.write_html(str(path), include_plotlyjs="cdn")
+            fig.write_html(
+                str(path), include_plotlyjs=True, config={"responsive": True, "scrollZoom": True}
+            )
             return
 
     # Self-contained HTML with embedded SVG or PNG
@@ -115,7 +117,10 @@ def _save_image(view: Visualization, path: Path, ext: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     import importlib.util
 
-    if importlib.util.find_spec("matplotlib") is not None:
+    spatial = (
+        view.data.get("dimensions") == 3 or view.data.get("neuron_graph", {}).get("dimensions") == 3
+    )
+    if importlib.util.find_spec("matplotlib") is not None and not spatial:
         fig = view.to_figure("matplotlib")
         fig.savefig(str(path), format=ext, bbox_inches="tight")
         return

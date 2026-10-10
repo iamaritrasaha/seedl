@@ -12,11 +12,15 @@ POSITIVE, NEGATIVE = "#119b9a", "#e17463"
 
 
 def _theme(data: dict[str, Any]) -> tuple[str, str, str, str]:
-    return (
-        ("#101827", "#e5edf7", "#a5b5ce", "#23314a")
-        if data.get("theme") == "dark"
-        else ("#fbfcff", "#20324e", "#65758d", "#e8edf5")
-    )
+    theme = data.get("theme", "light")
+    if theme in {"dark", "scientific"}:
+        return ("#0f172a", "#f8fafc", "#94a3b8", "#1e293b")
+    if theme == "minimal":
+        return ("#ffffff", "#0f172a", "#64748b", "#e2e8f0")
+    if theme == "presentation":
+        return ("#050814", "#ffffff", "#cbd5e1", "#1e293b")
+    # light
+    return ("#fbfcff", "#20324e", "#65758d", "#e8edf5")
 
 
 def _fmt(value: Any) -> str:
@@ -321,6 +325,7 @@ def plotly_network(view: Any) -> Any:
                 ],
                 hovertemplate="%{hovertext}<extra></extra>",
                 meta=dict(layer=index, role="nodes"),
+                customdata=[n["id"] for n in selected],
             )
             if spatial:
                 kwargs["z"] = [n["z3"] for n in selected]
@@ -1299,3 +1304,246 @@ def matplotlib_network(view: Any) -> Any:
     ax.set_facecolor(bg)
     ax.axis("off")
     return fig
+
+
+def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
+    """Generate self-contained client-side JavaScript for direct 3D neuron click interaction."""
+    import json
+
+    node_data = {}
+    for n in graph["nodes"]:
+        node_data[n["id"]] = {
+            "id": n["id"],
+            "layer": n["layer"],
+            "index": n["index"],
+            "x": n["x"],
+            "y": n["y3"] if spatial else n["y"],
+            "z": n["z3"] if spatial else 0.0,
+            "activation": n.get("activation"),
+            "activation_status": n.get("activation_status", "not captured"),
+            "preactivation": n.get("preactivation"),
+            "bias": n.get("bias"),
+            "gradient": n.get("gradient"),
+            "gradient_status": n.get("gradient_status", "missing"),
+            "trainable": n.get("trainable"),
+            "bias_trainable": n.get("bias_trainable"),
+            "incoming": [
+                {
+                    "source": e["source"],
+                    "target": e["target"],
+                    "weight": e["weight"],
+                    "gradient": e.get("gradient"),
+                }
+                for e in n.get("incoming_edges", [])
+            ],
+            "outgoing": [
+                {
+                    "source": e["source"],
+                    "target": e["target"],
+                    "weight": e["weight"],
+                    "gradient": e.get("gradient"),
+                }
+                for e in n.get("outgoing_edges", [])
+            ],
+        }
+    layers_data = [
+        {"label": layer["label"], "module": layer["module"], "operation": layer["operation"]}
+        for layer in graph["layers"]
+    ]
+    graph_payload = {
+        "spatial": spatial,
+        "sample": graph.get("sample", 0),
+        "captured": graph.get("captured", False),
+        "edge_opacity": graph.get("edge_opacity", 0.45),
+        "nodes": node_data,
+        "layers": layers_data,
+    }
+    graph_json = json.dumps(graph_payload)
+
+    return f"""
+(function() {{
+    var graphData = {graph_json};
+    var nodeMap = graphData.nodes;
+    var spatial = graphData.spatial;
+    var defaultEdgeOpacity = graphData.edge_opacity;
+
+    function initInteractive() {{
+        var gd = document.getElementsByClassName('plotly-graph-div')[0];
+        if (!gd || !gd.data) {{
+            setTimeout(initInteractive, 80);
+            return;
+        }}
+
+        var idxIncoming = -1, idxOutgoing = -1, idxSelectedNode = -1;
+        for (var i = 0; i < gd.data.length; i++) {{
+            var role = gd.data[i].meta ? gd.data[i].meta.role : null;
+            if (role === 'highlight_incoming') idxIncoming = i;
+            else if (role === 'highlight_outgoing') idxOutgoing = i;
+            else if (role === 'highlight_node') idxSelectedNode = i;
+        }}
+        if (idxIncoming === -1 || idxOutgoing === -1 || idxSelectedNode === -1) return;
+
+        function formatCard(node) {{
+            if (!node) {{
+                return '<b>SeeDL Overview</b> · Click any neuron directly in 3D to inspect connections and activations.';
+            }}
+            var layer = graphData.layers[node.layer];
+            var lines = [];
+            var heading = '<b>NEURON INSPECTION: ' + layer.label + ' · Neuron #' + node.index + '</b> (id: ' + node.id + ')';
+            if (graphData.captured) heading += ' · Sample ' + graphData.sample;
+            lines.push(heading);
+            lines.push('<b>Module:</b> ' + layer.module + ' · <b>Operation:</b> ' + layer.operation);
+
+            var actStr = node.activation !== null ? Number(node.activation).toPrecision(5) : 'unavailable';
+            var preStr = node.preactivation !== null ? Number(node.preactivation).toPrecision(5) : 'unavailable';
+            var biasStr = node.bias !== null ? Number(node.bias).toPrecision(5) : 'unavailable';
+            var gradStr = node.gradient !== null ? Number(node.gradient).toPrecision(5) : 'unavailable';
+
+            if (node.layer === 0) {{
+                lines.push('<b>Input feature:</b> ' + actStr + ' (' + node.activation_status + ') · No bias or parameter gradients');
+            }} else {{
+                lines.push('<b>Activation:</b> ' + actStr + ' · <b>Pre-activation:</b> ' + preStr + ' · <b>Bias:</b> ' + biasStr + ' · <b>∇:</b> ' + gradStr);
+            }}
+
+            var inEdges = node.incoming || [];
+            if (inEdges.length > 0) {{
+                var inStrs = inEdges.slice(0, 6).map(function(e) {{
+                    var w = 'w=' + (e.weight >= 0 ? '+' : '') + Number(e.weight).toPrecision(3);
+                    return '[' + e.source + '] ' + w;
+                }});
+                lines.push('<b>Incoming (' + inEdges.length + '):</b> ' + inStrs.join(', ') + (inEdges.length > 6 ? ', …' : ''));
+            }} else {{
+                lines.push('<b>Incoming:</b> None (input features)');
+            }}
+
+            var outEdges = node.outgoing || [];
+            if (outEdges.length > 0) {{
+                var outStrs = outEdges.slice(0, 6).map(function(e) {{
+                    var w = 'w=' + (e.weight >= 0 ? '+' : '') + Number(e.weight).toPrecision(3);
+                    return '[' + e.target + '] ' + w;
+                }});
+                lines.push('<b>Outgoing (' + outEdges.length + '):</b> ' + outStrs.join(', ') + (outEdges.length > 6 ? ', …' : ''));
+            }} else {{
+                lines.push('<b>Outgoing:</b> None (output layer)');
+            }}
+
+            return lines.join('<br>');
+        }}
+
+        window.__seedl_select_neuron = function(nodeId) {{
+            var node = nodeMap[nodeId];
+            if (!node) return;
+
+            var inX = [], inY = [], inZ = [], inText = [];
+            for (var i = 0; i < (node.incoming || []).length; i++) {{
+                var e = node.incoming[i];
+                var src = nodeMap[e.source];
+                if (src) {{
+                    inX.push(src.x, (src.x + node.x) / 2, node.x, null);
+                    inY.push(src.y, (src.y + node.y) / 2, node.y, null);
+                    if (spatial) inZ.push(src.z, (src.z + node.z) / 2, node.z, null);
+                    var t = e.source + ' → ' + e.target + '<br>Weight: ' + Number(e.weight).toPrecision(4);
+                    inText.push(t, t, t, '');
+                }}
+            }}
+
+            var outX = [], outY = [], outZ = [], outText = [];
+            for (var j = 0; j < (node.outgoing || []).length; j++) {{
+                var e2 = node.outgoing[j];
+                var tgt = nodeMap[e2.target];
+                if (tgt) {{
+                    outX.push(node.x, (node.x + tgt.x) / 2, tgt.x, null);
+                    outY.push(node.y, (node.y + tgt.y) / 2, tgt.y, null);
+                    if (spatial) outZ.push(node.z, (node.z + tgt.z) / 2, tgt.z, null);
+                    var t2 = e2.source + ' → ' + e2.target + '<br>Weight: ' + Number(e2.weight).toPrecision(4);
+                    outText.push(t2, t2, t2, '');
+                }}
+            }}
+
+            var opacities = [];
+            for (var k = 0; k < gd.data.length; k++) {{
+                var role = gd.data[k].meta ? gd.data[k].meta.role : null;
+                if (role === 'edges') opacities.push(0.04);
+                else if (role === 'nodes') opacities.push(0.25);
+                else if (role === 'guide') opacities.push(0.1);
+                else if (role === 'label') opacities.push(1.0);
+                else if (role === 'highlight_incoming' || role === 'highlight_outgoing' || role === 'highlight_node') opacities.push(1.0);
+                else opacities.push(1.0);
+            }}
+
+            var cam = (gd.layout && gd.layout.scene && gd.layout.scene.camera) ?
+                JSON.parse(JSON.stringify(gd.layout.scene.camera)) : null;
+
+            var restyleData = {{
+                'x': [inX, outX, [node.x]],
+                'y': [inY, outY, [node.y]],
+                'visible': [inX.length > 0, outX.length > 0, true]
+            }};
+            if (spatial) {{
+                restyleData['z'] = [inZ, outZ, [node.z]];
+            }}
+            Plotly.restyle(gd, restyleData, [idxIncoming, idxOutgoing, idxSelectedNode]);
+
+            for (var m = 0; m < gd.data.length; m++) {{
+                Plotly.restyle(gd, {{'opacity': opacities[m]}}, [m]);
+            }}
+
+            if (gd.layout && gd.layout.annotations) {{
+                var annots = JSON.parse(JSON.stringify(gd.layout.annotations));
+                if (annots.length > 0) {{
+                    annots[annots.length - 1].text = formatCard(node);
+                    var relayoutObj = {{'annotations': annots}};
+                    if (spatial && cam) relayoutObj['scene.camera'] = cam;
+                    Plotly.relayout(gd, relayoutObj);
+                }}
+            }}
+        }};
+
+        window.__seedl_clear_selection = function() {{
+            var cam = (gd.layout && gd.layout.scene && gd.layout.scene.camera) ?
+                JSON.parse(JSON.stringify(gd.layout.scene.camera)) : null;
+
+            var resetHighlight = {{'x': [[], [], []], 'y': [[], [], []], 'visible': [false, false, false]}};
+            if (spatial) resetHighlight['z'] = [[], [], []];
+            Plotly.restyle(gd, resetHighlight, [idxIncoming, idxOutgoing, idxSelectedNode]);
+
+            for (var k = 0; k < gd.data.length; k++) {{
+                var role = gd.data[k].meta ? gd.data[k].meta.role : null;
+                var op = (role === 'edges') ? defaultEdgeOpacity : (role === 'guide') ? 0.35 : 1.0;
+                Plotly.restyle(gd, {{'opacity': op}}, [k]);
+            }}
+
+            if (gd.layout && gd.layout.annotations) {{
+                var annots = JSON.parse(JSON.stringify(gd.layout.annotations));
+                if (annots.length > 0) {{
+                    annots[annots.length - 1].text = formatCard(null);
+                    var relayoutObj = {{'annotations': annots}};
+                    if (spatial && cam) relayoutObj['scene.camera'] = cam;
+                    Plotly.relayout(gd, relayoutObj);
+                }}
+            }}
+        }};
+
+        gd.on('plotly_click', function(data) {{
+            if (!data || !data.points || data.points.length === 0) return;
+            var pt = data.points[0];
+            var trace = gd.data[pt.curveNumber];
+            if (trace && trace.meta && trace.meta.role === 'nodes') {{
+                var nodeId = pt.customdata;
+                if (!nodeId && pt.text !== undefined && trace.meta.layer !== undefined) {{
+                    nodeId = trace.meta.layer + ':' + pt.text;
+                }}
+                if (nodeId) {{
+                    window.__seedl_select_neuron(nodeId);
+                }}
+            }}
+        }});
+    }}
+
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {{
+        initInteractive();
+    }} else {{
+        document.addEventListener('DOMContentLoaded', initInteractive);
+    }}
+}})();
+"""

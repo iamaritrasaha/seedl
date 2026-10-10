@@ -41,6 +41,56 @@ def render(view: Visualization, backend: str) -> Any:
 
         resolve_backend("plotly")
         return render_spatial(view)
+    if view.kind == "model" and view.data.get("presentation") == "cnn_3d":
+        from ._cnn_spatial import plotly_cnn_3d, svg_cnn_3d
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_cnn_3d(view)
+        return svg_cnn_3d(view)
+    if view.kind == "bloch":
+        from ._quantum_renderers import plotly_bloch, svg_bloch
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_bloch(view)
+        return svg_bloch(view)
+    if view.kind == "quantum_circuit":
+        from ._quantum_renderers import plotly_circuit, svg_circuit
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_circuit(view)
+        return svg_circuit(view)
+    if view.kind == "statevector":
+        from ._quantum_renderers import plotly_statevector, svg_statevector
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_statevector(view)
+        return svg_statevector(view)
+    if view.kind == "entanglement":
+        from ._quantum_renderers import plotly_entanglement, svg_entanglement
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_entanglement(view)
+        return svg_entanglement(view)
+    if view.kind == "density_matrix":
+        if len(view.data.get("density_matrix", [])) == 2:
+            from ._quantum_renderers import plotly_bloch, svg_bloch
+
+            resolve_backend(backend)
+            if backend == "plotly":
+                return plotly_bloch(view)
+            return svg_bloch(view)
+        else:
+            from ._quantum_renderers import plotly_statevector, svg_statevector
+
+            resolve_backend(backend)
+            if backend == "plotly":
+                return plotly_statevector(view)
+            return svg_statevector(view)
     if view.kind == "model" and view.data.get("presentation") in {"neurons", "architecture"}:
         from ._network_renderers import matplotlib_network, plotly_network, svg_network
 

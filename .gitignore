@@ -11,3 +11,5 @@ wheels/
 
 # Reproducible, self-contained browser artifacts (run scripts/build_visual_showcase.py)
 docs/visuals/*.html
+artifacts/
+examples/artifacts/

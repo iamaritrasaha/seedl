@@ -2,15 +2,16 @@
 
 # 🧠 SeeDL
 
-### Don't just train neural networks. **See them.**
+### Don't just train neural networks or run quantum circuits. **See them.**
 
-**The next-generation interactive neural network visualization, explainability & training insights toolkit for PyTorch.**
+**The next-generation scientific visualization library for classical neural networks and quantum systems.**
 
 [![CI Status](https://github.com/iamaritrasaha/seedl/actions/workflows/ci.yml/badge.svg)](https://github.com/iamaritrasaha/seedl/actions/workflows/ci.yml)
 [![Python Version](https://img.shields.io/badge/Python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.13-3776AB?logo=python&logoColor=white)](https://github.com/iamaritrasaha/seedl/blob/main/pyproject.toml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-22c55e.svg)](LICENSE)
 [![Zero Core Dependencies](https://img.shields.io/badge/Core%20Engine-Zero%20Dependencies%20(Pure%20Python)-blueviolet)](https://github.com/iamaritrasaha/seedl)
 [![PyTorch Compatible](https://img.shields.io/badge/PyTorch-Integrated-EE4C2C?logo=pytorch&logoColor=white)](https://pytorch.org/)
+[![Qiskit Compatible](https://img.shields.io/badge/Qiskit-Integrated-6929C4?logo=qiskit&logoColor=white)](https://qiskit.org/)
 [![Interactive 3D](https://img.shields.io/badge/3D%20WebGL-Plotly-3F4F75?logo=plotly&logoColor=white)](https://plotly.com/python/)
 
 <br>
@@ -25,7 +26,7 @@
   <a href="#-documentation"><b>📚 Docs</b></a>
 </p>
 
-<sub>Zero required dependencies for the pure Python SVG core • Optional integrations for PyTorch, NumPy, Plotly & Matplotlib</sub>
+<sub>Zero required dependencies for the pure Python SVG core • Optional integrations for PyTorch, NumPy, Plotly, Matplotlib & Qiskit</sub>
 
 <br>
 <br>
@@ -45,10 +46,16 @@
 ```python
 import seedl as sd
 
+# Classical Neural Networks
 sd.see(model)  # Instant 2D neuron & synaptic connection diagram
-sd.see(model, view="3d")  # Full 3D WebGL orbit, pan, zoom, & camera reset
+sd.see(model, view="3d")  # Full 3D WebGL orbit, pan, zoom & direct neuron clicking
 sd.see(model, input=x)  # Color neurons by true forward-pass activation responses
 sd.see(model, input=x).explore()  # Animate & step through forward propagation layer by layer
+
+# Quantum Computing & Information
+sd.bloch([1 / 2**0.5, 1 / 2**0.5])  # Interactive 3D Bloch sphere representation
+sd.circuit(qc, simulate=True)  # Visual circuit diagram with statevector evolution
+sd.entanglement(bell_state)  # Bipartite entanglement diagnostic & von Neumann entropy
 ```
 
 > [!NOTE]
@@ -58,18 +65,22 @@ sd.see(model, input=x).explore()  # Animate & step through forward propagation l
 
 ## ✨ Why SeeDL?
 
-Most neural network visualization tools either generate **static boxes of abstract module containers** (like Netron) or spit out **dense ASCII tables of parameter tallies** (like TorchInfo).
+Most scientific and machine learning visualization tools either generate **static boxes of abstract module containers** (like Netron), spit out **dense ASCII tables of parameter tallies** (like TorchInfo), or rely on static text-based circuit printers.
 
-**SeeDL is fundamentally different.** It brings your models to life by visualizing the **actual mathematical architecture** of your network — rendering individual neurons, true synaptic connection weights ($W_{ij}$), live tensor activations, and forward computation flows in responsive 2D and 3D WebGL.
+**SeeDL is fundamentally different.** It brings your classical models and quantum states to life by visualizing the **actual mathematical reality** — rendering individual neurons, true synaptic connection weights ($W_{ij}$), live tensor activations, and forward computation flows alongside rigorous 3D Bloch spheres, quantum circuits, and von Neumann entanglement metrics in responsive 2D and 3D WebGL.
 
 | Capability | Traditional Tools | **SeeDL** |
 | :--- | :--- | :--- |
 | **Neuron Granularity** | Abstract layer boxes or tensor shapes | **Individual neurons** mapped to matrix rows & columns |
+| **Direct 3D Interaction** | Static viewpoints or hover menus only | **Direct viewport clicking** on neurons with camera preservation |
 | **Connection Weights** | Hidden inside opaque state dictionaries | **True signed synaptic weights** scaled by magnitude and sign |
 | **Live Activations** | Requires writing custom forward hooks | **Automatic telemetry capture** with `input=x` |
+| **Spatial 3D CNNs** | Flattened feature plots | **3D stacked spatial planes** preserving channel structure |
 | **Interactive 3D** | Static 2D PNG diagrams | **Full WebGL 3D orbit, pan, zoom & reset** via Plotly |
 | **Forward Propagation** | Mental abstraction | **Interactive playback animation** with speed controls & layer stepping |
-| **Neuron Deep-Dive** | None | **Isolated dendrite inspection** (incoming/outgoing weights, bias, gradients) |
+| **Quantum States** | Text notation or static projection | **Interactive 3D Bloch sphere** for pure ($r=1$) and mixed ($r<1$) states |
+| **Quantum Circuits** | ASCII terminals or matplotlib figures | **Interactive circuit diagrams** with unitary evolution stepping |
+| **Entanglement Diagnostics** | Manual partial trace calculations | **Automated partial trace & von Neumann entropy** ($S=1.0$ bit for Bell) |
 | **Portability** | Requires running Python kernels or servers | **Self-contained HTML exports** & zero-dependency SVG engine |
 
 ---
@@ -174,9 +185,11 @@ uv add "seedl[torch,plotly] @ git+https://github.com/iamaritrasaha/seedl.git"
 ```bash
 pip install seedl                       # Lightweight zero-dependency core (SVG engine)
 pip install "seedl[torch,plotly]"       # Interactive PyTorch & 3D WebGL support
-pip install "seedl[all]"                # All optional backends (Matplotlib, etc.)
+pip install "seedl[quantum]"            # Quantum computing suite (Qiskit + NumPy)
+pip install "seedl[all]"                # Complete suite (PyTorch, Plotly, Qiskit, Matplotlib)
 
 uv add "seedl[torch,plotly]"
+uv add "seedl[quantum]"
 ```
 
 </details>
@@ -240,12 +253,16 @@ sd.see(model, backend="svg").save("architecture.svg")
 
 ## 🚀 Flagship Features
 
-### 🔍 1. Deep Neuron & Dendrite Inspection
+### 🔍 1. Direct 3D Neuron Selection & Dendrite Inspection
 
-Hovering gives you quick stats, but **selecting a neuron unlocks deep-dive telemetry**. You can inspect any neuron directly via code or through the in-browser dropdown menu:
+Hovering gives you quick stats, but **clicking a neuron unlocks deep-dive telemetry directly in the 3D viewport**. You can click any neuron directly with your mouse in standalone HTML or notebook environments, or select via code and dropdown menus:
 
 ```python
-# Inspect neuron index 2 in hidden layer 1:
+# Direct 3D network exploration:
+view = sd.see(model, input=x, view="3d")
+# Click any neuron marker directly to isolate its connections and update HUD!
+
+# Or programmatically select neuron index 2 in hidden layer 1:
 view = sd.see(model, input=x, select_neuron=(1, 2), view="3d")
 ```
 
@@ -253,6 +270,10 @@ view = sd.see(model, input=x, select_neuron=(1, 2), view="3d")
   <img src="docs/visuals/neuron-selected.svg" alt="Neuron Selection and Dendrite Highlighting" width="85%" />
 </div>
 
+- **Direct Viewport Interaction**:
+  - Click any neuron marker in the 3D scene to isolate its local dendritic neighborhood.
+  - **Camera Preservation**: Clicking a neuron preserves your current orbit and pan camera orientation without jumping.
+  - Click the empty background to clear selection and restore the full network overview.
 - **Isolated Synaptic Wiring**:
   - **Incoming Connections**: Highlighted in vivid cyan (`#00e5ff`, width 3.5, opacity 0.95).
   - **Outgoing Connections**: Highlighted in warm amber (`#fbbf24`, width 3.5, opacity 0.95).
@@ -289,14 +310,72 @@ sd.see(model, input=x, view="3d").explore()
 
 ---
 
-### 🌐 3. True 3D WebGL Architecture Exploration
+### 🌐 3. True 3D WebGL Architecture Exploration & Themes
 
 SeeDL's 3D engine is powered by Plotly WebGL scatter and mesh primitives, built specifically for spatial intuition:
 
 - **Optimal Default Perspective**: Opens with an ergonomic camera angle (`eye=(-1.8, -2.4, 0.85)`), providing immediate depth, clear layer spacing, and unoccluded connections.
 - **One-Click Camera Controls**: Dedicated camera menu to trigger automated 360° **Orbit**, switch to planar **Pan**, or **Reset view** back to home coordinates.
 - **Planar Layer Guides**: Dotted bounding boxes define layer boundaries in 3D space without obstructing connection sightlines.
-- **Dark & Light Themes**: Seamlessly switch between modern dark mode (`theme="dark"`) and publication-ready light mode (`theme="light"`).
+- **5 Scientific Themes**: `scientific` (deep space navy default), `dark`, `light`, `minimal`, and `presentation`.
+
+---
+
+### 🖼️ 4. 3D Spatial CNN Feature Map Stacks
+
+For convolutional neural networks, SeeDL captures intermediate activations via PyTorch forward hooks and renders them as stacked 3D spatial planes along the depth axis:
+
+```python
+# Pass any convolutional model and an image tensor:
+sd.see(cnn_model, input=image_tensor, view="3d")
+```
+
+- **Spatial Coordinate Planes**: Feature map channels are preserved as $(H, W)$ 2D grids stacked across layer depth.
+- **Activation Intensity Mapping**: Pixel markers reflect true forward-pass feature activations with continuous teal/viridis colormaps.
+- **Architecture Flow**: Inter-layer bounding boxes show receptive field downsampling and channel expansion.
+
+---
+
+### ⚛️ 5. The Quantum Revolution: Quantum System Diagnostics
+
+SeeDL 0.2.0 introduces a comprehensive quantum visualization subsystem with verified mathematical rigor:
+
+#### Interactive 3D Bloch Sphere
+Visualize any single-qubit statevector or density matrix with exact Cartesian coordinates $r_i = \text{Tr}(\rho \sigma_i)$:
+
+```python
+# Pure states (r = 1.0) on the sphere surface:
+sd.bloch([1 / 2**0.5, 1 / 2**0.5])  # |+> state on +X axis
+sd.bloch([1 / 2**0.5, 1j / 2**0.5])  # |+i> state on +Y axis
+
+# Mixed states (r < 1.0) inside the sphere:
+rho_mixed = [[0.75, 0.0], [0.0, 0.25]]
+sd.bloch(rho_mixed)  # Bloch vector length r = 0.5 inside sphere
+```
+
+#### Quantum Circuits & State Evolution
+Render interactive circuit diagrams and track unitary evolution step-by-step:
+
+```python
+from qiskit import QuantumCircuit
+
+qc = QuantumCircuit(2)
+qc.h(0)
+qc.cx(0, 1)
+
+# Interactive circuit diagram with statevector evolution tracking:
+sd.circuit(qc, simulate=True)
+```
+
+#### Bipartite Entanglement Diagnostics
+Diagnose quantum correlations using automated partial traces and von Neumann entropy:
+
+```python
+# Analyze a Bell pair (|00> + |11>) / sqrt(2):
+bell = [1 / 2**0.5, 0.0, 0.0, 1 / 2**0.5]
+sd.entanglement(bell)
+# Yields exact von Neumann entropy: S(ρ_A) = 1.0000 bit (Maximally Entangled)
+```
 
 ---
 
@@ -452,6 +531,7 @@ sd.see(model, backend="matplotlib")  # Publication-ready Matplotlib plot
 ## 📚 Documentation & Resources
 
 - **[Interactive Showcase Notebook](examples/neural_network_explorer.ipynb)**: Complete, cell-by-cell walkthrough demonstrating 2D/3D networks, neuron selection, forward exploration, loss landscapes, and embeddings.
+- **[Advanced 3D & Quantum Showcase](examples/advanced_3d_quantum_showcase.ipynb)**: Deep-dive notebook demonstrating direct 3D neuron selection, CNN spatial maps, 3D Bloch spheres, quantum circuit evolution, Bell state entanglement, and density matrices.
 - **[Visual Acceptance Specification](docs/VISUAL_ACCEPTANCE.md)**: Comprehensive verification criteria, tested architectures, and capability boundaries.
 - **[Examples Directory](examples/)**:
   - [`01_quickstart.py`](examples/01_quickstart.py): Zero-to-one API overview.

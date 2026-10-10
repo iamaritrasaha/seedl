@@ -44,13 +44,14 @@ model = nn.Sequential(
 x = torch.tensor([[0.3, 0.8, -0.2, 1.0]])
 
 sd.see(model)  # Neurons and actual weighted edges
+sd.see(model, select_neuron=(1, 2))  # Highlight incoming (cyan) & outgoing (amber) connections
 sd.see(model, view="3d")  # Plotly: orbit, zoom, pan
 sd.see(model, input=x, theme="dark")  # Actual post-activation node values
-sd.see(model, input=x).explore()  # Layer-step slider, including Reset
+sd.see(model, input=x).explore()  # Animated forward pass (Play/Pause/Reset) and layer-step slider
 sd.see(model, view="architecture")  # Operation blocks or module hierarchy
 sd.see(model, view="summary")  # Existing detailed inspection tables
 
-view = sd.see(model, view="3d", input=x)
+view = sd.see(model, view="3d", input=x, select_neuron=(1, 2))
 view.save("network.html")  # Self-contained Plotly JS; opens offline
 ```
 
@@ -119,13 +120,17 @@ restores the designed camera and orbit mode. Dotted outlines identify layer plan
 Colored node outlines preserve layer identity while the fill shows activation values.
 Edge-on camera angles can overlap labels.
 
-`.explore()` adds a layer-step slider when activations were captured. It highlights the current
-transformation and adjacent nodes. The readout displays its operation and captured input,
-pre-activation and output vectors (first six entries for wide layers; hover for each value).
-The slider sits above the graph, supports backward steps and Reset, and keeps the color scale
-fixed. Without a captured input, exploration explicitly says that values are unavailable.
-It reuses captured values without rerunning the model. There is no click-to-expand behavior,
-notebook widget dependency or fabricated propagation animation.
+`.explore()` provides animated forward propagation (**▶ Play**, **⏸ Pause**, **⏮ Reset**) with
+speed controls (**0.5x**, **1x**, **2x**) and a layer-step slider. It visually steps through computational
+transformations in execution order, highlighting active transformations and displaying actual captured
+tensors without inventing intermediate values. Without a captured input, exploration explicitly indicates
+that values are unavailable.
+
+Users can also select and inspect individual neurons via `select_neuron=(layer, idx)` or through the
+interactive dropdown menu. Selecting a neuron isolates its incoming connections (cyan) and outgoing
+connections (amber), dims unrelated edges, and provides a full inspection panel with module identity,
+operation, bias, trainability, activation, pre-activation, and gradient values. There is no external
+server requirement, notebook widget dependency, or fake particle physics.
 
 Without Plotly, `sd.see(model)` renders SVG circles, edges, labels and native title tooltips.
 Explicit `view="3d"` requires Plotly and raises an installation hint if it is absent. Unsupported

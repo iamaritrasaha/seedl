@@ -89,6 +89,7 @@ def see(
     max_connections: int = 1_500,
     min_weight: float = 0.0,
     edge_opacity: float = 0.45,
+    select_neuron: tuple[int, int] | str | None = None,
 ) -> Visualization:
     """Automatically visualize a supported deep-learning or numeric object.
 
@@ -115,6 +116,7 @@ def see(
         max_connections: Deterministic connection preview budget (default 1500).
         min_weight: Hide sampled connections below this absolute weight.
         edge_opacity: Connection opacity between zero and one.
+        select_neuron: Highlight and inspect a specific neuron as (layer, index) or 'layer:index'.
     """
     _validate_max_points(max_points)
     if view not in {"auto", "neurons", "3d", "architecture", "summary"}:
@@ -204,6 +206,7 @@ def see(
             min_weight=min_weight,
             edge_opacity=edge_opacity,
             detail=detail,
+            select_neuron=select_neuron,
         )
         kind, title = "model", f"{type(obj).__name__} architecture"
         if data.get("neuron_graph"):

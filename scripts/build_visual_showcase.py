@@ -93,7 +93,17 @@ assert actual == expected
 active.save(out / "neurons.html")
 active.save(out / "neurons.svg")
 active""")
-markdown("""## 5. Rotate a real 3D network
+markdown("""## 5. Select and inspect an individual neuron
+Select any neuron (e.g. `select_neuron=(1, 2)`) to isolate its incoming (cyan) and outgoing (amber)
+weighted connections while dimming unrelated edges. The interactive dropdown lets you switch
+between overview and any individual neuron, revealing real bias, activation, pre-activation,
+and weights in the inspection panel below the network.
+""")
+code("""inspected = sd.see(model, input=x, select_neuron=(1, 2), theme="dark")
+inspected.save(out / "neuron-selected.html")
+inspected.save(out / "neuron-selected.svg")
+inspected""")
+markdown("""## 6. Rotate a real 3D network
 Neurons occupy deterministic grids within layer planes. Drag to orbit; choose zoom or pan in
 the toolbar. **Orbit**, **Pan**, and **Reset view** are also available above the graph.
 Dotted outlines identify layer planes; they are not connections. Labels
@@ -114,12 +124,11 @@ spatial_light""")
 code("""medium_spatial = sd.see(medium_model, view="3d", max_connections=250)
 medium_spatial.save(out / "medium-3d.html")
 medium_spatial""")
-markdown("""## 6. Follow the forward pass
-The slider highlights a transformation and its input/output nodes. Select layers in either
-direction; Reset restores the whole network. This revisits captured values, with no additional
-model calls. The readout shows actual input, pre-activation and output vectors (first six values
-for wide layers; hover for every neuron). Values keep a fixed color scale while stepping.
-The slider is above the graph. There is no simulated time evolution or clickable expansion.
+markdown("""## 7. Follow forward propagation with animation
+The forward explorer offers interactive stepping and playback (**▶ Play**, **⏸ Pause**, **⏮ Reset**, with **0.5x**, **1x**, **2x** speed controls).
+Highlighting represents computational execution order through layers, displaying actual captured
+activations from the evaluation pass without fabricating artificial intermediate states.
+The slider and playback buttons are above the graph; the information panel updates with actual layer tensors.
 """)
 code("""forward = sd.see(model, input=x, theme="dark")
 forward_figure = forward.explore()
@@ -131,7 +140,7 @@ forward_sampled = sd.see(model, input=x, max_connections=40)
 forward_sampled.explore()
 forward_sampled.save(out / "forward-sampled.html")
 forward_figure""")
-markdown("""## 7. Convolutional data flow
+markdown("""## 8. Convolutional data flow
 Convolution blocks show channel counts, kernel/stride and captured spatial dimensions.
 These are operations and feature-map shapes, not fully connected neuron wiring.
 """)
@@ -146,7 +155,7 @@ conv = sd.see(cnn, input=torch.ones(1, 3, 16, 16))
 conv.save(out / "cnn.html")
 conv.save(out / "cnn.svg")
 conv""")
-markdown("""## 8. Large models collapse before extracting weights
+markdown("""## 9. Large models collapse before extracting weights
 A 1,024 → 2,048 → 10 model has over two million weights. It becomes a handful of architecture
 blocks. No million-edge graph is constructed. `view="summary"` retains detailed inspection.
 """)
@@ -155,7 +164,7 @@ large = sd.see(large_model)
 assert "neuron_graph" not in large.data
 large.save(out / "large.html")
 large""")
-markdown("""## 9. Transformer hierarchy
+markdown("""## 10. Transformer hierarchy
 Custom/residual structures use containment connectors. Registration order does not prove
 execution order; this view does not invent skip connections. Attention, feed-forward and
 normalization modules remain visible, with deeper details in `view="summary"`.
@@ -164,7 +173,7 @@ code("""transformer = nn.TransformerEncoderLayer(d_model=16, nhead=4, dim_feedfo
 hierarchy = sd.see(transformer)
 hierarchy.save(out / "transformer.html")
 hierarchy""")
-markdown("""## 10. Three-component PCA
+markdown("""## 11. Three-component PCA
 These are explicitly generated example vectors, not real documents. PCA fits the displayed
 sample and reports explained variance per axis. Category colors use supplied labels. Coordinates
 are scaled by the recorded `coordinate_scale` before PCA to avoid numeric overflow.
@@ -179,7 +188,7 @@ embedded = sd.embeddings(
 )
 embedded.save(out / "embeddings-3d.html")
 embedded""")
-markdown("""## 11. A defined loss slice
+markdown("""## 12. A defined loss slice
 For a one-input linear regressor, vary weight[0] and bias[0] around the current model. All other
 parameters stay fixed. `evaluate=True` explicitly authorizes repeated evaluation on a deep copy.
 This is a sampled two-dimensional coordinate slice of parameter space, not the full loss function.
@@ -207,9 +216,11 @@ markdown("""## Checks and limits
 
 - Neuron detail: exact built-in Linear/Sequential plus supported elementwise activations; no custom hooks.
 - Default limits: 100 total neurons, 48 per layer, 12 layers, 1,500 sampled connections.
+- Interactive inspection: dropdown neuron selection highlights incoming (cyan) and outgoing (amber) connections, and shows exact bias, activation, pre-activation, and weights.
+- Forward propagation: animated playback (**▶ Play**, **⏸ Pause**, **⏮ Reset**) and layer stepping operate purely on captured data without fabricating values.
 - Higher-rank MLP activations require selecting a `[features]` or `[batch, features]` input first.
 - SVG remains usable without Plotly; a 3D neuron SVG is explicitly labeled as a 2D projection.
-- Complex execution graphs, clickable expansion, animated propagation and automatic optimizer-path capture are not implemented.
+- Arbitrary directed acyclic computation graphs, complex branching, and automatic optimizer-path capture are not implemented.
 - All other SeeDL entry points remain available; this notebook focuses on the visual redesign.
 """)
 notebook = nbformat.v4.new_notebook(cells=cells)
@@ -219,10 +230,6 @@ nbformat.validate(notebook)
 NotebookClient(
     notebook, timeout=180, kernel_name="python3", resources={"metadata": {"path": str(ROOT)}}
 ).execute()
-path = ROOT / "examples" / "neural_network_explorer.ipynb"
-nbformat.write(notebook, path)
-# nbconvert does not natively render Plotly MIME; give the HTML preview real figures.
-
 preview = copy.deepcopy(notebook)
 first_plot = True
 for cell in preview.cells:
@@ -243,4 +250,17 @@ body = body.replace(
     "</head>", "<style>pre{white-space:pre-wrap!important;overflow-wrap:anywhere}</style></head>"
 )
 (DEST / "showcase.html").write_text(body, encoding="utf-8")
+
+# For the version-controlled notebook in examples/, retain clean outputs and
+# metadata while stripping heavyweight Plotly MIME payloads. Heavyweight
+# interactive visualizations are preserved as generated artifacts in docs/visuals/
+# (individual .html files and showcase.html), keeping the git repository compact.
+for cell in notebook.cells:
+    if cell.get("cell_type") == "code":
+        for output in cell.get("outputs", []):
+            if "data" in output:
+                output["data"].pop("application/vnd.plotly.v1+json", None)
+
+path = ROOT / "examples" / "neural_network_explorer.ipynb"
+nbformat.write(notebook, path)
 print(f"Executed {sum(c.cell_type == 'code' for c in notebook.cells)} cells: {path}")

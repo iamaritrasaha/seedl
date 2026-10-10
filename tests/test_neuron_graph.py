@@ -325,3 +325,128 @@ def test_wide_forward_readout_is_bounded_and_honest():
     fig = sd.see(model, input=torch.arange(16, dtype=torch.float32)).explore()
     text = fig.layout.sliders[0].steps[1].args[1]["annotations"][-1]["text"]
     assert "[0, 1, 2, 3, 4, 5, … (16 total; hover for each value)]" in text
+
+
+def test_neuron_selection_validation():
+    # Valid formats
+    v1 = sd.see(tiny(), select_neuron=(1, 0))
+    assert v1.data["neuron_graph"]["selected_neuron"] == "1:0"
+
+    v2 = sd.see(tiny(), select_neuron="1:0")
+    assert v2.data["neuron_graph"]["selected_neuron"] == "1:0"
+
+    # Out of bounds layer
+    with pytest.raises(ValueError, match="layer index 5 is out of bounds"):
+        sd.see(tiny(), select_neuron=(5, 0))
+
+    # Out of bounds neuron
+    with pytest.raises(ValueError, match="neuron index 9 is out of bounds"):
+        sd.see(tiny(), select_neuron=(0, 9))
+
+    # Invalid formats
+    with pytest.raises(ValueError, match="select_neuron must be"):
+        sd.see(tiny(), select_neuron="invalid")
+
+    with pytest.raises(ValueError, match="must be integers"):
+        sd.see(tiny(), select_neuron=(True, 0))
+
+
+def test_neuron_selection_graph_data_and_connections():
+    x = torch.tensor([1.0, 2.0])
+    v = sd.see(tiny(), input=x, select_neuron=(1, 0))
+    g = v.data["neuron_graph"]
+    assert g["selected_neuron"] == "1:0"
+
+    node = next(n for n in g["nodes"] if n["id"] == "1:0")
+    assert len(node["incoming_edges"]) == 2
+    assert [e["source"] for e in node["incoming_edges"]] == ["0:0", "0:1"]
+    assert len(node["outgoing_edges"]) == 1
+    assert [e["target"] for e in node["outgoing_edges"]] == ["2:0"]
+
+
+def test_neuron_selection_plotly_traces_and_dropdown():
+    pytest.importorskip("plotly")
+    x = torch.tensor([1.0, 2.0])
+    v = sd.see(tiny(), input=x, select_neuron=(1, 0))
+    fig = v.figure
+
+    roles = [t.meta.get("role") for t in fig.data if t.meta]
+    assert "highlight_incoming" in roles
+    assert "highlight_outgoing" in roles
+    assert "highlight_node" in roles
+
+    # In 2D, updatemenus[0] is the neuron selection dropdown
+    neuron_menu = fig.layout.updatemenus[0]
+    button_labels = [b.label for b in neuron_menu.buttons]
+    assert button_labels[0] == "Overview (All Neurons)"
+    assert any("[1:0]" in lbl for lbl in button_labels)
+
+    # Footer inspection card
+    footer_text = fig.layout.annotations[-1].text
+    assert "NEURON INSPECTION" in footer_text
+    assert "Neuron #0" in footer_text
+    assert "Incoming" in footer_text
+    assert "Outgoing" in footer_text
+
+
+def test_neuron_selection_3d_contract():
+    pytest.importorskip("plotly")
+    x = torch.tensor([1.0, 2.0])
+    v = sd.see(tiny(), input=x, view="3d", select_neuron=(1, 0))
+    fig = v.figure
+
+    # In 3D, updatemenus[0] MUST remain Camera controls for backward compatibility
+    assert [b.label for b in fig.layout.updatemenus[0].buttons] == ["Orbit", "Pan", "Reset view"]
+    # updatemenus[1] is the neuron selection dropdown
+    assert fig.layout.updatemenus[1].buttons[0].label == "Overview (All Neurons)"
+
+    # Highlight traces in 3D must have 3D coordinates
+    hl_node = next(t for t in fig.data if t.meta and t.meta.get("role") == "highlight_node")
+    assert hasattr(hl_node, "z")
+    assert len(hl_node.z) == 1
+
+
+def test_forward_animation_frames_and_playback_controls():
+    pytest.importorskip("plotly")
+    x = torch.tensor([1.0, 2.0])
+    fig = sd.see(tiny(), input=x).explore()
+
+    # Frames for playback
+    assert len(fig.frames) == 4  # reset + 3 layers
+    frame_names = [f.name for f in fig.frames]
+    assert frame_names == ["reset", "step_0", "step_1", "step_2"]
+
+    # Play/Pause/Reset controls
+    menu_button_labels = [[b.label for b in m.buttons] for m in fig.layout.updatemenus]
+    flat_labels = [lbl for sublist in menu_button_labels for lbl in sublist]
+    assert "▶ Play" in flat_labels
+    assert "⏸ Pause" in flat_labels
+    assert "⏮ Reset" in flat_labels
+    assert "1x" in flat_labels
+    assert "2x" in flat_labels
+    assert "0.5x" in flat_labels
+
+
+def test_svg_selected_neuron_rendering():
+    x = torch.tensor([1.0, 2.0])
+    v = sd.see(tiny(), input=x, select_neuron=(1, 0), backend="svg")
+    svg_str = v.to_figure("svg")
+
+    assert "#00e5ff" in svg_str  # Cyan incoming highlight
+    assert "#fbbf24" in svg_str  # Amber outgoing highlight
+    assert "Selected Neuron [1:0]" in svg_str
+    assert "Incoming (cyan): 2" in svg_str
+    assert "Outgoing (amber): 1" in svg_str
+
+
+def test_explore_with_select_neuron():
+    pytest.importorskip("plotly")
+    x = torch.tensor([1.0, 2.0])
+    fig = sd.see(tiny(), input=x).explore(select_neuron=(1, 0))
+
+    # Should have both explore frames and selected neuron highlight
+    assert len(fig.frames) == 4
+    roles = [t.meta.get("role") for t in fig.data if t.meta]
+    assert "highlight_node" in roles
+    hl_node = next(t for t in fig.data if t.meta and t.meta.get("role") == "highlight_node")
+    assert hl_node.visible is True

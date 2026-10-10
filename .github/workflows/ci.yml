@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-typecheck:
+    name: Code Quality & Type Checks
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f94e142e70d13161a0b3ac0f5b6e929e4cda735e # v5.3.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.10"
+
+      - name: Verify lockfile consistency
+        run: uv lock --check
+
+      - name: Install development dependencies
+        run: uv sync --extra dev
+
+      - name: Run Ruff linter
+        run: uv run --extra dev ruff check .
+
+      - name: Run Ruff format check
+        run: uv run --extra dev ruff format --check .
+
+      - name: Run mypy type checker
+        run: uv run --extra dev mypy
+
+      - name: Verify project release metadata
+        run: uv run python scripts/verify_release.py
+
+  test:
+    name: Test on Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f94e142e70d13161a0b3ac0f5b6e929e4cda735e # v5.3.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies with all extras
+        run: uv sync --extra dev --extra all
+
+      - name: Run full test suite (CPU)
+        run: uv run --extra dev --extra all pytest
+
+      - name: Run isolated core-only smoke test
+        run: |
+          uv venv /tmp/core-env
+          uv pip install -e . --extra dev --python /tmp/core-env/bin/python
+          /tmp/core-env/bin/python -c "
+          import sys, seedl as sd
+          for name in ('torch', 'numpy', 'plotly', 'matplotlib'):
+              assert name not in sys.modules, f'{name} unexpectedly loaded in core'
+          v = sd.see([1, 2, 3], backend='svg')
+          assert v.kind == 'sequence'
+          assert '<svg' in v.to_figure()
+          print('Core-only mode verified successfully on Python ${{ matrix.python-version }}')
+          "
+          rm -rf /tmp/core-env
+
+  package-validation:
+    name: Build & Distribution Validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f94e142e70d13161a0b3ac0f5b6e929e4cda735e # v5.3.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.10"
+
+      - name: Build distributions
+        run: uv build --no-sources
+
+      - name: Check package metadata with twine
+        run: uv run --with twine twine check --strict dist/*.whl dist/*.tar.gz
+
+      - name: Verify distribution contents
+        run: uv run python scripts/verify_release.py --check-dist
+
+      - name: Test clean-room wheel installation
+        run: |
+          uv venv /tmp/wheel-test-env
+          uv pip install dist/*.whl --python /tmp/wheel-test-env/bin/python
+          cd /tmp && /tmp/wheel-test-env/bin/python -c "
+          import sys, seedl as sd
+          assert 'site-packages/seedl' in sd.__file__
+          for name in ('torch', 'numpy', 'plotly', 'matplotlib'):
+              assert name not in sys.modules
+          v = sd.see([10, 20, 30], backend='svg')
+          assert v.kind == 'sequence'
+          assert '<svg' in v.to_figure()
+          print('Isolated clean-room wheel install verified!')
+          "
+          rm -rf /tmp/wheel-test-env
+
+      - name: Test clean-room sdist installation
+        run: |
+          uv venv /tmp/sdist-test-env
+          uv pip install dist/*.tar.gz --python /tmp/sdist-test-env/bin/python
+          cd /tmp && /tmp/sdist-test-env/bin/python -c "
+          import sys, seedl as sd
+          assert 'site-packages/seedl' in sd.__file__
+          v = sd.see(0.75, backend='svg')
+          assert v.kind == 'scalar'
+          assert '<svg' in v.to_figure()
+          print('Isolated clean-room sdist install verified!')
+          "
+          rm -rf /tmp/sdist-test-env

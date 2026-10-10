@@ -1,0 +1,132 @@
+name: Publish SeeDL to PyPI
+
+on:
+  release:
+    types: [published]
+
+# Prevent concurrent publishing and avoid arbitrary triggers
+concurrency:
+  group: publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build & Verify Distributions
+    runs-on: ubuntu-latest
+    if: github.repository == 'iamaritrasaha/seedl'
+    permissions:
+      contents: read  # No publishing permissions for the build job
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@f94e142e70d13161a0b3ac0f5b6e929e4cda735e # v5.3.0
+        with:
+          enable-cache: true
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.10"
+
+      - name: Verify lockfile consistency
+        run: uv lock --check
+
+      - name: Install dependencies
+        run: uv sync --extra dev --extra all
+
+      - name: Run test suite
+        run: uv run --extra dev --extra all pytest
+
+      - name: Run Ruff linter
+        run: uv run --extra dev ruff check .
+
+      - name: Run Ruff format check
+        run: uv run --extra dev ruff format --check .
+
+      - name: Run mypy type checker
+        run: uv run --extra dev mypy
+
+      - name: Validate release tag and metadata
+        run: uv run python scripts/verify_release.py --tag "${{ github.ref_name }}"
+
+      - name: Build distributions
+        run: uv build --no-sources
+
+      - name: Check package metadata with twine
+        run: uv run --with twine twine check --strict dist/*.whl dist/*.tar.gz
+
+      - name: Verify distribution archives and files
+        run: uv run python scripts/verify_release.py --check-dist --tag "${{ github.ref_name }}"
+
+      - name: Test isolated wheel installation
+        run: |
+          uv venv /tmp/test-wheel-env
+          uv pip install dist/*.whl --python /tmp/test-wheel-env/bin/python
+          /tmp/test-wheel-env/bin/python -c "
+          import sys, seedl as sd
+          assert 'seedl' in sd.__file__
+          for mod in ('torch', 'numpy', 'plotly', 'matplotlib'):
+              assert mod not in sys.modules, f'{mod} unexpectedly loaded'
+          v = sd.see([1, 4, 9], backend='svg')
+          assert v.kind == 'sequence'
+          assert '<svg' in v.to_figure()
+          print('Wheel smoke test passed!')
+          "
+          rm -rf /tmp/test-wheel-env
+
+      - name: Test isolated sdist installation
+        run: |
+          uv venv /tmp/test-sdist-env
+          uv pip install dist/*.tar.gz --python /tmp/test-sdist-env/bin/python
+          /tmp/test-sdist-env/bin/python -c "
+          import sys, seedl as sd
+          assert 'seedl' in sd.__file__
+          v = sd.see(42, backend='svg')
+          assert v.kind == 'scalar'
+          assert '<svg' in v.to_figure()
+          print('Source distribution smoke test passed!')
+          "
+          rm -rf /tmp/test-sdist-env
+
+      - name: Upload distribution artifacts
+        uses: actions/upload-artifact@4cec3d8aa04e39d1a68397de0c4cd6fb9dce8ec1 # v4.6.1
+        with:
+          name: python-package-distributions
+          path: |
+            dist/*.whl
+            dist/*.tar.gz
+          if-no-files-found: error
+
+  publish:
+    name: Publish to PyPI
+    needs: [build]
+    runs-on: ubuntu-latest
+    if: github.repository == 'iamaritrasaha/seedl'
+    environment:
+      name: pypi
+      url: https://pypi.org/p/seedl
+    permissions:
+      id-token: write  # Required for OIDC PyPI Trusted Publishing
+      contents: read   # Minimum read permissions
+
+    steps:
+      - name: Download verified distributions
+        uses: actions/download-artifact@cc203385981b70ca67e1ab388640d04474e5dd76 # v4.1.9
+        with:
+          name: python-package-distributions
+          path: dist/
+
+      - name: Inspect files to be published
+        run: |
+          echo "Distributions to upload to PyPI:"
+          ls -lh dist/
+
+      - name: Publish package to PyPI via Trusted Publishing
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: dist/

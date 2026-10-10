@@ -249,12 +249,19 @@ Run the test suite and quality checks:
 
 ```bash
 uv sync --extra dev --extra all
-uv run pytest
-uv run ruff check .
-uv run ruff format --check .
-uv run mypy src/seedl
-uv build
+uv run --extra dev --extra all pytest
+uv run --extra dev ruff check .
+uv run --extra dev ruff format --check .
+uv run --extra dev mypy
+uv build --no-sources
 ```
+
+---
+
+## Documentation & Releases
+
+- [Release Notes (v0.1.0)](docs/RELEASE_NOTES_0.1.0.md): Complete release summary of verified capabilities and limitations.
+- [Publishing Guide](docs/PUBLISHING.md): Instructions for building, verifying, and publishing to PyPI via OIDC Trusted Publishing.
 
 ---
 

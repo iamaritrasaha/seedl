@@ -90,8 +90,10 @@ class Visualization:
             return {"image/png": buffer.getvalue(), "text/plain": str(self)}
         return {"image/svg+xml": self.figure, "text/plain": str(self)}
 
-    def _repr_html_(self) -> str:
-        """Return a static SVG preview for HTML-oriented notebook frontends."""
+    def _repr_html_(self) -> str | None:
+        """Expose HTML only for SVG; do not override the selected backend MIME type."""
+        if self.backend != "svg":
+            return None
         from .renderers import render
 
         return render(self, "svg")

@@ -64,7 +64,8 @@ Scalars are shown as values, vectors as line charts, matrices as heatmaps, and
 image-like arrays as image previews. The view includes shape, element count,
 dtype, device, summary statistics, gradient tracking, and non-finite values.
 Large vectors and images are sampled or downsampled for display, with the
-sampling noted in the view. The original tensor or array is not modified.
+sampling noted in the view. Vector and matrix indices are zero-based and retain
+their original coordinates. The original tensor or array is not modified.
 
 Three-dimensional data is treated as an image only when a leading or trailing
 axis has 1, 3, or 4 channels and both other dimensions are at least 16. Float
@@ -99,10 +100,15 @@ sd.see(model, input=example)
 The input may be a tensor, a tuple of positional inputs, or a dictionary of
 keyword inputs. SeeDL runs one `eval()`-mode forward pass under `no_grad()`,
 clones tensor inputs, removes its temporary hooks, restores each module's
-training flag, and restores registered buffers from temporary copies. This pass
-can still execute user-defined Python code in `forward`; use it only when that
-behavior is safe. Dynamic control flow is represented only for the supplied
-example.
+training flag, and restores ordinary registered-buffer updates from temporary
+copies. Direct storage or dtype manipulation (such as assigning to a buffer's
+`.data`) can defeat that restoration. This pass can still execute user-defined Python code in `forward`; use it only when that
+behavior is safe. This is a module hierarchy, not a traced execution graph.
+Dynamic control flow is represented only for the supplied example. Reused
+modules show the shapes from their last observed call. Keyword input shapes
+are not captured by the input hooks; output shapes are still recorded.
+Per-layer counts include only directly registered parameters. Shared parameters
+can appear in multiple rows, while total counts deduplicate them.
 
 ## Training history
 
@@ -120,8 +126,11 @@ Training and validation series are grouped by metric, with epochs on the
 horizontal axis. Missing validation curves and unequal metric lengths are
 supported. You can provide an `"epoch"` or `"epochs"` sequence; if its length
 does not match a metric, that metric uses its index as the horizontal axis.
-Non-finite values appear as gaps. Curves are diagnostic clues, not guarantees
-about generalization or model quality.
+Non-finite values appear as gaps. Epoch labels must be finite real numbers.
+Large series use evenly spaced previews that can miss brief spikes; the full
+metric sequences remain in `view.data["metrics"]`. Metric units are not inferred
+or converted (for example, accuracy fractions remain fractions). Curves are
+diagnostic clues, not guarantees about generalization or model quality.
 
 ## Activations and gradients
 
@@ -133,11 +142,14 @@ view = sd.activations(model, input=example)
 
 SeeDL captures the first tensor output from each module and shows its shape and
 sampled values. It removes temporary hooks and restores module flags and
-registered buffers after the pass.
+registered buffers after the pass. Reused modules show their last observed
+output. Exact summaries and sampled distributions are distinguished in the view.
 
 Inspect gradients that already exist after your own backward pass:
 
 ```python
+# Example scalar loss; use your task's own loss during training.
+loss = model(example).square().mean()
 loss.backward()
 sd.gradients(model)
 ```
@@ -168,23 +180,45 @@ The built-in SVG view works without a plotting library.
 - Quantized PyTorch tensors are not supported yet. Call `tensor.dequantize()`
   before visualizing one.
 - An input-dependent model view requires PyTorch and an explicit `input=`.
-- Model execution can trigger custom forward-method side effects beyond module
-  flags and registered buffers; inspect unfamiliar models without `input=` first.
+- Model inspection and activation capture execute the supplied model's forward
+  method. They cannot sandbox arbitrary custom Python side effects. Standard
+  layers leave parameters and existing gradients unchanged, but custom code can
+  mutate parameters, gradients, non-tensor inputs, Python attributes, files, or
+  random-number-generator state. Those effects are not restored. Inspect
+  unfamiliar models without `input=` first.
+- Forward inspection temporarily copies tensor inputs and registered buffers;
+  memory use includes those copies and the model's normal forward allocations.
+  `max_points` limits rendered samples, not forward-pass memory or execution time.
+- Activation and gradient samples share a budget across modules or parameters.
+  Small budgets can leave some rows without samples; exact summaries still
+  appear. Tables show the first 100 rows. Plotly activation plots and gradient
+  plots show the first 20 rows. Full rows remain in `view.data["layers"]`.
+- SVG tables shorten long labels with full text in hover titles. On narrow
+  notebook outputs, horizontal scrolling preserves a minimum readable width.
 - Plotly and Matplotlib raise an actionable optional-dependency error if they
   are explicitly selected but unavailable.
 - Exact statistics scan the full tensor or array in bounded chunks; on a GPU the
-  reductions can synchronize with the device. Rendered samples are capped by
-  `max_points` (default 2,048).
+  reductions can synchronize with the device. Vector/distribution samples,
+  matrix cells, image pixels, and each history series are capped by `max_points`
+  (default 2,048). RGB/RGBA pixels contain three/four components each. Matrix
+  previews also cap each dimension at 80, images at 128. Plain Python sequences
+  and histories are validated in full and can require full-size Python copies.
+  Statistics are unavailable when any non-finite values are present; plots can
+  still show the finite portion. Sparse summaries exclude implicit zeros.
+  Floating-point reductions can round very large integers (above `2**53`);
+  these views are diagnostic summaries, not arbitrary-precision calculations.
 - TensorFlow/Keras adapters, attention maps, convolution filters, graph tracing,
   and exported reports are planned, not implemented in this release.
 
 ## Development
 
 ```bash
-uv sync --extra dev --extra numpy --extra plotly --extra matplotlib
-uv run --extra dev --extra numpy --extra plotly --extra matplotlib pytest
+uv sync --extra dev --extra all
+uv run --extra dev --extra all pytest
 uv run --extra dev ruff check .
 uv run --extra dev mypy src/seedl
+uv lock --check
+git diff --check
 uv build
 ```
 

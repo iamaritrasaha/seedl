@@ -64,7 +64,7 @@ def test_training_history_pairs_validation_and_accepts_unequal_lengths() -> None
     assert len(view.data["groups"]) == 2
     loss_group = view.data["groups"][0]
     assert loss_group["name"] == "loss"
-    assert [series["name"] for series in loss_group["series"]] == ["loss", "validation"]
+    assert [series["name"] for series in loss_group["series"]] == ["loss", "val_loss"]
     assert len(loss_group["series"][0]["values"]) == 3
     assert len(loss_group["series"][1]["values"]) == 2
     assert "index labels are used" in " ".join(view.notes)
@@ -166,7 +166,7 @@ def test_matplotlib_backend_when_available() -> None:
             data={"layers": [{"name": "weight", "max_abs": 0.7, "sample": [-0.2, 0.1, 0.7]}]},
             backend="matplotlib",
         )
-        assert len(gradient_view.to_figure().axes) == 2
+        assert len(gradient_view.to_figure().axes) == 3
 
 
 def test_numpy_arrays_and_tensor_values_are_not_modified() -> None:

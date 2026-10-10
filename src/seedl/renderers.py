@@ -5,6 +5,7 @@ from __future__ import annotations
 import html
 import importlib.util
 import math
+import textwrap
 from collections.abc import Iterable
 from typing import Any
 
@@ -58,16 +59,67 @@ def _finite(values: Iterable[Any]) -> list[float]:
     return result
 
 
+def _details(view: Visualization, width: int = 110) -> list[str]:
+    lines = []
+    items = list(view.metadata.items())
+    for start in range(0, len(items), 3):
+        lines.extend(
+            textwrap.wrap(" · ".join(f"{k}: {v}" for k, v in items[start : start + 3]), width)
+        )
+    for note in view.notes:
+        lines.extend(textwrap.wrap(note, width))
+    if (
+        view.kind in {"model", "activations", "gradients"}
+        and len(view.data.get("layers", [])) > 100
+    ):
+        lines.append(
+            f"Showing first 100 of {len(view.data['layers'])} rows; all rows remain in view.data."
+        )
+    return lines
+
+
+def _normalized(value: float, low: float, high: float) -> float:
+    if high == low:
+        return 0.5
+    scale = max(abs(low), abs(high)) or 1.0
+    return (value / scale - low / scale) / (high / scale - low / scale)
+
+
+def _table_value(value: Any) -> str:
+    if value is None:
+        return "n/a"
+    if isinstance(value, float):
+        return f"{value:.5g}" if math.isfinite(value) else "n/a"
+    return str(value)
+
+
+def _stats_rows(data: dict[str, Any]) -> list[list[str]]:
+    return [
+        [
+            _table_value(row.get(key, "—"))
+            for key in ("name", "shape", "status", "mean", "std", "max_abs", "finite")
+        ]
+        for row in data.get("layers", [])[:100]
+    ]
+
+
+def _svg_table_text(x: int, y: int, value: Any, width: int) -> str:
+    full = _table_value(value)
+    limit = max(5, width // 7)
+    short = full if len(full) <= limit else full[: limit - 1] + "…"
+    if len(short) * 7 > width:
+        short = short[: max(1, width // 7 - 1)] + "…"
+    return f'<text x="{x}" y="{y}" class="row"><title>{_esc(full)}</title>{_esc(short)}</text>'
+
+
 def _svg_header(view: Visualization, height: int) -> str:
     title = _esc(view.title)
     summary = _esc(view.summary)
-    notes = "".join(
-        f'<text x="32" y="{height - 18 - i * 18}" class="note">{_esc(note)}</text>'
-        for i, note in enumerate(view.notes[:3])
-    )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{title}" '
-        f'viewBox="0 0 920 {height}" width="100%" height="{height}">'
+        f'viewBox="0 0 920 {height}" width="100%" height="{height}" '
+        'style="min-width:760px">'
+        f"<title>{title}</title><desc>{_esc(str(view))}</desc>"
         "<style>text{font-family:Inter,ui-sans-serif,system-ui,sans-serif;fill:#172b4d}"
         ".title{font-size:23px;font-weight:650}.sub{font-size:13px;fill:#52657d}"
         ".note{font-size:12px;fill:#52657d}.axis{stroke:#b7c4d3;stroke-width:1}"
@@ -77,7 +129,6 @@ def _svg_header(view: Visualization, height: int) -> str:
         ".track{fill:#e6edf5}.bar{fill:#4b78c2}</style>"
         f'<text x="32" y="38" class="title">{title}</text>'
         f'<text x="32" y="61" class="sub">{summary}</text>'
-        f"{notes}"
     )
 
 
@@ -89,20 +140,19 @@ def _svg_line_chart(
     title: str = "",
     x_label: str = "Index",
     y_label: str = "Value",
-    width: int = 840,
-    left: int = 54,
+    width: int = 810,
+    left: int = 82,
 ) -> str:
     bottom = top + height
     right = left + width
     data = [(t, _finite(t.get("values", []))) for t in traces]
     values = [value for _, series in data for value in series]
     if not values:
-        return f'<text x="{left}" y="{top + 30}" class="label">No finite values to plot</text>'
+        return (
+            f'<text x="{left}" y="{top}" class="head">{_esc(title or y_label)}</text>'
+            f'<text x="{left}" y="{top + 30}" class="label">No finite values to plot</text>'
+        )
     low, high = min(values), max(values)
-    if low == high:
-        padding = abs(low) * 0.1 or 1.0
-        low -= padding
-        high += padding
     x_values = []
     for trace, _series in data:
         series_values = trace.get("values", [])
@@ -116,8 +166,6 @@ def _svg_line_chart(
             if math.isfinite(x_value) and math.isfinite(y_value):
                 x_values.append(x_value)
     x_low, x_high = (min(x_values), max(x_values)) if x_values else (0.0, 1.0)
-    if x_low == x_high:
-        x_high = x_low + 1.0
     if title:
         title_svg = f'<text x="{left}" y="{top - 10}" class="head">{_esc(title)}</text>'
     else:
@@ -134,6 +182,7 @@ def _svg_line_chart(
         if not series:
             continue
         color = trace.get("color", colors[index % len(colors)])
+        dash = 'stroke-dasharray="6 4"' if trace.get("role") == "validation" else ""
         original = trace.get("values", [])
         x_values_for_trace = trace.get("x")
         segments: list[list[tuple[float, float]]] = []
@@ -150,8 +199,8 @@ def _svg_line_chart(
                     current = []
                 continue
             if math.isfinite(number) and math.isfinite(x_value):
-                x = left + ((x_value - x_low) / (x_high - x_low)) * width
-                y = bottom - ((number - low) / (high - low)) * height
+                x = left + _normalized(x_value, x_low, x_high) * width
+                y = bottom - _normalized(number, low, high) * height
                 current.append((x, y))
             elif current:
                 segments.append(current)
@@ -163,29 +212,36 @@ def _svg_line_chart(
                 points = " ".join(f"{x:.1f},{y:.1f}" for x, y in segment)
                 paths.append(
                     f'<polyline points="{points}" fill="none" stroke="{color}" '
-                    'stroke-width="2.4" stroke-linejoin="round"/>'
+                    f'stroke-width="2.4" stroke-linejoin="round" {dash}/>'
                 )
                 paths.extend(
                     f'<circle cx="{x:.1f}" cy="{y:.1f}" r="2.3" fill="{color}"/>'
                     for x, y in segment
                 )
-            x = left + index * 145
+            x = left + (index % 4) * 200
+            legend_y = bottom + 32 + (index // 4) * 20
+            name = str(trace.get("name", "series"))
+            name_label = name if len(name) <= 23 else name[:22] + "…"
             legend.append(
-                f'<line x1="{x}" y1="{bottom + 25}" x2="{x + 18}" y2="{bottom + 25}" '
-                f'stroke="{color}" stroke-width="3"/><text x="{x + 24}" y="{bottom + 29}" '
-                f'class="label">{_esc(trace.get("name", "series"))}</text>'
+                f'<line x1="{x}" y1="{legend_y}" x2="{x + 18}" y2="{legend_y}" '
+                f'stroke="{color}" stroke-width="3" {dash}/>'
+                f'<text x="{x + 24}" y="{legend_y + 4}" '
+                f'class="label"><title>{_esc(name)}</title>{_esc(name_label)}</text>'
             )
     high_label, low_label = _esc(f"{high:.4g}"), _esc(f"{low:.4g}")
+    x_axis_y = bottom + 56 + max(0, math.ceil(len(traces) / 4) - 1) * 20
     return (
         f'{title_svg}{grid}<line x1="{left}" y1="{bottom}" x2="{right}" '
         f'y2="{bottom}" class="axis"/><line x1="{left}" y1="{top}" x2="{left}" '
         f'y2="{bottom}" class="axis"/>'
         f'<text x="{left - 8}" y="{top + 3}" text-anchor="end" class="label">{high_label}</text>'
         f'<text x="{left - 8}" y="{bottom + 4}" text-anchor="end" class="label">{low_label}</text>'
-        f'<text x="{left + width / 2}" y="{bottom + 46}" text-anchor="middle" '
+        f'<text x="{left + width / 2}" y="{x_axis_y}" text-anchor="middle" '
         f'class="label">{_esc(x_label)}</text>'
         f'<text x="18" y="{top + height / 2}" text-anchor="middle" class="label" '
         f'transform="rotate(-90 18 {top + height / 2})">{_esc(y_label)}</text>'
+        f'<text x="{left}" y="{bottom + 16}" class="label">{x_low:.4g}</text>'
+        f'<text x="{right}" y="{bottom + 16}" text-anchor="end" class="label">{x_high:.4g}</text>'
         f"{''.join(paths)}{''.join(legend)}"
     )
 
@@ -202,7 +258,7 @@ def _svg(view: Visualization) -> str:
         height = 240
     elif kind == "sequence":
         body = _svg_line_chart(
-            [{"name": data.get("label", "value"), "values": data["values"]}],
+            [{"name": data.get("label", "value"), "values": data["values"], "x": data.get("x")}],
             top=98,
             height=145,
             x_label="Index",
@@ -227,7 +283,7 @@ def _svg(view: Visualization) -> str:
                 if not math.isfinite(number):
                     color = "#dce4ed"
                 else:
-                    ratio = 0.5 if high == low else (number - low) / (high - low)
+                    ratio = _normalized(number, low, high)
                     red = round(49 + 190 * ratio)
                     green = round(95 + 115 * (1 - abs(ratio - 0.5) * 2))
                     blue = round(189 - 120 * ratio)
@@ -235,11 +291,16 @@ def _svg(view: Visualization) -> str:
                 rects.append(
                     f'<rect class="cell" x="{x0 + j * cell:.1f}" y="{y0 + i * cell:.1f}" '
                     f'width="{cell:.1f}" height="{cell:.1f}" fill="{color}"><title>'
-                    f"row {i}, column {j}: {_esc(value)}</title></rect>"
+                    f"row {data.get('row_indices', list(range(row_count)))[i]}, "
+                    f"column {data.get('column_indices', list(range(col_count)))[j]}: "
+                    f"{_esc(value)}</title></rect>"
                 )
         body = (
             f'<text x="{x0}" y="87" class="label">columns</text>'
             f'<text x="42" y="{y0 + 14}" class="label">rows</text>{"".join(rects)}'
+            f'<text x="{x0}" y="{y0 + row_count * cell + 22}" class="label">'
+            f"Color scale: blue {low:.4g} → red {high:.4g}; gray = non-finite. "
+            f"Row/column indices are zero-based; hover cells for values.</text>"
         )
         height = int(y0 + row_count * cell + 55)
     elif kind == "image":
@@ -262,7 +323,10 @@ def _svg(view: Visualization) -> str:
                     color = f"rgb({rgb[0]}, {rgb[1]}, {rgb[2]})"
                 pieces.append(
                     f'<rect x="{200 + x * size:.1f}" y="{90 + y * size:.1f}" '
-                    f'width="{size + 0.2:.1f}" height="{size + 0.2:.1f}" fill="{color}"/>'
+                    f'width="{size if channels == 4 else size + 0.2:.1f}" '
+                    f'height="{size if channels == 4 else size + 0.2:.1f}" fill="{color}" '
+                    f'fill-opacity="{components[3] if channels == 4 else 1}" '
+                    'shape-rendering="crispEdges"/>'
                 )
         body = (
             "".join(pieces) or '<text x="40" y="110" class="label">Image preview unavailable</text>'
@@ -279,7 +343,7 @@ def _svg(view: Visualization) -> str:
             index = (
                 0
                 if low == high
-                else min(count - 1, int((sample_value - low) / (high - low) * count))
+                else min(count - 1, int(_normalized(sample_value, low, high) * count))
             )
             bins[index] += 1
         maximum = max(bins, default=1) or 1
@@ -287,12 +351,22 @@ def _svg(view: Visualization) -> str:
         for i, bin_count in enumerate(bins):
             bar_h = 150 * bin_count / maximum
             bars.append(
-                f'<rect x="{70 + i * 25}" y="{250 - bar_h:.1f}" width="21" '
-                f'height="{bar_h:.1f}" rx="2" fill="#4b78c2"/>'
+                f'<rect x="{70 + i * 750 / count}" y="{250 - bar_h:.1f}" '
+                f'width="{750 / count - 2:.1f}" '
+                f'height="{bar_h:.1f}" rx="2" fill="#4b78c2">'
+                f"<title>{bin_count} sampled values</title></rect>"
             )
         body = (
             "".join(bars)
             + '<line x1="70" y1="250" x2="825" y2="250" class="axis"/>'
+            + f'<text x="70" y="267" class="label">{low:.4g}</text>'
+            + f'<text x="820" y="267" text-anchor="end" class="label">{high:.4g}</text>'
+            + f'<text x="60" y="103" text-anchor="end" class="label">{maximum}</text>'
+            + (
+                '<text x="70" y="125" class="label">No finite values to plot</text>'
+                if not distribution_values
+                else ""
+            )
             + '<text x="447" y="278" text-anchor="middle" class="label">Value</text>'
             + '<text x="30" y="165" text-anchor="middle" class="label" '
             'transform="rotate(-90 30 165)">Count</text>'
@@ -302,7 +376,7 @@ def _svg(view: Visualization) -> str:
         groups = data.get("groups", [])
         body_parts = []
         top = 105
-        per_group = 175
+        per_group = 205
         for group in groups:
             traces = group.get("series", [])
             body_parts.append(
@@ -315,7 +389,7 @@ def _svg(view: Visualization) -> str:
                     y_label=group.get("name", "metric"),
                 )
             )
-            top += per_group
+            top += per_group + max(0, math.ceil(len(traces) / 4) - 1) * 20
         body = "".join(body_parts) or '<text x="40" y="110" class="label">No metrics to plot</text>'
         height = max(220, top + 30)
     elif kind == "model":
@@ -342,7 +416,15 @@ def _svg(view: Visualization) -> str:
                 (positions[5], row.get("output_shape", "—")),
             ]
             rendered.extend(
-                f'<text x="{x}" y="{y}" class="row">{_esc(value)}</text>' for x, value in fields
+                _svg_table_text(
+                    x,
+                    y,
+                    value,
+                    positions[min(i + 1, len(positions) - 1)] - x - 8
+                    if i < len(positions) - 1
+                    else 120,
+                )
+                for i, (x, value) in enumerate(fields)
             )
             rendered.append(f'<line x1="32" y1="{y + 8}" x2="875" y2="{y + 8}" class="grid"/>')
         body = heading + line + "".join(rendered)
@@ -350,8 +432,8 @@ def _svg(view: Visualization) -> str:
     elif kind in {"activations", "gradients"}:
         rows = data.get("layers", [])
         shown = rows[:100]
-        labels = ["Layer", "Shape / status", "Mean", "Std", "Max |value|", "Finite"]
-        positions = [32, 355, 540, 625, 710, 835]
+        labels = ["Layer", "Shape", "Status", "Mean", "Std", "Max |value|", "Finite"]
+        positions = [32, 260, 405, 520, 615, 705, 825]
         heading = "".join(
             f'<text x="{x}" y="102" class="head">{label}</text>'
             for x, label in zip(positions, labels, strict=True)
@@ -361,15 +443,16 @@ def _svg(view: Visualization) -> str:
             y = 130 + index * 23
             values = [
                 row.get("name", ""),
-                row.get("shape", row.get("status", "")),
+                row.get("shape", "—"),
+                row.get("status", "available"),
                 row.get("mean", "—"),
                 row.get("std", "—"),
                 row.get("max_abs", "—"),
                 row.get("finite", "—"),
             ]
             rendered.extend(
-                f'<text x="{x}" y="{y}" class="row">{_esc(value)}</text>'
-                for x, value in zip(positions, values, strict=True)
+                _svg_table_text(x, y, value, positions[i + 1] - x - 8 if i < 6 else 80)
+                for i, (x, value) in enumerate(zip(positions, values, strict=True))
             )
             rendered.append(f'<line x1="32" y1="{y + 8}" x2="875" y2="{y + 8}" class="grid"/>')
         body = heading + "".join(rendered)
@@ -377,8 +460,13 @@ def _svg(view: Visualization) -> str:
     else:
         body = f'<text x="32" y="110" class="label">{_esc(view.summary)}</text>'
         height = 210
-    height += min(len(view.notes), 3) * 18
-    return _svg_header(view, height) + body + "</svg>"
+    details = _details(view)
+    footer = "".join(
+        f'<text x="32" y="{height + 18 * i}" class="note">{_esc(line)}</text>'
+        for i, line in enumerate(details)
+    )
+    height += len(details) * 18 + 20
+    return _svg_header(view, height) + body + footer + "</svg>"
 
 
 def _plotly(view: Visualization) -> Any:
@@ -392,7 +480,9 @@ def _plotly(view: Visualization) -> Any:
         ) from exc
 
     data = view.data
-    layout = dict(title=view.title, template="plotly_white", margin=dict(l=50, r=25, t=65, b=50))
+    layout: dict[str, Any] = dict(
+        title=view.title, template="plotly_white", margin=dict(l=50, r=25, t=65, b=50)
+    )
     if view.kind == "scalar":
         value = data.get("value", 0)
         try:
@@ -416,7 +506,7 @@ def _plotly(view: Visualization) -> Any:
         values = data["values"]
         figure = go.Figure(
             go.Scatter(
-                x=list(range(1, len(values) + 1)),
+                x=data.get("x", list(range(len(values)))),
                 y=values,
                 mode="lines+markers",
                 name=data.get("label", "value"),
@@ -425,14 +515,45 @@ def _plotly(view: Visualization) -> Any:
         figure.update_xaxes(title="Index")
         figure.update_yaxes(title=data.get("label", "Value"))
     elif view.kind == "matrix":
-        figure = go.Figure(go.Heatmap(z=data.get("values", []), colorbar=dict(title="Value")))
+        figure = go.Figure(
+            go.Heatmap(
+                z=data.get("values", []),
+                x=data.get("column_indices"),
+                y=data.get("row_indices"),
+                colorbar=dict(title="Value"),
+            )
+        )
         figure.update_xaxes(title="Column")
         figure.update_yaxes(title="Row", autorange="reversed")
     elif view.kind == "image":
-        figure = go.Figure(go.Image(z=data.get("pixels", [])))
+        pixels = data.get("pixels", [])
+        if data.get("channels") == 1:
+            figure = go.Figure(
+                go.Heatmap(
+                    z=[[p[0] for p in row] for row in pixels],
+                    zmin=0,
+                    zmax=1,
+                    colorscale="gray",
+                    showscale=False,
+                )
+            )
+        else:
+            channels = data.get("channels", 3)
+            figure = go.Figure(
+                go.Image(
+                    z=pixels,
+                    colormodel="rgba" if channels == 4 else "rgb",
+                    zmin=[0] * 4,
+                    zmax=[1] * 4,
+                )
+            )
+        figure.update_xaxes(title="Preview column")
+        figure.update_yaxes(title="Preview row")
         figure.update_yaxes(autorange="reversed")
     elif view.kind == "distribution":
-        figure = go.Figure(go.Histogram(x=data.get("sample", []), nbinsx=40, name="sampled values"))
+        figure = go.Figure(
+            go.Histogram(x=_finite(data.get("sample", [])), nbinsx=40, name="sampled values")
+        )
         figure.update_xaxes(title="Value")
         figure.update_yaxes(title="Count")
     elif view.kind == "training":
@@ -452,6 +573,7 @@ def _plotly(view: Visualization) -> Any:
                         y=values,
                         name=series.get("name"),
                         mode="lines+markers",
+                        line=dict(dash="dash" if series.get("role") == "validation" else "solid"),
                     ),
                     row=row_index,
                     col=1,
@@ -459,7 +581,7 @@ def _plotly(view: Visualization) -> Any:
             figure.update_xaxes(title_text="Epoch", row=row_index, col=1)
             figure.update_yaxes(title_text=group["name"], row=row_index, col=1)
     elif view.kind == "model":
-        rows = data.get("layers", [])[:300]
+        rows = data.get("layers", [])[:100]
         headers = ["Layer", "Type", "Parameters", "Trainable", "Input shape", "Output shape"]
         cells = [
             [row.get("name") or "(root)" for row in rows],
@@ -470,38 +592,42 @@ def _plotly(view: Visualization) -> Any:
             [row.get("output_shape", "—") for row in rows],
         ]
         figure = go.Figure(
-            go.Table(header=dict(values=headers), cells=dict(values=cells, height=27))
+            go.Table(
+                header=dict(values=headers),
+                cells=dict(values=cells, height=27),
+                columnwidth=[2.2, 1.4, 1, 1, 1.8, 1.8],
+            )
         )
     elif view.kind == "activations":
-        rows = data.get("layers", [])[:100]
-        figure = go.Figure(
-            go.Box(
-                x=[row.get("name", "") for row in rows for _ in row.get("sample", [])],
-                y=[value for row in rows for value in row.get("sample", [])],
-                name="Activation values",
-                boxpoints=False,
-            )
-        )
-        if not any(row.get("sample") for row in rows):
-            figure = go.Figure(
-                go.Table(
-                    header=dict(values=["Layer", "Shape"]),
-                    cells=dict(
-                        values=[[r.get("name") for r in rows], [r.get("shape") for r in rows]]
-                    ),
-                )
-            )
-        figure.update_xaxes(title="Layer")
-        figure.update_yaxes(title="Activation")
-    elif view.kind == "gradients":
-        rows = data.get("layers", [])
+        rows = data.get("layers", [])[:20]
         figure = make_subplots(
             rows=2,
             cols=1,
-            subplot_titles=("Maximum absolute gradient", "Sampled gradient values"),
-            vertical_spacing=0.18,
+            specs=[[{"type": "xy"}], [{"type": "table"}]],
+            row_heights=[0.4, 0.6],
+            vertical_spacing=0.1,
         )
-        magnitude_rows = [row for row in rows if row.get("max_abs") is not None]
+        figure.add_trace(
+            go.Box(
+                x=[row.get("name", "") for row in rows for _ in row.get("sample", [])],
+                y=[value for row in rows for value in row.get("sample", [])],
+                name="Sampled activation values",
+                boxpoints=False,
+            )
+        )
+        figure.update_xaxes(title="Layer", type="category")
+        figure.update_yaxes(title="Activation")
+    elif view.kind == "gradients":
+        rows = data.get("layers", [])[:20]
+        figure = make_subplots(
+            rows=3,
+            cols=1,
+            specs=[[{"type": "xy"}], [{"type": "xy"}], [{"type": "table"}]],
+            row_heights=[0.25, 0.25, 0.5],
+            subplot_titles=("Maximum absolute gradient", "Sampled gradient values", "Summaries"),
+            vertical_spacing=0.1,
+        )
+        magnitude_rows = [row for row in rows[:20] if row.get("max_abs") is not None]
         figure.add_trace(
             go.Bar(
                 x=[row.get("name", "") for row in magnitude_rows],
@@ -526,23 +652,102 @@ def _plotly(view: Visualization) -> Any:
                 row=2,
                 col=1,
             )
-        figure.update_xaxes(title="Parameter", row=1, col=1)
+        figure.update_xaxes(title="Parameter", type="category", row=1, col=1)
         figure.update_yaxes(title="Maximum |gradient|", row=1, col=1)
-        figure.update_xaxes(title="Parameter", row=2, col=1)
+        figure.update_xaxes(title="Parameter", type="category", row=2, col=1)
         figure.update_yaxes(title="Gradient", row=2, col=1)
     else:
         raise SeeDLError(f"The Plotly renderer does not support the {view.kind!r} view.")
+    if view.kind in {"activations", "gradients"}:
+        stats = _stats_rows(data)
+        headers = ["Layer", "Shape", "Status", "Mean", "Std", "Max |value|", "Finite"]
+        figure.add_trace(
+            go.Table(
+                header=dict(values=headers),
+                cells=dict(
+                    values=list(zip(*stats, strict=True)) if stats else [() for _ in headers],
+                    height=27,
+                ),
+                columnwidth=[2.4, 1.5, 1.3, 1, 1, 1.2, 1],
+            ),
+            row=2 if view.kind == "activations" else 3,
+            col=1,
+        )
+    details = _details(view)
+    base_height = (
+        max(300, 150 + min(len(data.get("layers", [])), 100) * 27)
+        if view.kind == "model"
+        else max(700, 350 + min(len(data.get("layers", [])), 100) * 40)
+        if view.kind in {"activations", "gradients"}
+        else max(360, len(data.get("groups", [])) * 250)
+        if view.kind == "training"
+        else 360
+    )
+    footer_height = 18 * (len(details) + 2)
+    layout.update(
+        height=base_height + footer_height,
+        margin=dict(l=65, r=30, t=95, b=footer_height + 65),
+        title=dict(text=_esc(view.title) + "<br><sup>" + _esc(view.summary) + "</sup>"),
+    )
     figure.update_layout(**layout)
-    if view.notes:
+    if view.kind in {"sequence", "distribution"} and not _finite(
+        data.get("values", data.get("sample", []))
+    ):
         figure.add_annotation(
-            text="<br>".join(view.notes),
+            text="No finite values to plot",
+            xref="paper",
+            yref="paper",
+            x=0.5,
+            y=0.5,
+            showarrow=False,
+        )
+    if details:
+        figure.add_annotation(
+            text="<br>".join(_esc(line) for line in details),
             xref="paper",
             yref="paper",
             x=0,
-            y=-0.2,
+            y=0,
+            yshift=-65,
+            xanchor="left",
+            yanchor="top",
             showarrow=False,
             align="left",
+            font=dict(size=12),
         )
+    return figure
+
+
+def _mpl_table(axis: Any, rows: list[Any], columns: list[str]) -> None:
+    if not rows:
+        axis.text(0.5, 0.5, "No rows to show", ha="center", transform=axis.transAxes)
+        return
+    wrapped = [
+        ["\n".join(textwrap.wrap(_table_value(v), 25 if i == 0 else 18)) for i, v in enumerate(row)]
+        for row in rows
+    ]
+    table = axis.table(cellText=wrapped, colLabels=columns, loc="center", cellLoc="left")
+    table.auto_set_font_size(False)
+    table.set_fontsize(9)
+    row_lines = [max(v.count("\n") + 1 for v in row) for row in wrapped]
+    total_lines = sum(row_lines) + 1
+    for col in range(len(columns)):
+        table[0, col].set_height(0.9 / total_lines)
+    for index, line_count in enumerate(row_lines, 1):
+        height = 0.9 * line_count / total_lines
+        for col in range(len(columns)):
+            table[index, col].set_height(height)
+
+
+def _finish_matplotlib(figure: Any, view: Visualization) -> Any:
+    lines = _details(view)
+    height = figure.get_figheight()
+    footer_inches = 0.18 * len(lines) + 0.2
+    figure.set_figheight(height + footer_inches)
+    if lines:
+        figure.text(0.02, 0.02, "\n".join(lines), fontsize=9, color="#52657d")
+    figure.suptitle(view.title + "\n" + view.summary, fontsize=12)
+    figure.tight_layout(rect=(0, footer_inches / (height + footer_inches), 1, 0.93))
     return figure
 
 
@@ -570,18 +775,33 @@ def _matplotlib(view: Visualization) -> Any:
         )
         axis.text(0.5, 0.38, data.get("caption", view.summary), ha="center", va="center")
     elif view.kind == "sequence":
-        axis.plot(range(1, len(data["values"]) + 1), data["values"], marker="o", markersize=3)
+        axis.plot(
+            data.get("x", range(len(data["values"]))), data["values"], marker="o", markersize=3
+        )
         axis.set(xlabel="Index", ylabel=data.get("label", "Value"))
     elif view.kind == "matrix":
         axis.imshow(data.get("values", []), aspect="auto", interpolation="nearest", cmap="coolwarm")
         axis.set(xlabel="Column", ylabel="Row")
+        for which, indices in (("x", data.get("column_indices")), ("y", data.get("row_indices"))):
+            if indices:
+                ticks = list(range(0, len(indices), max(1, math.ceil(len(indices) / 6))))
+                getattr(axis, f"set_{which}ticks")(ticks, [indices[i] for i in ticks])
         figure.colorbar(axis.images[0], ax=axis, label="Value")
     elif view.kind == "image":
-        axis.imshow(data.get("pixels", []), cmap="gray" if data.get("channels") == 1 else None)
+        axis.imshow(
+            [[p[0] for p in row] for row in data.get("pixels", [])]
+            if data.get("channels") == 1
+            else data.get("pixels", []),
+            cmap="gray" if data.get("channels") == 1 else None,
+            vmin=0,
+            vmax=1,
+        )
         axis.axis("off")
     elif view.kind == "distribution":
-        axis.hist(data.get("sample", []), bins=40, color="#4b78c2")
+        axis.hist(_finite(data.get("sample", [])), bins=40, color="#4b78c2")
         axis.set(xlabel="Value", ylabel="Count")
+        if not _finite(data.get("sample", [])):
+            axis.text(0.5, 0.5, "No finite values to plot", transform=axis.transAxes, ha="center")
     elif view.kind == "training":
         plt.close(figure)
         groups = data.get("groups", [])
@@ -597,27 +817,30 @@ def _matplotlib(view: Visualization) -> Any:
                     marker="o",
                     markersize=3,
                     label=series.get("name"),
+                    linestyle="--" if series.get("role") == "validation" else "-",
                 )
             axis.set(title=group.get("name"), xlabel="Epoch", ylabel=group.get("name"))
             axis.legend()
-        if view.notes:
-            figure.text(0.01, 0.01, "\n".join(view.notes), fontsize=8, color="#52657d")
-        figure.tight_layout()
-        return figure
+        return _finish_matplotlib(figure, view)
     elif view.kind in {"model", "activations", "gradients"}:
         plt.close(figure)
         if view.kind == "gradients":
-            rows = data.get("layers", [])
-            figure, axes = plt.subplots(2, 1, figsize=(12, 7), sharex=False)
+            rows = data.get("layers", [])[:100]
+            figure, axes = plt.subplots(
+                3,
+                1,
+                figsize=(12, 7 + 0.3 * min(len(rows), 100)),
+                gridspec_kw={"height_ratios": [3, 3, max(2, len(rows) * 0.3)]},
+            )
             figure.suptitle(view.title)
-            magnitude_rows = [row for row in rows if row.get("max_abs") is not None]
+            magnitude_rows = [row for row in rows[:20] if row.get("max_abs") is not None]
             axes[0].bar(
                 [row.get("name", "") for row in magnitude_rows],
                 [row["max_abs"] for row in magnitude_rows],
                 color="#4b78c2",
             )
             axes[0].set(ylabel="Maximum |gradient|", title="Layer-wise magnitude")
-            for index, row in enumerate(rows):
+            for index, row in enumerate(rows[:20]):
                 samples = row.get("sample", [])
                 if samples:
                     jitter = [
@@ -631,19 +854,24 @@ def _matplotlib(view: Visualization) -> Any:
                         color="#315fbd",
                     )
             axes[1].set(
-                xticks=range(len(rows)),
-                xticklabels=[row.get("name", "") for row in rows],
+                xticks=range(min(len(rows), 20)),
+                xticklabels=[row.get("name", "") for row in rows[:20]],
                 xlabel="Parameter",
                 ylabel="Gradient",
                 title="Sampled gradient values",
             )
-            for axis in axes:
+            axes[2].axis("off")
+            _mpl_table(
+                axes[2],
+                _stats_rows(data),
+                ["Layer", "Shape", "Status", "Mean", "Std", "Max |value|", "Finite"],
+            )
+            for axis in axes[:2]:
                 axis.tick_params(axis="x", labelrotation=45)
-            if view.notes:
-                figure.text(0.01, 0.01, "\n".join(view.notes), fontsize=8, color="#52657d")
-            figure.tight_layout(rect=(0, 0.08, 1, 0.95))
-            return figure
-        figure, axis = plt.subplots(figsize=(12, 0.8 + 0.34 * max(1, len(data.get("layers", [])))))
+            return _finish_matplotlib(figure, view)
+        figure, axis = plt.subplots(
+            figsize=(12, 0.8 + 0.34 * max(1, min(len(data.get("layers", [])), 100)))
+        )
         axis.axis("off")
         if view.kind == "model":
             columns = ["Layer", "Type", "Parameters", "Trainable", "Input shape", "Output shape"]
@@ -659,28 +887,11 @@ def _matplotlib(view: Visualization) -> Any:
                 for r in data.get("layers", [])[:100]
             ]
         else:
-            columns = ["Layer", "Shape / status", "Mean", "Std", "Max |value|", "Finite"]
-            rows = [
-                [
-                    r.get("name", ""),
-                    r.get("shape", r.get("status", "")),
-                    r.get("mean", "—"),
-                    r.get("std", "—"),
-                    r.get("max_abs", "—"),
-                    r.get("finite", "—"),
-                ]
-                for r in data.get("layers", [])[:100]
-            ]
-        axis.table(cellText=rows, colLabels=columns, loc="center", cellLoc="left")
-        if view.notes:
-            figure.text(0.01, 0.01, "\n".join(view.notes), fontsize=8, color="#52657d")
-        figure.tight_layout(rect=(0, 0.08, 1, 0.95))
-        return figure
+            columns = ["Layer", "Shape", "Status", "Mean", "Std", "Max |value|", "Finite"]
+            rows = _stats_rows(data)
+        _mpl_table(axis, rows, columns)
+        return _finish_matplotlib(figure, view)
     else:
         plt.close(figure)
         raise SeeDLError(f"The Matplotlib renderer does not support the {view.kind!r} view.")
-    axis.set_title(view.summary)
-    if view.notes:
-        figure.text(0.01, 0.01, "\n".join(view.notes), fontsize=8, color="#52657d")
-    figure.tight_layout()
-    return figure
+    return _finish_matplotlib(figure, view)

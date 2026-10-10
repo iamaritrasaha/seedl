@@ -69,7 +69,8 @@ def see(
 
     ``input`` is used only for PyTorch model inspection. The model is called once
     with that input, in eval mode and without gradients; temporary hooks and
-    registered buffer changes are restored. No forward pass occurs without it.
+    ordinary registered-buffer updates are restored. Arbitrary custom Python
+    side effects are not sandboxed. No forward pass occurs without it.
 
     ``backend`` accepts ``"auto"`` (Plotly when installed, otherwise SVG),
     ``"plotly"``, ``"matplotlib"``, or ``"svg"``. Plotly and Matplotlib are
@@ -86,6 +87,7 @@ def see(
             raise ValueError("interactive=True requires backend='plotly' or backend='auto'.")
     elif interactive is False and backend == "auto":
         backend = "svg"
+    selected_backend = resolve_backend(backend)
     if input is not None and not is_torch_module(obj):
         raise SeeDLError("The input= argument is only used when visualizing a PyTorch nn.Module.")
     kind, title, data, metadata, notes = inspect_object(
@@ -98,7 +100,7 @@ def see(
         data=data,
         metadata=metadata,
         notes=notes,
-        backend=resolve_backend(backend),
+        backend=selected_backend,
     )
     _show_result(view)
     return view
@@ -114,10 +116,12 @@ def activations(
     """Capture layer outputs from one explicit input-driven forward pass.
 
     Temporary forward hooks are removed even when the model raises an error.
-    Model training flags and registered buffers are restored afterward. Each
+    Model training flags and ordinary registered-buffer updates are restored.
+    Arbitrary custom Python side effects are not sandboxed. Each
     layer's first tensor output is sampled without retaining its graph.
     """
     _validate_max_points(max_points)
+    selected_backend = resolve_backend(backend)
     data, summary, notes = activation_payload(model, input, max_points)
     view = Visualization(
         kind="activations",
@@ -125,7 +129,7 @@ def activations(
         summary=summary,
         data=data,
         notes=notes,
-        backend=resolve_backend(backend),
+        backend=selected_backend,
     )
     _show_result(view)
     return view
@@ -143,6 +147,7 @@ def gradients(
     parameters. If no gradients are present, the view explains how to create them.
     """
     _validate_max_points(max_points)
+    selected_backend = resolve_backend(backend)
     data, summary, notes = gradient_payload(model, max_points)
     view = Visualization(
         kind="gradients",
@@ -150,7 +155,7 @@ def gradients(
         summary=summary,
         data=data,
         notes=notes,
-        backend=resolve_backend(backend),
+        backend=selected_backend,
     )
     _show_result(view)
     return view

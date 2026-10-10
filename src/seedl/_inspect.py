@@ -30,12 +30,20 @@ def _numpy_module() -> Any | None:
         raise
 
 
+def _framework_type(value: Any, prefix: str) -> bool:
+    return any(cls.__module__.split(".")[0] == prefix for cls in type(value).__mro__)
+
+
 def is_torch_tensor(value: Any, torch: Any | None = None) -> bool:
+    if torch is None and not _framework_type(value, "torch"):
+        return False
     torch = torch if torch is not None else _torch_module()
     return bool(torch is not None and isinstance(value, torch.Tensor))
 
 
 def is_torch_module(value: Any, torch: Any | None = None) -> bool:
+    if torch is None and not _framework_type(value, "torch"):
+        return False
     torch = torch if torch is not None else _torch_module()
     return bool(torch is not None and isinstance(value, torch.nn.Module))
 
@@ -113,7 +121,7 @@ def _torch_chunks(tensor: Any, chunk_size: int = 1_048_576):
     for start in range(0, int(tensor.shape[axis]), width):
         slices = [slice(None)] * tensor.ndim
         slices[axis] = slice(start, start + width)
-        yield tensor[tuple(slices)].reshape(-1)
+        yield from _torch_chunks(tensor[tuple(slices)], chunk_size)
 
 
 def _torch_statistics(
@@ -183,6 +191,8 @@ def _torch_sample(tensor: Any, max_points: int) -> list[Any]:
     assert torch is not None
     count = int(tensor.numel())
     sample_count = min(max_points, count)
+    if not sample_count:
+        return []
     step = max(1, math.ceil(count / sample_count))
     if tensor.is_contiguous():
         selected = tensor.view(-1)[::step][:sample_count]
@@ -270,30 +280,51 @@ def _torch_tensor_data(
         )
 
     sampled = _torch_sample(detached, max_points)
-    if count > len(sampled):
+    if count > len(sampled) and (
+        len(shape) == 1 or (len(shape) > 2 and _image_layout(shape) is None)
+    ):
         notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
 
     if len(shape) == 1:
         return (
             "sequence",
-            {"values": sampled, "label": "Tensor value", "shape": shape},
+            {
+                "values": sampled,
+                "x": list(range(0, count, math.ceil(count / max_points))),
+                "label": "Tensor value",
+                "shape": shape,
+            },
             metadata,
             notes,
         )
     if len(shape) == 2:
-        row_step = max(1, math.ceil(shape[0] / 80))
-        col_step = max(1, math.ceil(shape[1] / 80))
+        row_step, col_step = _preview_steps(shape[0], shape[1], 80, max_points)
         preview = detached[::row_step, ::col_step][:80, :80].to(device="cpu").tolist()
         if len(preview) != shape[0] or (preview and len(preview[0]) != shape[1]):
             notes.append("The heatmap is a downsampled preview of the full matrix.")
-        return "matrix", {"values": preview, "shape": shape}, metadata, notes
+        return (
+            "matrix",
+            {
+                "values": preview,
+                "shape": shape,
+                "row_indices": list(range(0, shape[0], row_step)),
+                "column_indices": list(range(0, shape[1], col_step)),
+            },
+            metadata,
+            notes,
+        )
 
     image_candidate = _image_layout(shape)
     if image_candidate is not None:
-        pixels, channels = _torch_image_preview(detached, image_candidate)
+        pixels, channels = _torch_image_preview(detached, image_candidate, max_points)
         notes.append(
             "Image layout was inferred from a 1, 3, or 4 channel axis. "
             "Values are scaled for display; tensor data is unchanged."
+        )
+        notes.append(
+            f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
+            "float [0, 1] values retained, integers [0, 255] divided by 255, "
+            "other ranges min-max scaled; non-finite components shown as mid-gray."
         )
         return "image", {"pixels": pixels, "channels": channels, "shape": shape}, metadata, notes
 
@@ -301,6 +332,16 @@ def _torch_tensor_data(
         "Higher-dimensional data is shown as a value distribution from an evenly spaced sample."
     )
     return "distribution", {"sample": sampled, "shape": shape}, metadata, notes
+
+
+def _preview_steps(height: int, width: int, side_limit: int, max_points: int) -> tuple[int, int]:
+    ystep, xstep = max(1, math.ceil(height / side_limit)), max(1, math.ceil(width / side_limit))
+    while math.ceil(height / ystep) * math.ceil(width / xstep) > max_points:
+        if math.ceil(height / ystep) >= math.ceil(width / xstep):
+            ystep += 1
+        else:
+            xstep += 1
+    return ystep, xstep
 
 
 def _image_layout(shape: tuple[int, ...]) -> tuple[str, int] | None:
@@ -320,7 +361,11 @@ def _image_scale(values: Any, dtype: Any) -> Any:
     values = values.to(dtype=work_dtype)
     if not values.numel():
         return values
-    if dtype == torch.uint8:
+    if (
+        dtype != torch.bool
+        and not dtype.is_floating_point
+        and bool(((values >= 0) & (values <= 255)).all())
+    ):
         return values / 255.0
     finite = torch.isfinite(values)
     if not bool(finite.all().item()):
@@ -340,12 +385,14 @@ def _image_scale(values: Any, dtype: Any) -> Any:
     return torch.where(finite, scaled, torch.full_like(values, 0.5))
 
 
-def _torch_image_preview(tensor: Any, layout: tuple[str, int]) -> tuple[list[Any], int]:
+def _torch_image_preview(
+    tensor: Any, layout: tuple[str, int], max_points: int
+) -> tuple[list[Any], int]:
     mode, channels = layout
     if mode == "channels_first":
         tensor = tensor.permute(1, 2, 0)
     height, width = int(tensor.shape[0]), int(tensor.shape[1])
-    ystep, xstep = max(1, math.ceil(height / 128)), max(1, math.ceil(width / 128))
+    ystep, xstep = _preview_steps(height, width, 128, max_points)
     pixels = tensor[::ystep, ::xstep][:128, :128]
     return _image_scale(pixels, tensor.dtype).to(device="cpu").tolist(), channels
 
@@ -403,22 +450,42 @@ def _numpy_array_data(
             notes.append(f"Showing {len(sample):,} evenly spaced sample values out of {count:,}.")
         return (
             "sequence",
-            {"values": sample, "label": "Array value", "shape": shape},
+            {
+                "values": sample,
+                "x": list(range(0, count, step)),
+                "label": "Array value",
+                "shape": shape,
+            },
             metadata,
             notes,
         )
     if len(shape) == 2:
-        step_y, step_x = max(1, math.ceil(shape[0] / 80)), max(1, math.ceil(shape[1] / 80))
+        step_y, step_x = _preview_steps(shape[0], shape[1], 80, max_points)
         preview = array[::step_y, ::step_x][:80, :80].tolist()
         if step_y > 1 or step_x > 1:
             notes.append("The heatmap is a downsampled preview of the full matrix.")
-        return "matrix", {"values": preview, "shape": shape}, metadata, notes
+        return (
+            "matrix",
+            {
+                "values": preview,
+                "shape": shape,
+                "row_indices": list(range(0, shape[0], step_y)),
+                "column_indices": list(range(0, shape[1], step_x)),
+            },
+            metadata,
+            notes,
+        )
     image_candidate = _image_layout(shape)
     if image_candidate is not None:
-        pixels, channels = _numpy_image_preview(array, image_candidate)
+        pixels, channels = _numpy_image_preview(array, image_candidate, max_points)
         notes.append(
             "Image layout was inferred from a 1, 3, or 4 channel axis. "
             "Values are scaled for display; array data is unchanged."
+        )
+        notes.append(
+            f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
+            "float [0, 1] values retained, integers [0, 255] divided by 255, "
+            "other ranges min-max scaled; non-finite components shown as mid-gray."
         )
         return "image", {"pixels": pixels, "channels": channels, "shape": shape}, metadata, notes
     step = max(1, math.ceil(count / max_points))
@@ -441,22 +508,25 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
     if array.ndim == 0 or count <= chunk_size:
         chunks = (array.reshape(-1),)
     else:
-        axis = max(range(array.ndim), key=lambda index: int(array.shape[index]))
-        other_elements = count // int(array.shape[axis])
-        width = max(1, chunk_size // max(other_elements, 1))
 
-        def iter_chunks():
-            for start in range(0, int(array.shape[axis]), width):
-                index = [slice(None)] * array.ndim
-                index[axis] = slice(start, start + width)
-                yield array[tuple(index)].reshape(-1)
+        def iter_chunks(part):
+            if part.size <= chunk_size:
+                yield part.reshape(-1)
+                return
+            split_axis = max(range(part.ndim), key=lambda i: int(part.shape[i]))
+            part_width = max(1, chunk_size // max(int(part.size) // int(part.shape[split_axis]), 1))
+            for start in range(0, int(part.shape[split_axis]), part_width):
+                index = [slice(None)] * part.ndim
+                index[split_axis] = slice(start, start + part_width)
+                yield from iter_chunks(part[tuple(index)])
 
-        chunks = iter_chunks()
+        chunks = iter_chunks(array)
     finite_count = nonfinite = 0
     minimum: float | None = None
     maximum: float | None = None
     mean: float | None = None
     m2: float | None = None
+    scale = 0.0
     for chunk in chunks:
         values = np.asarray(chunk, dtype=np.float64)
         finite = np.isfinite(values)
@@ -467,8 +537,17 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
             continue
         chunk_min = float(valid.min())
         chunk_max = float(valid.max())
-        chunk_mean = float(valid.mean())
-        chunk_m2 = float(np.square(valid - chunk_mean).sum())
+        chunk_scale = float(np.abs(valid).max())
+        if chunk_scale > scale:
+            factor = scale / chunk_scale if scale else 0.0
+            if finite_count:
+                assert mean is not None and m2 is not None
+                mean *= factor
+                m2 *= factor * factor
+            scale = chunk_scale
+        normalized = valid / scale if scale else valid
+        chunk_mean = float(normalized.mean())
+        chunk_m2 = float(np.square(normalized - chunk_mean).sum())
         minimum = chunk_min if minimum is None else min(minimum, chunk_min)
         maximum = chunk_max if maximum is None else max(maximum, chunk_max)
         if finite_count == 0:
@@ -486,45 +565,51 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
     std = None
     if finite_count:
         assert m2 is not None
-        std = math.sqrt(max(m2 / finite_count, 0.0))
+        assert mean is not None
+        mean *= scale
+        std = math.sqrt(max(m2 / finite_count, 0.0)) * scale
     return minimum, maximum, mean, std, 0
 
 
-def _numpy_image_preview(array: Any, layout: tuple[str, int]) -> tuple[list[Any], int]:
+def _numpy_image_preview(
+    array: Any, layout: tuple[str, int], max_points: int
+) -> tuple[list[Any], int]:
     np = _numpy_module()
     assert np is not None
     mode, channels = layout
     if mode == "channels_first":
         array = np.moveaxis(array, 0, -1)
     height, width = array.shape[:2]
-    array = array[:: max(1, math.ceil(height / 128)), :: max(1, math.ceil(width / 128))][:128, :128]
-    array = array.astype(np.float32, copy=False)
+    ystep, xstep = _preview_steps(height, width, 128, max_points)
+    integer_image = np.issubdtype(array.dtype, np.integer)
+    array = array[::ystep, ::xstep][:128, :128].astype(np.float64, copy=False)
     finite = np.isfinite(array)
     if not finite.any():
         return np.full_like(array, 0.5).tolist(), channels
     valid = array[finite]
     low, high = float(np.min(valid)), float(np.max(valid))
-    if low >= 0 and high <= 1:
-        pass
-    elif high > 1 and low >= 0 and high <= 255:
+    if integer_image and low >= 0 and high <= 255:
         array = array / 255.0
+    elif low >= 0 and high <= 1:
+        pass
     elif high == low:
         array = np.full_like(array, 0.5)
     else:
-        array = (array - low) / (high - low)
+        scale = max(abs(low), abs(high))
+        array = (array / scale - low / scale) / (high / scale - low / scale)
     array = np.where(finite, array, 0.5)
     return array.tolist(), channels
 
 
 def _numeric_sequence(values: Any, *, label: str) -> list[float]:
-    torch = _torch_module()
+    torch = _torch_module() if _framework_type(values, "torch") else None
     if torch is not None and isinstance(values, torch.Tensor):
         if values.ndim != 1:
             raise SeeDLError(
                 f"{label} must be one-dimensional, received shape {tuple(values.shape)}."
             )
         values = values.detach().to(device="cpu").tolist()
-    np = _numpy_module()
+    np = _numpy_module() if _framework_type(values, "numpy") else None
     if np is not None and isinstance(values, np.ndarray):
         if values.ndim != 1:
             raise SeeDLError(f"{label} must be one-dimensional, received shape {values.shape}.")
@@ -535,7 +620,9 @@ def _numeric_sequence(values: Any, *, label: str) -> list[float]:
     return result
 
 
-def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list[str]]:
+def _history_data(
+    history: Mapping[Any, Any], max_points: int
+) -> tuple[dict[str, Any], str, list[str]]:
     metrics: dict[str, list[float]] = {}
     epochs: list[float] | None = None
     notes = ["Curves are diagnostic clues; they are not guarantees about model quality."]
@@ -557,6 +644,8 @@ def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list
         raise SeeDLError("Training history metric sequences must contain at least one value.")
     if epochs is not None and not epochs:
         raise SeeDLError("The epoch sequence must contain at least one value.")
+    if epochs is not None and any(not math.isfinite(value) for value in epochs):
+        raise SeeDLError("Epoch labels must be finite real numbers.")
     if any(not math.isfinite(value) for values in metrics.values() for value in values):
         notes.append("Non-finite metric values are kept as gaps in the curves.")
     groups: dict[str, list[dict[str, Any]]] = {}
@@ -587,9 +676,7 @@ def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list
                 f"'{name}' has {len(values)} points; epoch labels do not match, "
                 "so index labels are used."
             )
-        groups.setdefault(group, []).append(
-            {"name": label if label != "training" else name, "x": x, "values": values}
-        )
+        groups.setdefault(group, []).append({"name": name, "role": label, "x": x, "values": values})
     output_groups: list[dict[str, Any]] = [
         {"name": name, "series": series} for name, series in groups.items()
     ]
@@ -598,11 +685,11 @@ def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list
         if "loss" not in metric_name and "error" not in metric_name:
             continue
         training = next(
-            (series for series in metric_group["series"] if series["name"] != "validation"),
+            (series for series in metric_group["series"] if series["role"] == "training"),
             None,
         )
         validation = next(
-            (series for series in metric_group["series"] if series["name"] == "validation"),
+            (series for series in metric_group["series"] if series["role"] == "validation"),
             None,
         )
         if training is None or validation is None:
@@ -612,7 +699,7 @@ def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list
             for train, valid in zip(training["values"], validation["values"], strict=False)
             if math.isfinite(train) and math.isfinite(valid)
         ]
-        if len(paired) < 3:
+        if training["x"] != validation["x"] or len(paired) < 3:
             continue
         train_start, train_end = paired[0][0], paired[-1][0]
         validation_values = [pair[1] for pair in paired]
@@ -628,6 +715,15 @@ def _history_data(history: Mapping[Any, Any]) -> tuple[dict[str, Any], str, list
                 "Check the curves and validation setup."
             )
             break
+    for group_data in output_groups:
+        for series in group_data["series"]:
+            if len(series["values"]) > max_points:
+                step = math.ceil(len(series["values"]) / max_points)
+                series["values"] = series["values"][::step]
+                series["x"] = series["x"][::step]
+                notes.append(
+                    f"'{series['name']}' is an evenly spaced preview; spikes may be missed."
+                )
     lengths = [len(values) for values in metrics.values()]
     summary = f"{len(metrics)} metric(s), {min(lengths)}–{max(lengths)} epochs"
     return {"groups": output_groups, "metrics": metrics}, summary, notes
@@ -637,9 +733,7 @@ def _shape_text(value: Any, torch: Any) -> str:
     if isinstance(value, torch.Tensor):
         return str(tuple(int(size) for size in value.shape))
     if isinstance(value, Mapping):
-        parts = [
-            f"{key}: {_shape_text(item, torch)}" for key, item in islice(value.items(), 4)
-        ]
+        parts = [f"{key}: {_shape_text(item, torch)}" for key, item in islice(value.items(), 4)]
         return "{" + ", ".join(parts) + (", …" if len(value) > 4 else "") + "}"
     if isinstance(value, tuple):
         parts = [_shape_text(item, torch) for item in value[:4]]
@@ -704,6 +798,7 @@ def _run_model_observation(
         (
             module,
             dict(module._buffers),
+            set(module._non_persistent_buffers_set),
             {
                 name: buffer.detach().clone() if buffer is not None else None
                 for name, buffer in module._buffers.items()
@@ -734,7 +829,14 @@ def _run_model_observation(
                     current_limit = min(sample_limit, available)
                     payload = _torch_tensor_data(tensor, max(current_limit, 1))
                     sample = (
-                        _torch_sample(tensor.detach(), current_limit) if current_limit else []
+                        _torch_sample(
+                            tensor.detach()
+                            if tensor.layout == torch.strided
+                            else tensor.detach().to_sparse_coo().coalesce().values(),
+                            current_limit,
+                        )
+                        if current_limit
+                        else []
                     )
                     remaining_sample_points = available - len(sample)
                     observation["sample"] = sample
@@ -773,11 +875,14 @@ def _run_model_observation(
         finally:
             try:
                 with torch.no_grad():
-                    for module, original_buffers, saved_values in buffers:
+                    for module, original_buffers, non_persistent, saved_values in buffers:
+                        module._non_persistent_buffers_set = non_persistent
                         module._buffers = original_buffers
                         for name, saved in saved_values.items():
                             buffer = original_buffers[name]
                             if buffer is not None and saved is not None:
+                                if buffer.shape != saved.shape:
+                                    buffer.resize_(saved.shape)
                                 buffer.copy_(saved)
             finally:
                 for module, training in states:
@@ -868,7 +973,10 @@ def _model_data(model: Any, example_input: Any | None) -> tuple[dict[str, Any], 
     total_label = f"{total:,}" if total is not None else "unknown number of"
     trainable_label = f"{trainable:,}" if trainable is not None else "unknown number of"
     summary = f"{len(layers)} module(s) · {total_label} parameter(s) · {trainable_label} trainable"
-    notes = []
+    notes = [
+        "Per-layer counts include direct parameters only; shared parameters may appear in "
+        "multiple rows. Total counts deduplicate shared parameters."
+    ]
     if example_input is None:
         notes.append(
             "Only the module hierarchy is shown. Pass input=... to record input and output shapes."
@@ -880,16 +988,16 @@ def _model_data(model: Any, example_input: Any | None) -> tuple[dict[str, Any], 
             )
     else:
         notes.append(
-            "An inference-mode forward pass was run once with the supplied input; "
-            "hooks and buffer changes were restored."
+            "An eval-mode forward pass under no_grad() was run once with the supplied input; "
+            "temporary hooks were removed and ordinary buffer updates were restored."
         )
         notes.append(
-            "Input-dependent control flow follows this example only; "
-            "the diagram does not infer all possible paths."
+            "This is a module hierarchy, not an execution graph. Shapes describe the last "
+            "observed call for this example; keyword input shapes are not captured."
         )
     if len(layers) > 100:
         notes.append(
-            "SVG and Matplotlib show the first 100 modules; Plotly tables show the first 300."
+            "All backends show the first 100 modules; all rows remain available in view.data."
         )
     return {"layers": layers, "parameters": total, "trainable": trainable}, summary, notes
 
@@ -915,17 +1023,22 @@ def _activation_data(
                 "mean": stats.get("Mean", "n/a"),
                 "std": stats.get("Std. deviation", "n/a"),
                 "max_abs": stats.get("Maximum absolute value"),
-                "finite": "yes" if stats.get("Non-finite values") == 0 else "no",
+                "finite": "yes"
+                if stats.get("Non-finite values") == 0
+                else f"no ({stats.get('Non-finite values')})",
+                "status": "available",
             }
         )
     notes = [
-        "Captured in one eval-mode forward pass; the model's training flags and registered "
-        "buffers were restored.",
+        "Captured in one eval-mode forward pass under no_grad(); training flags and "
+        "ordinary buffer updates were restored. Custom forward side effects are not sandboxed.",
         "Each row shows the first tensor output from that module; repeated uses show the last "
         "observed output. Sample values share a max_points budget across modules.",
     ]
-    if len(layers) > 100:
-        notes.append("Static activation summaries show the first 100 modules.")
+    if not layers:
+        notes.append("No tensor outputs were captured for this input.")
+    if len(layers) > 20:
+        notes.append("Activation plots show the first 20 modules; tables show the first 100.")
     return {"layers": layers}, f"Captured {len(layers)} module activation(s)", notes
 
 
@@ -1009,8 +1122,10 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
         notes.append(
             "Sparse gradient summaries use stored values; implicit zeros are not included."
         )
-    if len(layers) > 100:
-        notes.append("Static gradient tables show the first 100 parameter tensors.")
+    if len(layers) > 20:
+        notes.append(
+            "Gradient plots show the first 20 parameter tensors; tables show the first 100."
+        )
     return (
         {"layers": layers},
         f"Gradients available for {present} of {len(layers)} parameter tensor(s)",
@@ -1022,7 +1137,7 @@ def inspect_object(
     obj: Any, *, example_input: Any | None, max_points: int
 ) -> tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
     """Return the semantic view payload for a supported object."""
-    torch = _torch_module()
+    torch = _torch_module() if _framework_type(obj, "torch") else None
     if torch is not None and isinstance(obj, torch.nn.Module):
         data, summary, notes = _model_data(obj, example_input)
         data["summary"] = summary
@@ -1030,14 +1145,14 @@ def inspect_object(
     if torch is not None and isinstance(obj, torch.Tensor):
         kind, data, metadata, notes = _torch_tensor_data(obj, max_points)
         return kind, "Tensor visualization", data, metadata, notes
-    np = _numpy_module()
+    np = _numpy_module() if _framework_type(obj, "numpy") else None
     if np is not None and isinstance(obj, np.ndarray):
         kind, data, metadata, notes = _numpy_array_data(obj, max_points)
         return kind, "NumPy array visualization", data, metadata, notes
     if np is not None and isinstance(obj, np.generic):
         obj = obj.item()
     if isinstance(obj, Mapping):
-        data, summary, notes = _history_data(obj)
+        data, summary, notes = _history_data(obj, max_points)
         data["summary"] = summary
         return "training", "Training history", data, {}, notes
     if isinstance(obj, numbers.Real):
@@ -1068,26 +1183,42 @@ def inspect_object(
                 raise SeeDLError("Nested numeric sequences must form a rectangular matrix.")
             if not rows[0]:
                 raise SeeDLError("A numeric matrix must have at least one column.")
-            if len(rows) > 80 or len(rows[0]) > 80:
-                rows = [row[:80] for row in rows[:80]]
-                notes = ["Showing the top-left 80 × 80 section of this nested sequence."]
+            row_step, col_step = _preview_steps(len(rows), len(rows[0]), 80, max_points)
+            row_indices = list(range(0, len(rows), row_step))
+            column_indices = list(range(0, len(rows[0]), col_step))
+            if row_step > 1 or col_step > 1:
+                rows = [row[::col_step] for row in rows[::row_step]]
+                notes = ["The heatmap is an evenly spaced preview of this nested sequence."]
             else:
                 notes = []
             return (
                 "matrix",
                 "Numeric matrix",
-                {"values": rows, "shape": (len(obj), len(obj[0]))},
+                {
+                    "values": rows,
+                    "shape": (len(obj), len(obj[0])),
+                    "row_indices": row_indices,
+                    "column_indices": column_indices,
+                },
                 {},
                 notes,
             )
         values = _numeric_sequence(obj, label="sequence")
+        indices = list(range(len(values)))
         if len(values) > max_points:
             stride = math.ceil(len(values) / max_points)
             values = values[::stride][:max_points]
+            indices = indices[::stride][:max_points]
             notes = [f"Showing {len(values):,} evenly spaced values from the sequence."]
         else:
             notes = []
-        return "sequence", "Numeric sequence", {"values": values, "label": "Value"}, {}, notes
+        return (
+            "sequence",
+            "Numeric sequence",
+            {"values": values, "x": indices, "label": "Value"},
+            {},
+            notes,
+        )
     supported = (
         "PyTorch tensors and modules, NumPy arrays, real numbers, numeric sequences, "
         "and metric dictionaries"

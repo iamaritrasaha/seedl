@@ -11,7 +11,6 @@ Validates that:
 from __future__ import annotations
 
 import argparse
-import os
 import re
 import sys
 import zipfile
@@ -102,7 +101,7 @@ def verify_release(
     print(f"  src/seedl/__init__.py __version__: {init_version} (MATCH)")
 
     # 5. Check git tag if supplied
-    if expected_tag:
+    if expected_tag is not None:
         # Strip refs/tags/ if passed from GITHUB_REF
         clean_tag = expected_tag.removeprefix("refs/tags/")
         expected_tag_name = f"v{version}"
@@ -156,8 +155,8 @@ def main() -> None:
     parser.add_argument(
         "--tag",
         type=str,
-        default=os.environ.get("GITHUB_REF_NAME"),
-        help="Expected git release tag (e.g. v0.1.0 or GITHUB_REF_NAME)",
+        default=None,
+        help="Explicit release tag to validate (e.g. v0.1.0); omitted for ordinary CI",
     )
     parser.add_argument(
         "--check-dist",

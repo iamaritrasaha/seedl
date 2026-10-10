@@ -265,3 +265,63 @@ def test_standalone_linear_keyword_example_input_keeps_existing_call_contract():
     assert [n["activation"] for n in g["layers"][0]["nodes"]] == [3.0, 1.0]
     assert g["layers"][1]["nodes"][0]["activation"] == 5.5
     assert not m._forward_hooks
+
+
+def test_forward_readout_uses_captured_values_with_fixed_scale():
+    pytest.importorskip("plotly")
+    v = sd.see(tiny(), input=torch.tensor([1.0, 2.0]), backend="plotly")
+    figure = v.explore()
+    slider = figure.layout.sliders[0]
+    assert slider.y > 1  # Controls stay above the graph, not below the readout.
+    hidden = slider.steps[2]
+    detail = hidden.args[1]["annotations"][-1]["text"]
+    assert "Input a = [1, 2]" in detail
+    assert "Pre-activation z = [-2.5, 5, 3]" in detail
+    assert "Output = [0, 5, 3]" in detail
+    assert "ReLU()" in detail
+    assert set(hidden.args[0]) == {"opacity"}  # No altered values, scales or legend state.
+    for trace, opacity in zip(figure.data, hidden.args[0]["opacity"], strict=True):
+        if trace.meta["role"] == "edges":
+            assert opacity == (0.8 if trace.meta["layer"] == 1 else 0.04)
+    reset = slider.steps[0].args[0]["opacity"]
+    assert all(o == 1 for t, o in zip(figure.data, reset, strict=True) if t.meta["role"] == "nodes")
+
+
+def test_no_input_explore_is_explicit_about_unavailable_values():
+    pytest.importorskip("plotly")
+    figure = sd.see(tiny(), backend="plotly").explore()
+    assert not figure.layout.sliders
+    assert any("Values unavailable" in a.text for a in figure.layout.annotations)
+    nodes = [t for t in figure.data if t.meta["role"] == "nodes"]
+    assert "Input feature: unavailable" in nodes[0].hovertext[0]
+    assert "sample 0" not in nodes[0].hovertext[0]
+
+
+def test_3d_guides_camera_controls_and_legend_filtering_contract():
+    pytest.importorskip("plotly")
+    v = sd.see(tiny(), view="3d")
+    figure = v.figure
+    guides = [t for t in figure.data if t.meta["role"] == "guide"]
+    assert len(guides) == 3
+    assert all(t.hoverinfo == "skip" and not t.showlegend for t in guides)
+    assert all(len(set(t.x)) == 1 and t.line.dash == "dot" for t in guides)
+    buttons = figure.layout.updatemenus[0].buttons
+    assert [b.label for b in buttons] == ["Orbit", "Pan", "Reset view"]
+    assert buttons[-1].args[0]["scene.camera"] == figure.layout.scene.camera.to_plotly_json()
+    assert figure.layout.legend.groupclick == "togglegroup"
+    edges = [t for t in figure.data if t.meta["role"] == "edges"]
+    assert {t.legendgroup for t in edges} == {
+        "Positive weights",
+        "Negative weights",
+        "Zero weights",
+    }
+    assert len([t for t in edges if t.showlegend]) == 3
+    assert sum(sum(x is None for x in t.x) for t in edges) == 9
+
+
+def test_wide_forward_readout_is_bounded_and_honest():
+    pytest.importorskip("plotly")
+    model = nn.Linear(16, 16)
+    fig = sd.see(model, input=torch.arange(16, dtype=torch.float32)).explore()
+    text = fig.layout.sliders[0].steps[1].args[1]["annotations"][-1]["text"]
+    assert "[0, 1, 2, 3, 4, 5, … (16 total; hover for each value)]" in text

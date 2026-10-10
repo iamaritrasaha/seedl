@@ -95,7 +95,8 @@ active.save(out / "neurons.svg")
 active""")
 markdown("""## 5. Rotate a real 3D network
 Neurons occupy deterministic grids within layer planes. Drag to orbit; choose zoom or pan in
-the toolbar. Use **Reset camera to last save** to restore the designed initial view. Labels
+the toolbar. **Orbit**, **Pan**, and **Reset view** are also available above the graph.
+Dotted outlines identify layer planes; they are not connections. Labels
 can overlap at edge-on camera angles. Spatial positions are layout coordinates, not learned values.
 """)
 code("""spatial = sd.see(model, input=x, view="3d", theme="dark")
@@ -103,14 +104,32 @@ assert all(trace.type == "scatter3d" for trace in spatial.figure.data)
 spatial.save(out / "3d.html")
 spatial.save(out / "3d.svg")
 spatial""")
+markdown("""### Compare light mode and a denser 3D view
+The same camera and layer guides work in both themes. The medium model still uses the edge
+budget; all 80 neurons are present while the caption discloses sampled connections.
+""")
+code("""spatial_light = sd.see(model, input=x, view="3d", theme="light")
+spatial_light.save(out / "3d-light.html")
+spatial_light""")
+code("""medium_spatial = sd.see(medium_model, view="3d", max_connections=250)
+medium_spatial.save(out / "medium-3d.html")
+medium_spatial""")
 markdown("""## 6. Follow the forward pass
 The slider highlights a transformation and its input/output nodes. Select layers in either
 direction; Reset restores the whole network. This revisits captured values, with no additional
-model calls. Hover shows values; there is no simulated time evolution or clickable expansion.
+model calls. The readout shows actual input, pre-activation and output vectors (first six values
+for wide layers; hover for every neuron). Values keep a fixed color scale while stepping.
+The slider is above the graph. There is no simulated time evolution or clickable expansion.
 """)
 code("""forward = sd.see(model, input=x, theme="dark")
 forward_figure = forward.explore()
 forward.save(out / "forward.html")
+forward_3d = sd.see(model, input=x, view="3d", theme="dark")
+forward_3d.explore()
+forward_3d.save(out / "forward-3d.html")
+forward_sampled = sd.see(model, input=x, max_connections=40)
+forward_sampled.explore()
+forward_sampled.save(out / "forward-sampled.html")
 forward_figure""")
 markdown("""## 7. Convolutional data flow
 Convolution blocks show channel counts, kernel/stride and captured spatial dimensions.

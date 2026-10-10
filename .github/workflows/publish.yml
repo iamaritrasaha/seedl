@@ -13,6 +13,8 @@ jobs:
   build:
     name: Build & Verify Distributions
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.10"
     if: github.repository == 'iamaritrasaha/seedl'
     permissions:
       contents: read  # No publishing permissions for the build job

@@ -18,6 +18,8 @@ jobs:
   lint-and-typecheck:
     name: Code Quality & Type Checks
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.10"
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -55,6 +57,8 @@ jobs:
   test:
     name: Test on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
     strategy:
       fail-fast: false
       matrix:
@@ -100,6 +104,8 @@ jobs:
   package-validation:
     name: Build & Distribution Validation
     runs-on: ubuntu-latest
+    env:
+      UV_PYTHON: "3.10"
     steps:
       - name: Check out repository
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -123,7 +129,7 @@ jobs:
         run: uv run --with twine twine check --strict dist/*.whl dist/*.tar.gz
 
       - name: Verify distribution contents
-        run: uv run python scripts/verify_release.py --check-dist
+        run: uv run --with tomli python scripts/verify_release.py --check-dist
 
       - name: Test clean-room wheel installation
         run: |

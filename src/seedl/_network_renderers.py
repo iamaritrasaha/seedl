@@ -58,11 +58,25 @@ def _color(node: dict[str, Any], graph: dict[str, Any]) -> str:
     )
 
 
+def _operation(layer: dict[str, Any]) -> str:
+    activation = layer["operation"]
+    return "z = W @ a + b" + (f" → {activation}" if activation != "Linear" else "")
+
+
 def _node_text(node: dict[str, Any], graph: dict[str, Any]) -> str:
     layer = graph["layers"][node["layer"]]
+    heading = f"{layer['label']} · neuron {node['index']}"
+    if graph["captured"]:
+        heading += f" · sample {graph['sample']}"
+    if node["layer"] == 0:
+        return (
+            f"{heading}\nInput feature: {_fmt(node['activation'])} ({node['activation_status']})"
+            "\nInput features have no bias or parameter gradient."
+        )
     return (
-        f"{layer['label']} · neuron {node['index']}\nModule: {layer['module']}\n"
-        f"Operation: {layer['operation']}\nActivation: {_fmt(node['activation'])} ({node['activation_status']})\n"
+        f"{heading}\nModule: {layer['module']}\n"
+        f"Operation: {_operation(layer)}\n"
+        f"Activation: {_fmt(node['activation'])} ({node['activation_status']})\n"
         f"Pre-activation: {_fmt(node['preactivation'])}\nBias: {_fmt(node['bias'])}\n"
         f"Weight trainable: {node['trainable']} · bias trainable: {node['bias_trainable']}\n"
         f"Bias gradient: {_fmt(node['gradient'])} ({node['gradient_status']})"
@@ -86,9 +100,31 @@ def _footer(graph: dict[str, Any]) -> str:
     color = (
         "layer identity"
         if field is None
-        else f"{field} · −{_scale(graph):.3g} to +{_scale(graph):.3g} · gray = unavailable"
+        else f"{'bias gradient' if field == 'gradient' else field} · −{_scale(graph):.3g} to +{_scale(graph):.3g} · gray = unavailable"
     )
     return f"Node color: {color}. Connection width: |weight|."
+
+
+def _vector_text(nodes: list[dict[str, Any]], field: str) -> str:
+    values = ", ".join(_fmt(n[field]) for n in nodes[:6])
+    suffix = f", … ({len(nodes)} total; hover for each value)" if len(nodes) > 6 else ""
+    return "[" + values + suffix + "]"
+
+
+def _step_text(graph: dict[str, Any], index: int) -> str:
+    if index < 0:
+        return "<b>Captured forward pass</b> · select a layer below; colors keep the same scale."
+    layer = graph["layers"][index]
+    output = _vector_text(layer["nodes"], "activation")
+    if index == 0:
+        return f"<b>Input · sample {graph['sample']}</b><br>Features = {output}"
+    inputs = _vector_text(graph["layers"][index - 1]["nodes"], "activation")
+    pre = _vector_text(layer["nodes"], "preactivation")
+    operation = html.escape(_operation(layer))
+    return (
+        f"<b>{layer['label']} · {operation}</b>"
+        f"<br>Input a = {inputs}<br>Pre-activation z = {pre}<br>Output = {output}"
+    )
 
 
 def plotly_network(view: Any) -> Any:
@@ -143,13 +179,14 @@ def plotly_network(view: Any) -> Any:
             mode="lines",
             line=dict(
                 color=POSITIVE if sign_value > 0 else NEGATIVE if sign_value < 0 else "#8390a6",
-                width=0.6 + bucket * 0.65,
+                width=(1.2 if spatial else 0.8) + bucket * 0.8,
             ),
             opacity=graph["edge_opacity"],
             text=text,
             hovertemplate="%{text}<extra></extra>",
             name=sign,
             legendgroup=sign,
+            legendrank={1: 0, -1: 1, 0: 2}[sign_value],
             showlegend=sign not in legends,
             meta=dict(layer=layer, role="edges"),
         )
@@ -167,9 +204,9 @@ def plotly_network(view: Any) -> Any:
             if not selected:
                 continue
             marker: dict[str, Any] = dict(
-                size=9 if spatial else max(10, min(28, 320 / max(graph["widths"]))),
+                size=11 if spatial else max(10, min(28, 320 / max(graph["widths"]))),
                 color=[_color(n, graph) for n in selected],
-                line=dict(color=bg, width=1.8),
+                line=dict(color=PALETTE[index % len(PALETTE)] if field else bg, width=1.8),
             )
             if field and present:
                 marker.update(
@@ -189,12 +226,17 @@ def plotly_network(view: Any) -> Any:
             kwargs = dict(
                 x=[n["x"] for n in selected],
                 y=[n["y3"] if spatial else n["y"] for n in selected],
-                mode="markers",
+                mode="markers+text" if not spatial and max(graph["widths"]) <= 12 else "markers",
+                textposition="middle right",
+                textfont=dict(size=10, color=muted),
                 marker=marker,
                 name=layer["label"],
                 showlegend=False,
-                text=[html.escape(_node_text(n, graph)).replace("\n", "<br>") for n in selected],
-                hovertemplate="%{text}<extra></extra>",
+                text=[str(n["index"]) for n in selected],
+                hovertext=[
+                    html.escape(_node_text(n, graph)).replace("\n", "<br>") for n in selected
+                ],
+                hovertemplate="%{hovertext}<extra></extra>",
                 meta=dict(layer=index, role="nodes"),
             )
             if spatial:
@@ -204,11 +246,28 @@ def plotly_network(view: Any) -> Any:
     for index, layer in enumerate(graph["layers"]):
         label = f"<b>{layer['label']}</b><br>{layer['width']} neurons<br>{html.escape(layer['operation'])}"
         if spatial:
+            ymin = min(n["y3"] for n in layer["nodes"]) - 0.4
+            ymax = max(n["y3"] for n in layer["nodes"]) + 0.4
+            zmin = min(n["z3"] for n in layer["nodes"]) - 0.4
+            zmax = max(n["z3"] for n in layer["nodes"]) + 0.4
+            figure.add_trace(
+                go.Scatter3d(
+                    x=[index * 3.5] * 5,
+                    y=[ymin, ymax, ymax, ymin, ymin],
+                    z=[zmin, zmin, zmax, zmax, zmin],
+                    mode="lines",
+                    line=dict(color=PALETTE[index % len(PALETTE)], width=2, dash="dot"),
+                    opacity=0.35,
+                    hoverinfo="skip",
+                    showlegend=False,
+                    meta=dict(role="guide", layer=index),
+                )
+            )
             figure.add_trace(
                 go.Scatter3d(
                     x=[index * 3.5],
                     y=[0],
-                    z=[max(n["z3"] for n in graph["nodes"]) + 1.4],
+                    z=[max(n["z3"] for n in graph["nodes"]) + 0.9],
                     mode="text",
                     text=[label],
                     textfont=dict(size=12, color=fg),
@@ -218,6 +277,17 @@ def plotly_network(view: Any) -> Any:
                 )
             )
         else:
+            figure.add_shape(
+                type="rect",
+                x0=index * 3.5 - 0.35,
+                x1=index * 3.5 + 0.35,
+                y0=-layer["width"] / 2,
+                y1=layer["width"] / 2,
+                fillcolor=PALETTE[index % len(PALETTE)],
+                opacity=0.07,
+                line=dict(width=0),
+                layer="below",
+            )
             annotations.append(
                 dict(
                     x=index * 3.5,
@@ -232,10 +302,11 @@ def plotly_network(view: Any) -> Any:
     annotations.append(
         dict(
             x=0,
-            y=-0.17,
+            y=-0.23 if spatial and graph.get("explore") else -0.17,
             xref="paper",
             yref="paper",
-            text=_footer(graph),
+            text=_footer(graph)
+            + ("<br>Dotted outlines mark layer planes, not connections." if spatial else ""),
             showarrow=False,
             xanchor="left",
             font=dict(size=11, color=muted),
@@ -272,6 +343,7 @@ def plotly_network(view: Any) -> Any:
             yanchor="top",
             font=dict(size=12),
             groupclick="togglegroup",
+            title=dict(text="Connections · click to filter", font=dict(size=11, color=muted)),
         ),
         annotations=annotations,
         hoverlabel=dict(bgcolor=bg, font=dict(color=fg)),
@@ -279,6 +351,7 @@ def plotly_network(view: Any) -> Any:
     )
     if spatial:
         axis = dict(visible=False, showbackground=False)
+        camera = dict(eye=dict(x=-1.6, y=-2.6, z=0.55), up=dict(x=0, y=0, z=1))
         figure.update_layout(
             scene=dict(
                 xaxis=axis,
@@ -286,10 +359,31 @@ def plotly_network(view: Any) -> Any:
                 zaxis=axis,
                 bgcolor=bg,
                 aspectmode="manual",
-                aspectratio=dict(x=max(1.8, len(graph["layers"]) * 0.6), y=0.7, z=1.1),
-                camera=dict(eye=dict(x=-0.5, y=-2.5, z=0.7), up=dict(x=0, y=0, z=1)),
+                aspectratio=dict(x=max(1.8, len(graph["layers"]) * 0.6), y=1.6, z=1.25),
+                camera=camera,
                 dragmode="orbit",
-            )
+            ),
+            updatemenus=[
+                dict(
+                    type="buttons",
+                    direction="right",
+                    x=0,
+                    y=1.09,
+                    xanchor="left",
+                    showactive=False,
+                    bgcolor=bg,
+                    bordercolor=border,
+                    buttons=[
+                        dict(label="Orbit", method="relayout", args=[{"scene.dragmode": "orbit"}]),
+                        dict(label="Pan", method="relayout", args=[{"scene.dragmode": "pan"}]),
+                        dict(
+                            label="Reset view",
+                            method="relayout",
+                            args=[{"scene.camera": camera, "scene.dragmode": "orbit"}],
+                        ),
+                    ],
+                )
+            ],
         )
     else:
         figure.update_xaxes(
@@ -300,8 +394,38 @@ def plotly_network(view: Any) -> Any:
             range=[-max(graph["widths"]) / 2 - 0.7, max(graph["widths"]) / 2 + 0.7],
             fixedrange=False,
         )
-    if graph.get("explore") and graph["captured"]:
+    if graph.get("explore"):
+        if not graph["captured"]:
+            figure.add_annotation(
+                x=0,
+                y=-0.25,
+                xref="paper",
+                yref="paper",
+                showarrow=False,
+                xanchor="left",
+                text="Values unavailable. Supply input=… to capture a forward pass.",
+                font=dict(color=muted, size=12),
+            )
+            return figure
         steps = []
+
+        def detail(index: int) -> dict[str, Any]:
+            return dict(
+                x=0,
+                y=-0.30,
+                xref="paper",
+                yref="paper",
+                xanchor="left",
+                yanchor="top",
+                text=_step_text(graph, index),
+                showarrow=False,
+                align="left",
+                font=dict(size=12, color=fg),
+                bgcolor=bg,
+                bordercolor=border,
+                borderpad=10,
+            )
+
         for current_layer in range(-1, len(graph["layers"])):
             opacities = []
             for trace in figure.data:
@@ -310,58 +434,45 @@ def plotly_network(view: Any) -> Any:
                 active = meta.get("layer") == current_layer or (
                     role == "nodes" and meta.get("layer") == current_layer - 1
                 )
+                normal = (
+                    graph["edge_opacity"] if role == "edges" else 0.35 if role == "guide" else 1
+                )
                 opacities.append(
-                    (graph["edge_opacity"] if role == "edges" else 1)
+                    normal
                     if current_layer == -1 or role == "label"
-                    else (0.8 if role == "edges" else 1)
+                    else (0.8 if role in ("edges", "guide") else 1)
                     if active
-                    else 0.07
+                    else (0.04 if role == "edges" else 0.22)
                 )
-            explanation = (
-                "All layers"
-                if current_layer < 0
-                else "Input features"
-                if current_layer == 0
-                else (
-                    f"{graph['layers'][current_layer]['label']}: z = W @ a + b → {graph['layers'][current_layer]['operation']}"
-                )
-            )
             steps.append(
                 dict(
                     method="update",
                     label="Reset" if current_layer < 0 else graph["layers"][current_layer]["label"],
                     args=[
                         {"opacity": opacities},
-                        {
-                            "annotations": annotations
-                            + [
-                                dict(
-                                    x=0,
-                                    y=-0.23,
-                                    xref="paper",
-                                    yref="paper",
-                                    text=html.escape(explanation),
-                                    showarrow=False,
-                                    xanchor="left",
-                                )
-                            ]
-                        },
+                        {"annotations": annotations + [detail(current_layer)]},
                     ],
                 )
             )
         figure.update_layout(
+            annotations=annotations + [detail(-1)],
             sliders=[
                 dict(
                     active=0,
                     steps=steps,
                     x=0,
-                    y=-0.25,
+                    y=1.58,
                     len=0.95,
-                    currentvalue=dict(prefix=f"Sample {graph['sample']} · "),
+                    currentvalue=dict(prefix=f"Sample {graph['sample']} · ", font=dict(color=fg)),
+                    bgcolor=border,
+                    activebgcolor=PALETTE[0],
+                    bordercolor=muted,
+                    font=dict(color=fg),
+                    transition=dict(duration=0),
                 )
             ],
-            margin=dict(b=190),
-            height=760,
+            margin=dict(t=260 if view.data.get("visual_notes") else 210, b=230),
+            height=790 if view.data.get("visual_notes") else 740,
         )
     return figure
 
@@ -400,6 +511,8 @@ def svg_network(view: Any) -> str:
         body.append(
             f'<circle cx="{x}" cy="{y}" r="{radius}" fill="{_color(node, graph)}" stroke="{fg}" stroke-width="0.5"><title>{html.escape(_node_text(node, graph))}</title></circle>'
         )
+        if max(graph["widths"]) <= 12:
+            body.append(_text(x + radius + 5, y + 3, str(node["index"]), muted, 10))
     for i, layer in enumerate(graph["layers"]):
         x = left + i * gap
         body += [

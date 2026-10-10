@@ -88,7 +88,7 @@ def see(
     max_neurons: int = 100,
     max_connections: int = 1_500,
     min_weight: float = 0.0,
-    edge_opacity: float = 0.32,
+    edge_opacity: float = 0.45,
 ) -> Visualization:
     """Automatically visualize a supported deep-learning or numeric object.
 

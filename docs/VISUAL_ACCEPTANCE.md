@@ -1,5 +1,9 @@
 # Visual redesign acceptance record
 
+Follow-up: [CI repair and visual polish report](CI_VISUAL_POLISH_REPORT.md) records the
+current 174-test results across Python 3.10–3.13, updated 14-cell notebook, interaction checks
+and new screenshots. The original implementation record below is retained for context.
+
 Verified on 10 October 2026 in the local repository, using CPU PyTorch, Python 3.13,
 and the Codex in-app browser. No publishing workflow or release version was changed.
 

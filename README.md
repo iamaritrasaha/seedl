@@ -105,7 +105,7 @@ ranking. The plot discloses displayed versus total connections. Connections are 
 sign/magnitude/layer traces, rather than creating a Plotly trace per edge.
 
 ```python
-sd.see(model, max_neurons=100, max_connections=500, min_weight=0.1, edge_opacity=0.4)
+sd.see(model, max_neurons=100, max_connections=500, min_weight=0.1, edge_opacity=0.45)
 sd.see(model, color_by="layer", theme="light")
 sd.see(model, input=x, sample=0, color_by="activation")
 ```
@@ -114,19 +114,26 @@ sd.see(model, input=x, sample=0, color_by="activation")
 
 Install `pip install "seedl[torch,plotly]"` for interactive model exploration. Plotly 3D uses
 actual `Scatter3d` traces and a WebGL browser. Hover, sign-legend toggles, orbit, zoom and pan
-are supported. **Reset camera to last save** restores the designed camera; Plotly's default
-camera button uses its own default. Edge-on camera angles can overlap labels.
+are supported. **Orbit**, **Pan**, and **Reset view** controls sit above the graph. Reset view
+restores the designed camera and orbit mode. Dotted outlines identify layer planes, not weights.
+Colored node outlines preserve layer identity while the fill shows activation values.
+Edge-on camera angles can overlap labels.
 
 `.explore()` adds a layer-step slider when activations were captured. It highlights the current
-transformation and adjacent nodes and displays its operation; values remain available on hover.
+transformation and adjacent nodes. The readout displays its operation and captured input,
+pre-activation and output vectors (first six entries for wide layers; hover for each value).
+The slider sits above the graph, supports backward steps and Reset, and keeps the color scale
+fixed. Without a captured input, exploration explicitly says that values are unavailable.
 It reuses captured values without rerunning the model. There is no click-to-expand behavior,
 notebook widget dependency or fabricated propagation animation.
 
 Without Plotly, `sd.see(model)` renders SVG circles, edges, labels and native title tooltips.
 Explicit `view="3d"` requires Plotly and raises an installation hint if it is absent. Unsupported
 3D model requests use an explicitly disclosed 2D architecture fallback. SVG/Matplotlib export
-of a 3D neuron network is labeled as a **2D projection**. Genuine 3D raster export requires
-Plotly's optional Kaleido setup; HTML is the portable interactive export.
+of a 3D neuron network is labeled as a **2D projection**. Python-side 3D raster export requires
+Plotly's optional Kaleido setup. The browser toolbar can download a genuine 3D PNG without
+Kaleido; this was tested and [the output inspected](docs/visuals/network-3d-export.png).
+HTML is the portable interactive export.
 
 Notebooks must trust the output and support Plotly MIME rendering. GitHub's notebook viewer
 may not execute interactive output; use Jupyter or generated HTML. Small panels can require

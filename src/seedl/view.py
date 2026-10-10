@@ -69,6 +69,20 @@ class Visualization:
 
         return save_visualization(self, filepath, format=format)
 
+    def to_html(self) -> str:
+        """Return a complete, self-contained interactive HTML document for this visualization."""
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+            tmp_path = Path(tmp.name)
+        try:
+            self.save(tmp_path, format="html")
+            return tmp_path.read_text(encoding="utf-8")
+        finally:
+            if tmp_path.exists():
+                tmp_path.unlink()
+
     def explore(self, *, select_neuron: tuple[int, int] | str | None = None) -> Any:
         """Return an interactive figure with layer stepping, forward animation, and neuron inspection."""
         if self.data.get("neuron_graph"):

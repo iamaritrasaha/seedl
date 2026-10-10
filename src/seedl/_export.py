@@ -48,8 +48,17 @@ def _save_html(view: Visualization, path: Path) -> None:
     if view.backend == "plotly":
         fig = view.figure
         if hasattr(fig, "write_html"):
+            post_script = None
+            if view.data.get("neuron_graph"):
+                from ._network_renderers import build_network_interactive_js
+
+                spatial = view.data["neuron_graph"].get("dimensions") == 3
+                post_script = build_network_interactive_js(view.data["neuron_graph"], spatial)
             fig.write_html(
-                str(path), include_plotlyjs=True, config={"responsive": True, "scrollZoom": True}
+                str(path),
+                include_plotlyjs=True,
+                config={"responsive": True, "scrollZoom": True},
+                post_script=post_script,
             )
             return
 

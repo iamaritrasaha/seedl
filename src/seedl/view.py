@@ -73,7 +73,15 @@ class Visualization:
         if self.backend == "plotly":
             figure = self.figure
             if hasattr(figure, "_repr_mimebundle_"):
-                return figure._repr_mimebundle_()
+                bundle = figure._repr_mimebundle_()
+                if isinstance(bundle, tuple):
+                    bundle = bundle[0]
+                if isinstance(bundle, dict) and bundle:
+                    return bundle
+            if hasattr(figure, "_repr_html_"):
+                html = figure._repr_html_()
+                if html:
+                    return {"text/html": html, "text/plain": str(self)}
         if self.backend == "matplotlib":
             from io import BytesIO
 

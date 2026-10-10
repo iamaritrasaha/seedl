@@ -165,6 +165,8 @@ The built-in SVG view works without a plotting library.
 
 - Complex tensors and arrays are not supported yet. Split real and imaginary
   components before visualizing them.
+- Quantized PyTorch tensors are not supported yet. Call `tensor.dequantize()`
+  before visualizing one.
 - An input-dependent model view requires PyTorch and an explicit `input=`.
 - Model execution can trigger custom forward-method side effects beyond module
   flags and registered buffers; inspect unfamiliar models without `input=` first.

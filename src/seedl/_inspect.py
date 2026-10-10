@@ -6,6 +6,7 @@ import importlib
 import math
 import numbers
 from collections.abc import Mapping, Sequence
+from itertools import islice
 from typing import Any
 
 from .exceptions import MissingDependencyError, SeeDLError, UnsupportedObjectError
@@ -121,15 +122,20 @@ def _torch_statistics(
     """Compute exact-shape summaries in bounded chunks without a full-size temporary."""
     torch = _torch_module()
     assert torch is not None
+    stats_dtype = (
+        torch.float64
+        if tensor.dtype == torch.float64 or not tensor.dtype.is_floating_point
+        else torch.float32
+    )
     finite_count = 0
     nonfinite = 0
     minimum: float | None = None
     maximum: float | None = None
     mean: float | None = None
     m2: float | None = None
-    max_abs: float | None = None
+    scale = 0.0
     for chunk in _torch_chunks(tensor):
-        values = chunk.to(dtype=torch.float32)
+        values = chunk.to(dtype=stats_dtype)
         mask = torch.isfinite(values)
         nonfinite += int(values.numel()) - int(mask.sum().item())
         valid = values[mask]
@@ -138,12 +144,19 @@ def _torch_statistics(
             continue
         chunk_min = float(valid.min().item())
         chunk_max = float(valid.max().item())
-        chunk_mean = float(valid.mean().item())
-        chunk_m2 = float((valid - chunk_mean).square().sum().item())
-        chunk_max_abs = float(valid.abs().max().item())
+        chunk_scale = float(valid.abs().max().item())
+        if chunk_scale > scale:
+            factor = scale / chunk_scale if scale else 0.0
+            if finite_count:
+                assert mean is not None and m2 is not None
+                mean *= factor
+                m2 *= factor * factor
+            scale = chunk_scale
+        normalized = valid / scale if scale else valid
+        chunk_mean = float(normalized.mean().item())
+        chunk_m2 = float((normalized - chunk_mean).square().sum().item())
         minimum = chunk_min if minimum is None else min(minimum, chunk_min)
         maximum = chunk_max if maximum is None else max(maximum, chunk_max)
-        max_abs = chunk_max_abs if max_abs is None else max(max_abs, chunk_max_abs)
         if finite_count == 0:
             mean, m2 = chunk_mean, chunk_m2
             finite_count = size
@@ -159,8 +172,10 @@ def _torch_statistics(
     std = None
     if finite_count:
         assert m2 is not None
-        std = math.sqrt(max(m2 / finite_count, 0.0))
-    return minimum, maximum, mean, std, max_abs, 0
+        assert mean is not None
+        mean *= scale
+        std = math.sqrt(max(m2 / finite_count, 0.0)) * scale
+    return minimum, maximum, mean, std, scale if finite_count else None, 0
 
 
 def _torch_sample(tensor: Any, max_points: int) -> list[Any]:
@@ -186,6 +201,10 @@ def _torch_tensor_data(
 ) -> tuple[str, dict[str, Any], dict[str, Any], list[str]]:
     torch = _torch_module()
     assert torch is not None
+    if tensor.is_quantized:
+        raise SeeDLError(
+            "Quantized PyTorch tensors are not supported yet; call dequantize() first."
+        )
     if tensor.is_complex():
         raise SeeDLError(
             "Complex tensors are not visualized yet; convert real and imaginary parts separately."
@@ -242,7 +261,7 @@ def _torch_tensor_data(
         return (
             "scalar",
             {
-                "value": float(detached.to(dtype=torch.float32).item()),
+                "value": float(detached.item()),
                 "display_value": _display_scalar(detached.item()),
                 "caption": f"0-dimensional tensor · {dtype} · {device}",
             },
@@ -297,7 +316,8 @@ def _image_layout(shape: tuple[int, ...]) -> tuple[str, int] | None:
 def _image_scale(values: Any, dtype: Any) -> Any:
     torch = _torch_module()
     assert torch is not None
-    values = values.to(dtype=torch.float32)
+    work_dtype = torch.float64 if dtype == torch.float64 else torch.float32
+    values = values.to(dtype=work_dtype)
     if not values.numel():
         return values
     if dtype == torch.uint8:
@@ -315,7 +335,8 @@ def _image_scale(values: Any, dtype: Any) -> Any:
     elif high == low:
         scaled = torch.full_like(values, 0.5)
     else:
-        scaled = (values - low) / (high - low)
+        scale = max(abs(low), abs(high))
+        scaled = (values / scale - low / scale) / (high / scale - low / scale)
     return torch.where(finite, scaled, torch.full_like(values, 0.5))
 
 
@@ -616,11 +637,18 @@ def _shape_text(value: Any, torch: Any) -> str:
     if isinstance(value, torch.Tensor):
         return str(tuple(int(size) for size in value.shape))
     if isinstance(value, Mapping):
-        parts = [f"{key}: {_shape_text(item, torch)}" for key, item in list(value.items())[:4]]
+        parts = [
+            f"{key}: {_shape_text(item, torch)}" for key, item in islice(value.items(), 4)
+        ]
         return "{" + ", ".join(parts) + (", …" if len(value) > 4 else "") + "}"
-    if isinstance(value, (tuple, list)):
+    if isinstance(value, tuple):
         parts = [_shape_text(item, torch) for item in value[:4]]
+        if len(value) == 1:
+            parts[0] += ","
         return "(" + ", ".join(parts) + (", …" if len(value) > 4 else "") + ")"
+    if isinstance(value, list):
+        parts = [_shape_text(item, torch) for item in value[:4]]
+        return "[" + ", ".join(parts) + (", …" if len(value) > 4 else "") + "]"
     return type(value).__name__
 
 
@@ -670,8 +698,19 @@ def _run_model_observation(
         )
     modules = list(model.named_modules())
     sample_limit = max(1, max_points // max(len(modules), 1)) if capture_values else max_points
+    remaining_sample_points = max_points
     states = [(module, bool(module.training)) for _, module in modules]
-    buffers = [(buffer, buffer.detach().clone()) for buffer in model.buffers()]
+    buffers = [
+        (
+            module,
+            dict(module._buffers),
+            {
+                name: buffer.detach().clone() if buffer is not None else None
+                for name, buffer in module._buffers.items()
+            },
+        )
+        for _, module in modules
+    ]
     observations: dict[int, dict[str, Any]] = {}
     handles = []
 
@@ -684,17 +723,30 @@ def _run_model_observation(
 
     def make_post(module_id: int, name: str, module: Any):
         def hook(_module: Any, _args: Any, output: Any) -> None:
+            nonlocal remaining_sample_points
             observation = observations.setdefault(module_id, {})
             observation["output_shape"] = _shape_text(output, torch)
             if capture_values:
                 tensor = _first_tensor(output, torch)
                 if tensor is not None:
-                    payload = _torch_tensor_data(tensor, sample_limit)
-                    observation["sample"] = _torch_sample(tensor.detach(), sample_limit)
+                    old_sample_count = len(observation.get("sample", []))
+                    available = remaining_sample_points + old_sample_count
+                    current_limit = min(sample_limit, available)
+                    payload = _torch_tensor_data(tensor, max(current_limit, 1))
+                    sample = (
+                        _torch_sample(tensor.detach(), current_limit) if current_limit else []
+                    )
+                    remaining_sample_points = available - len(sample)
+                    observation["sample"] = sample
                     observation["stats"] = payload[2]
                     observation["tensor_shape"] = tuple(int(size) for size in tensor.shape)
                     observation["module_name"] = name
                     observation["module_type"] = type(module).__name__
+                else:
+                    old_sample_count = len(observation.pop("sample", []))
+                    remaining_sample_points += old_sample_count
+                    for key in ("stats", "tensor_shape", "module_name", "module_type"):
+                        observation.pop(key, None)
 
         return hook
 
@@ -706,20 +758,30 @@ def _run_model_observation(
         copied_input = _clone_input(example_input, torch)
         with torch.no_grad():
             _call_model(model, copied_input)
-    except (RuntimeError, TypeError, ValueError, IndexError) as exc:
+    except SeeDLError:
+        raise
+    except Exception as exc:
         raise SeeDLError(
             "Could not inspect this model with the supplied input. "
             "Check the input structure, shapes, dtype, and device. "
             f"Original error: {exc}"
         ) from exc
     finally:
-        for handle in handles:
-            handle.remove()
-        with torch.no_grad():
-            for buffer, saved in buffers:
-                buffer.copy_(saved)
-        for module, training in states:
-            module.training = training
+        try:
+            for handle in handles:
+                handle.remove()
+        finally:
+            try:
+                with torch.no_grad():
+                    for module, original_buffers, saved_values in buffers:
+                        module._buffers = original_buffers
+                        for name, saved in saved_values.items():
+                            buffer = original_buffers[name]
+                            if buffer is not None and saved is not None:
+                                buffer.copy_(saved)
+            finally:
+                for module, training in states:
+                    module.training = training
     return observations
 
 
@@ -876,6 +938,7 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
     layers = []
     parameters = list(model.named_parameters())
     sample_limit = max(1, max_points // max(len(parameters), 1))
+    remaining_sample_points = max_points
     present = 0
     sparse_count = 0
     for name, parameter in parameters:
@@ -909,7 +972,9 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
         else:
             values = gradient
         count = int(values.numel())
-        sample = _torch_sample(values, sample_limit) if count else []
+        current_limit = min(sample_limit, remaining_sample_points)
+        sample = _torch_sample(values, current_limit) if count and current_limit else []
+        remaining_sample_points -= len(sample)
         _, _, mean, std, max_abs, nonfinite = _torch_statistics(values)
         if nonfinite == 0 and count:
             mean_value, std_value, max_abs_value = mean, std, max_abs

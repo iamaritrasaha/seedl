@@ -58,14 +58,13 @@ def _summary(kind: str, data: dict[str, Any], metadata: dict[str, Any]) -> str:
 
 
 def _show_result(view: Visualization) -> None:
-    """Display in an IPython frontend or provide a short terminal fallback."""
+    """Display in a terminal fallback; in notebooks, the return value renders automatically."""
     try:
         from IPython import get_ipython  # type: ignore[import-not-found]
 
         if get_ipython() is not None:
-            from IPython.display import display  # type: ignore[import-not-found]
-
-            display(view)
+            # In IPython/Jupyter, Visualization instances render automatically when returned
+            # as the final expression in a cell. Suppress explicit display() to avoid duplicates.
             return
     except ImportError:
         pass
@@ -256,7 +255,29 @@ def explain(
     abs: bool | None = None,
     backend: str = "auto",
 ) -> Visualization:
-    """Generate input feature attributions using saliency, integrated gradients, or Grad-CAM."""
+    """Generate input feature attributions using saliency, integrated gradients, or Grad-CAM.
+
+    Methods:
+    - 'saliency': Vanilla gradient saliency with respect to the input tensor.
+    - 'integrated_gradients': Path-integrated gradients along a straight line from baseline
+      using the composite midpoint integration rule (open Newton-Cotes formula with uniform weights,
+      distinct from Gauss-Legendre quadrature which uses non-uniform polynomial roots).
+      Attributions are signed by default to satisfy the Completeness axiom:
+      sum(attribution) ≈ F(input) - F(baseline).
+    - 'grad_cam': Coarse spatial activation mapping for convolutional networks.
+
+    Parameters:
+    - model: PyTorch nn.Module.
+    - input: Input tensor.
+    - target: Target class index (defaults to argmax predicted class).
+    - method: Attribution method ('saliency', 'integrated_gradients', 'grad_cam').
+    - steps: Number of interpolation steps for composite midpoint integration (default: 20).
+    - baseline: Reference input tensor for integrated gradients (default: zeros).
+    - layer: Target layer name or class for Grad-CAM (default: last conv layer).
+    - abs: Whether to take absolute value of attributions (default: False for IG to preserve
+      completeness, True for saliency).
+    - backend: Visualization backend ('auto', 'svg', 'plotly', 'matplotlib').
+    """
     selected_backend = resolve_backend(backend)
     from ._explain import explain_prediction
 

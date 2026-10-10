@@ -236,3 +236,30 @@ def test_grad_cam_custom_layer_and_disconnected():
     # Non-existent layer
     with pytest.raises(SeeDLError, match="Target layer 'non_existent' not found"):
         sd.explain(model, input=x, method="grad_cam", layer="non_existent")
+
+
+def test_multidimensional_attribution_rendering_across_backends():
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
+
+    model = nn.Sequential(
+        nn.Conv2d(3, 4, 3, padding=1),
+        nn.ReLU(),
+        nn.AdaptiveAvgPool2d(1),
+        nn.Flatten(),
+        nn.Linear(4, 2),
+    )
+    x = torch.randn(1, 3, 16, 16)
+    view = sd.explain(model, input=x, method="saliency")
+
+    # Plotly backend produces a 2D spatial heatmap
+    fig_plotly = view.to_figure("plotly")
+    assert fig_plotly is not None
+
+    # Matplotlib backend produces 2D spatial imshow without TypeError
+    fig_mpl = view.to_figure("matplotlib")
+    assert fig_mpl is not None
+
+    # SVG backend produces valid SVG
+    svg_out = view.to_figure("svg")
+    assert "<svg" in svg_out

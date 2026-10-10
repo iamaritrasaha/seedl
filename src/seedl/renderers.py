@@ -78,6 +78,29 @@ def _details(view: Visualization, width: int = 110) -> list[str]:
     return lines
 
 
+def _reduce_attribution_matrix(attr: Any) -> list[Any]:
+    """Reduce multi-dimensional attribution array to 2D matrix or 1D vector for display."""
+    if not isinstance(attr, list) or not attr:
+        return []
+    if not isinstance(attr[0], list):
+        return attr
+    if not isinstance(attr[0][0], list):
+        if len(attr) == 1:
+            return attr[0]
+        return attr
+    if not isinstance(attr[0][0][0], list):
+        h = len(attr[0])
+        w = len(attr[0][0])
+        out_2d = [[0.0] * w for _ in range(h)]
+        num_slices = max(len(attr), 1)
+        for s in attr:
+            for r in range(h):
+                for c in range(w):
+                    out_2d[r][c] += abs(float(s[r][c])) / num_slices
+        return out_2d
+    return _reduce_attribution_matrix(attr[0])
+
+
 def _normalized(value: float, low: float, high: float) -> float:
     if high == low:
         return 0.5
@@ -993,10 +1016,12 @@ def _plotly(view: Visualization) -> Any:
         figure.update_xaxes(title="Output X")
         figure.update_yaxes(title="Output Y", autorange="reversed")
     elif view.kind == "attribution":
-        attr = data.get("attribution", [])
+        raw_attr = data.get("attribution", [])
+        attr = _reduce_attribution_matrix(raw_attr)
         if attr and isinstance(attr[0], list):
             figure = go.Figure(go.Heatmap(z=attr, colorscale="Hot"))
-            figure.update_yaxes(autorange="reversed")
+            figure.update_xaxes(title="Spatial X")
+            figure.update_yaxes(title="Spatial Y", autorange="reversed")
         else:
             figure = go.Figure(go.Bar(y=attr, marker=dict(color="#4b78c2")))
             figure.update_xaxes(title="Feature Index")
@@ -1406,10 +1431,12 @@ def _matplotlib(view: Visualization) -> Any:
         axis.set(xlabel="Output X", ylabel="Output Y")
         return _finish_matplotlib(figure, view)
     elif view.kind == "attribution":
-        attr = data.get("attribution", [])
+        raw_attr = data.get("attribution", [])
+        attr = _reduce_attribution_matrix(raw_attr)
         if attr and isinstance(attr[0], list):
             im = axis.imshow(attr, cmap="hot", interpolation="nearest")
             figure.colorbar(im, ax=axis, label="Attribution")
+            axis.set(xlabel="Spatial X", ylabel="Spatial Y")
         else:
             axis.bar(range(len(attr)), attr, color="#4b78c2")
             axis.set(xlabel="Feature Index", ylabel="Attribution")

@@ -78,10 +78,12 @@ def explain_prediction(
             attribution, target_class, pred_score = _compute_integrated_gradients(
                 model, example_input, target, steps, torch, baseline=baseline, abs=abs
             )
-            method_desc = f"Integrated Gradients ({steps} interpolation steps)"
+            method_desc = f"Integrated Gradients ({steps} steps via composite midpoint rule)"
             limitation = (
-                "Integrated Gradients satisfies completeness along a straight-line path from baseline; "
-                "attributions are signed by default to satisfy completeness."
+                "Integrated Gradients approximates the path integral via the composite midpoint "
+                "integration rule (open Newton-Cotes formula with uniform step weights, distinct from "
+                "Gauss-Legendre quadrature which uses non-uniform polynomial roots). Attributions "
+                "are signed by default to satisfy the Completeness axiom."
             )
         else:  # grad_cam
             attribution, target_class, pred_score = _compute_grad_cam(
@@ -199,7 +201,10 @@ def _compute_integrated_gradients(
             )
         score_val = float(orig_out[target].item())
 
-    # Accumulate gradients along path from baseline to input using midpoint rule
+    # Accumulate gradients along path from baseline to input using the uniform composite
+    # midpoint integration rule (open Newton-Cotes formula with alpha_k = (k - 0.5) / steps).
+    # Note: This is composite midpoint integration, distinct from Gauss-Legendre quadrature
+    # which uses non-uniform roots of Legendre polynomials and non-uniform weights.
     accum_grads = torch.zeros_like(cloned_input)
     delta = cloned_input - baseline_t
 

@@ -182,7 +182,7 @@ Inspect which input features influenced a model's prediction:
 # Saliency maps (input gradient sensitivity):
 sd.explain(model, input=sample, method="saliency")
 
-# Integrated Gradients (path-integrated attribution satisfying completeness):
+# Integrated Gradients (path-integrated attribution satisfying completeness via composite midpoint rule):
 sd.explain(model, input=sample, method="integrated_gradients", steps=25)
 
 # Grad-CAM (coarse spatial activation mapping for convnets):

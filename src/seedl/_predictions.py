@@ -5,6 +5,8 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from .exceptions import SeeDLError
+
 
 def inspect_predictions(
     predictions: Any,
@@ -16,7 +18,14 @@ def inspect_predictions(
 ) -> tuple[str, dict[str, Any], str, list[str]]:
     """Inspect model predictions, probabilities, residuals, or ranking."""
     preds_list = _to_list(predictions)
+    if preds_list is None or preds_list == []:
+        raise SeeDLError("Cannot inspect empty predictions.")
+    if isinstance(preds_list, (int, float)):
+        preds_list = [float(preds_list)]
+
     targets_list = _to_list(targets) if targets is not None else None
+    if targets_list is not None and isinstance(targets_list, (int, float)):
+        targets_list = [float(targets_list)]
 
     # Determine dimensionality: 1D (single sample or 1D regression) or 2D (batch or multiclass)
     is_2d = isinstance(preds_list, list) and len(preds_list) > 0 and isinstance(preds_list[0], list)
@@ -56,14 +65,24 @@ def compare_predictions(
     p_a = _to_list(preds_a)
     p_b = _to_list(preds_b)
 
+    if p_a is None or p_a == [] or p_b is None or p_b == []:
+        raise SeeDLError("Cannot compare empty predictions.")
+
     # Assume single sample multiclass for comparison if 1D or single row
     row_a = p_a[0] if (isinstance(p_a, list) and p_a and isinstance(p_a[0], list)) else p_a
     row_b = p_b[0] if (isinstance(p_b, list) and p_b and isinstance(p_b[0], list)) else p_b
+
+    if isinstance(row_a, (int, float)):
+        row_a = [row_a]
+    if isinstance(row_b, (int, float)):
+        row_b = [row_b]
 
     probs_a, is_logits_a = _softmax_if_needed([float(v) for v in row_a])
     probs_b, is_logits_b = _softmax_if_needed([float(v) for v in row_b])
 
     num_classes = max(len(probs_a), len(probs_b))
+    if num_classes == 0:
+        raise SeeDLError("Cannot compare empty predictions.")
     class_names = [
         labels[i] if labels and i < len(labels) else f"Class {i}" for i in range(num_classes)
     ]
@@ -71,14 +90,13 @@ def compare_predictions(
     top_a = max(range(len(probs_a)), key=lambda i: probs_a[i]) if probs_a else 0
     top_b = max(range(len(probs_b)), key=lambda i: probs_b[i]) if probs_b else 0
 
-    agree = top_a == top_b
-    diffs = [b - a for a, b in zip(probs_a, probs_b, strict=False)]
+    agree = (top_a == top_b) and (len(probs_a) > 0 and len(probs_b) > 0)
 
     rows = []
     for i in range(num_classes):
         val_a = probs_a[i] if i < len(probs_a) else 0.0
         val_b = probs_b[i] if i < len(probs_b) else 0.0
-        delta = diffs[i] if i < len(diffs) else 0.0
+        delta = val_b - val_a
         rows.append(
             {
                 "class": class_names[i],
@@ -126,17 +144,30 @@ def _inspect_classification(
     labels: list[str] | None = None,
     targets: list[Any] | None = None,
 ) -> tuple[str, dict[str, Any], str, list[str]]:
+    if not preds_list:
+        raise SeeDLError("Cannot inspect empty predictions.")
     # If 2D (batch), take first sample for detailed top-k, and summarize batch
     is_batch = isinstance(preds_list, list) and preds_list and isinstance(preds_list[0], list)
     single_sample = preds_list[0] if is_batch else preds_list
 
-    raw_scores = [float(v) for v in single_sample]
-    probs, was_logits = _softmax_if_needed(raw_scores)
+    if not single_sample:
+        raise SeeDLError("Cannot inspect empty predictions sample.")
 
-    num_classes = len(probs)
-    class_names = [
-        labels[i] if labels and i < len(labels) else f"Class {i}" for i in range(num_classes)
-    ]
+    raw_scores = [float(v) for v in single_sample]
+    if len(raw_scores) == 1 and 0.0 <= raw_scores[0] <= 1.0:
+        # Single probability represents binary classification
+        p = raw_scores[0]
+        probs = [1.0 - p, p]
+        was_logits = False
+        num_classes = 2
+        class_names = labels[:2] if (labels and len(labels) >= 2) else ["Class 0", "Class 1"]
+        raw_scores = probs
+    else:
+        probs, was_logits = _softmax_if_needed(raw_scores)
+        num_classes = len(probs)
+        class_names = [
+            labels[i] if labels and i < len(labels) else f"Class {i}" for i in range(num_classes)
+        ]
 
     # Rank classes
     ranked_indices = sorted(range(num_classes), key=lambda i: probs[i], reverse=True)
@@ -160,7 +191,7 @@ def _inspect_classification(
     if was_logits:
         notes.append(
             "Raw inputs were identified as raw logits and normalized with softmax. "
-            "Scores represent relative model confidence, not necessarily calibrated real-world probabilities."
+            "Scores represent relative model confidence; probability normalization does not guarantee empirical calibration."
         )
     else:
         notes.append("Inputs were already normalized probabilities summing to 1.")
@@ -186,6 +217,8 @@ def _inspect_regression(
     preds_list: list[Any],
     targets: list[Any] | None = None,
 ) -> tuple[str, dict[str, Any], str, list[str]]:
+    if not preds_list:
+        raise SeeDLError("Cannot inspect empty predictions.")
     flat_preds = [
         float(v)
         for v in (
@@ -193,6 +226,8 @@ def _inspect_regression(
         )
     ]
     n = len(flat_preds)
+    if n == 0:
+        raise SeeDLError("Cannot inspect empty predictions.")
 
     data: dict[str, Any] = {
         "predictions": flat_preds,
@@ -210,11 +245,15 @@ def _inspect_regression(
         flat_targets = [
             float(v)
             for v in (targets if not isinstance(targets[0], list) else [row[0] for row in targets])
-        ][:n]
-        residuals = [p - t for p, t in zip(flat_preds, flat_targets, strict=False)]
+        ]
+        if len(flat_targets) != n:
+            raise SeeDLError(
+                f"Shape mismatch: {n} predictions but {len(flat_targets)} targets provided."
+            )
+        residuals = [p - t for p, t in zip(flat_preds, flat_targets, strict=True)]
         mae = sum(abs(r) for r in residuals) / max(len(residuals), 1)
         mse = sum(r * r for r in residuals) / max(len(residuals), 1)
-        rmse = math.sqrt(mse)
+        rmse = math.sqrt(max(mse, 0.0))
 
         data.update(
             {

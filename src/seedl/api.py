@@ -251,6 +251,9 @@ def explain(
     target: int | None = None,
     method: str = "saliency",
     steps: int = 20,
+    baseline: Any | None = None,
+    layer: str | None = None,
+    abs: bool | None = None,
     backend: str = "auto",
 ) -> Visualization:
     """Generate input feature attributions using saliency, integrated gradients, or Grad-CAM."""
@@ -258,7 +261,14 @@ def explain(
     from ._explain import explain_prediction
 
     data, summary, notes = explain_prediction(
-        model, input, target=target, method=method, steps=steps
+        model,
+        input,
+        target=target,
+        method=method,
+        steps=steps,
+        baseline=baseline,
+        layer=layer,
+        abs=abs,
     )
     view = Visualization(
         kind="attribution",

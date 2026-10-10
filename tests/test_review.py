@@ -1,14 +1,16 @@
-"""Regression coverage for defects reproduced during the release review."""
-
 from __future__ import annotations
 
 import math
 import xml.etree.ElementTree as ET
+from typing import TYPE_CHECKING
 
 import pytest
 
 import seedl as sd
 from seedl.exceptions import SeeDLError
+
+if TYPE_CHECKING:
+    pass
 
 
 def test_sampled_vectors_keep_original_zero_based_indices() -> None:

@@ -1087,10 +1087,18 @@ def _activation_data(
         "Each row shows the first tensor output from that module; repeated uses show the last "
         "observed output. Sample values share a max_points budget across modules.",
     ]
-    dead_layers = [layer["name"] for layer in layers if layer.get("dead_fraction", 0.0) > 0.8]
+    dead_layers = [
+        layer["name"]
+        for layer in layers
+        if layer.get("dead_fraction", 0.0) > 0.8
+        and any(
+            act in layer.get("type", "").lower()
+            for act in ("relu", "gelu", "silu", "sigmoid", "tanh")
+        )
+    ]
     if dead_layers:
         notes.append(
-            f"Dead unit alert: {len(dead_layers)} layer(s) have >80% inactive zeros: {', '.join(dead_layers[:5])}"
+            f"Dead unit alert (heuristic): {len(dead_layers)} activation layer(s) have >80% inactive zeros: {', '.join(dead_layers[:5])}"
         )
     sat_layers = [layer["name"] for layer in layers if layer.get("saturation_note")]
     if sat_layers:
@@ -1130,7 +1138,10 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
                     "mean": None,
                     "std": None,
                     "max_abs": None,
+                    "norm": None,
+                    "l2_norm": None,
                     "finite": "—",
+                    "trainable": bool(parameter.requires_grad),
                     "sample": [],
                 }
             )
@@ -1154,8 +1165,13 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
         sample = _torch_sample(values, current_limit) if count and current_limit else []
         remaining_sample_points -= len(sample)
         _, _, mean, std, max_abs, nonfinite = _torch_statistics(values)
+        l2_norm_val = None
         if nonfinite == 0 and count:
             mean_value, std_value, max_abs_value = mean, std, max_abs
+            try:
+                l2_norm_val = float(values.float().norm().item())
+            except Exception:
+                l2_norm_val = None
             if max_abs_value is not None:
                 if max_abs_value == 0.0:
                     zero_count += 1
@@ -1173,7 +1189,10 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
                 "mean": _fmt(mean_value),
                 "std": _fmt(std_value),
                 "max_abs": max_abs_value,
+                "norm": l2_norm_val,
+                "l2_norm": _fmt(l2_norm_val),
                 "finite": "yes" if nonfinite == 0 else f"no ({nonfinite})",
+                "trainable": bool(parameter.requires_grad),
                 "sample": sample,
             }
         )
@@ -1190,13 +1209,18 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
             "Gradient inspection is read-only and never calls backward() or an optimizer step. "
             "Sample values share a max_points budget across parameters."
         )
+    nonfinite_param_count = sum(1 for layer in layers if "no (" in str(layer.get("finite", "")))
+    if nonfinite_param_count > 0:
+        notes.append(
+            f"Non-finite gradients detected: {nonfinite_param_count} parameter tensor(s) contain NaN or Inf values."
+        )
     if vanishing_count > 0:
         notes.append(
-            f"Vanishing gradients detected: {vanishing_count} parameter tensor(s) have maximum absolute gradient below 1e-7."
+            f"Vanishing gradients detected (heuristic): {vanishing_count} parameter tensor(s) have maximum absolute gradient below 1e-7."
         )
     if exploding_count > 0:
         notes.append(
-            f"Exploding gradients detected: {exploding_count} parameter tensor(s) have maximum absolute gradient exceeding 100."
+            f"Exploding gradients detected (heuristic): {exploding_count} parameter tensor(s) have maximum absolute gradient exceeding 100."
         )
     if zero_count > 0:
         notes.append(f"{zero_count} parameter tensor(s) have all-zero gradients.")

@@ -21,12 +21,12 @@ SeeDL determines the nature of supported objects, chooses a meaningful visualiza
 
 - **Multidimensional Tensor Explorer:** Scalars, 1D signals, 2D matrices, image tensors (CHW/HWC), batch grids, channel decomposition, memory footprints, and value distributions.
 - **Model Architecture & Shape Tracing:** Clean module hierarchy, parameter counting (trainable vs frozen), shared parameter deduplication, and hook-based shape tracing.
-- **Activations & Feature Maps:** Layer outputs, convolutional feature map grids, saturation diagnostics, and dead unit alerts (>80% inactive zeros in ReLU/GELU).
-- **Gradient Flow Observability:** Observational, non-intrusive parameter gradient inspection, L2 norm metrics, and vanishing (<1e-7) / exploding (>100) / all-zero alerts without modifying model parameters.
+- **Activations & Feature Maps:** Layer outputs, convolutional feature map grids, saturation diagnostics, and heuristic dead unit alerts (>80% inactive zeros in ReLU/GELU).
+- **Gradient Flow Observability:** Observational, non-intrusive parameter gradient inspection, L2 norm metrics, and heuristic alerts for vanishing (<1e-7), exploding (>100), non-finite (NaN/Inf), or all-zero layers without modifying model parameters.
 - **Training Observability & Tracking:** Exponential moving average (EMA) smoothing, multi-metric grouping, divergence/plateau/overfitting alerts, lightweight `Tracker` class, and run comparison (`sd.compare`).
-- **Prediction Analysis:** Top-k classification ranking, logit vs probability calibration detection, regression residuals ($y_{pred} - y_{true}$), MAE/MSE/RMSE metrics, and multi-model comparison (`sd.compare_predictions`).
+- **Prediction Analysis:** Top-k classification ranking, logit vs normalized probability detection, regression residuals ($y_{pred} - y_{true}$), MAE/MSE/RMSE metrics, and multi-model comparison (`sd.compare_predictions`).
 - **Dataset & DataLoader Inspection:** Bounded inspection of PyTorch `Dataset` and `DataLoader` batches, image tile grids, tabular column distributions, and class frequencies without exhausting streams or downloading full datasets.
-- **CNNs & Transformers:** Exact 2D discrete convolution simulations (kernel, stride, padding, receptive field) and multi-head self-attention heatmaps with query-key token labels and causal mask detection.
+- **CNNs & Transformers:** 2D discrete cross-correlation simulations (following deep learning Conv2d conventions for kernel, stride, padding, and receptive field) and multi-head attention heatmaps (self- and cross-attention) with query-key token labels and causal mask detection.
 - **Vector Embeddings:** Pairwise cosine similarity matrix and analytical 2D PCA projections with explained variance ratio.
 - **Explainability & Attribution:** Feature attribution using Vanilla Saliency, Integrated Gradients (with interpolation steps), and Grad-CAM for convolutional networks, with strict state and gradient preservation.
 - **Educational Concept Simulations:** Interactive visual simulations of core deep learning concepts via `sd.learn(...)` (Gradient Descent, Backpropagation chain rule, Attention, Activation functions, Loss functions, Dropout, Batch Normalization, and Convolution).
@@ -151,7 +151,7 @@ sd.compare(run_a_history, run_b_history, names=("SGD", "AdamW"))
 ### 5. Prediction Inspection & Error Residuals
 
 ```python
-# Multiclass classification: Top-k ranking and probability calibration:
+# Multiclass classification: Top-k ranking and probability normalization:
 logits = [2.4, 0.2, -1.5, 0.9]
 labels = ["cat", "dog", "bird", "fish"]
 sd.predictions(logits, labels=labels, task="classification")

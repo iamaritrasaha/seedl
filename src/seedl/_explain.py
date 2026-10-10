@@ -22,6 +22,9 @@ def explain_prediction(
     target: int | None = None,
     method: str = "saliency",
     steps: int = 20,
+    baseline: Any | None = None,
+    layer: str | None = None,
+    abs: bool | None = None,
 ) -> tuple[dict[str, Any], str, list[str]]:
     """Compute feature attribution using saliency, integrated gradients, or Grad-CAM.
 
@@ -46,6 +49,9 @@ def explain_prediction(
             f"Unsupported explain method {method!r}. Choose from: {', '.join(sorted(valid_methods))}."
         )
 
+    if not isinstance(steps, int) or steps < 1:
+        raise SeeDLError("steps must be a positive integer.")
+
     # Save original training modes and parameter gradients
     states = [(m, bool(m.training)) for _, m in model.named_modules()]
     saved_grads = {
@@ -60,29 +66,30 @@ def explain_prediction(
 
         if method == "saliency":
             attribution, target_class, pred_score = _compute_saliency(
-                model, example_input, target, torch
+                model, example_input, target, torch, abs=abs
             )
-            method_desc = "Vanilla Saliency (Input Gradient Magnitude)"
+            abs_mode = "Absolute Magnitude" if (abs is True or abs is None) else "Signed"
+            method_desc = f"Vanilla Saliency ({abs_mode})"
             limitation = (
                 "Saliency measures instantaneous gradient sensitivity at the input; "
                 "it does not account for non-linear saturation and does not prove causality."
             )
         elif method == "integrated_gradients":
             attribution, target_class, pred_score = _compute_integrated_gradients(
-                model, example_input, target, steps, torch
+                model, example_input, target, steps, torch, baseline=baseline, abs=abs
             )
             method_desc = f"Integrated Gradients ({steps} interpolation steps)"
             limitation = (
                 "Integrated Gradients satisfies completeness along a straight-line path from baseline; "
-                "results depend on the choice of baseline (default: zeros)."
+                "attributions are signed by default to satisfy completeness."
             )
         else:  # grad_cam
             attribution, target_class, pred_score = _compute_grad_cam(
-                model, example_input, target, torch
+                model, example_input, target, torch, layer=layer
             )
             method_desc = "Grad-CAM (Class Activation Mapping)"
             limitation = (
-                "Grad-CAM visualizes coarse spatial activation weights from the last convolutional layer; "
+                "Grad-CAM visualizes coarse spatial activation weights from the target convolutional layer; "
                 "it highlights general regions of interest rather than fine-grained pixel boundaries."
             )
 
@@ -120,44 +127,85 @@ def explain_prediction(
     return data, summary, notes
 
 
-def _compute_saliency(model: Any, input_tensor: Any, target: int | None, torch: Any):
+def _compute_saliency(
+    model: Any,
+    input_tensor: Any,
+    target: int | None,
+    torch: Any,
+    abs: bool | None = None,
+):
     cloned_input = input_tensor.detach().clone().requires_grad_(True)
     output = model(cloned_input)
 
     flat_out = output.reshape(-1)
+    if flat_out.numel() == 0:
+        raise SeeDLError("Model produced empty output.")
     if target is None:
         target = int(flat_out.argmax().item())
+    elif target < 0 or target >= flat_out.numel():
+        raise SeeDLError(
+            f"Target index {target} is out of bounds for model output with {flat_out.numel()} element(s)."
+        )
 
     score = flat_out[target]
     score_val = float(score.item())
 
     # Compute gradient w.r.t input
     grads = torch.autograd.grad(score, cloned_input, create_graph=False, retain_graph=False)[0]
-    attribution = grads.abs()
+    attribution = grads.abs() if (abs is True or abs is None) else grads
 
     return attribution, target, score_val
 
 
 def _compute_integrated_gradients(
-    model: Any, input_tensor: Any, target: int | None, steps: int, torch: Any
+    model: Any,
+    input_tensor: Any,
+    target: int | None,
+    steps: int,
+    torch: Any,
+    baseline: Any | None = None,
+    abs: bool | None = None,
 ):
     cloned_input = input_tensor.detach().clone()
-    baseline = torch.zeros_like(cloned_input)
+    if baseline is None:
+        baseline_t = torch.zeros_like(cloned_input)
+    elif isinstance(baseline, torch.Tensor):
+        baseline_t = (
+            baseline.detach().clone().to(device=cloned_input.device, dtype=cloned_input.dtype)
+        )
+    else:
+        try:
+            baseline_t = torch.tensor(
+                baseline, dtype=cloned_input.dtype, device=cloned_input.device
+            )
+        except Exception as exc:
+            raise SeeDLError(f"Invalid baseline: {exc}") from exc
 
-    # First determine target class from original input
+    if baseline_t.shape != cloned_input.shape:
+        raise SeeDLError(
+            f"Baseline shape {tuple(baseline_t.shape)} must match input shape {tuple(cloned_input.shape)}."
+        )
+
+    # First determine target class and score from original input
     with torch.no_grad():
         orig_out = model(cloned_input).reshape(-1)
+        if orig_out.numel() == 0:
+            raise SeeDLError("Model produced empty output.")
         if target is None:
             target = int(orig_out.argmax().item())
+        elif target < 0 or target >= orig_out.numel():
+            raise SeeDLError(
+                f"Target index {target} is out of bounds for model output with {orig_out.numel()} element(s)."
+            )
         score_val = float(orig_out[target].item())
 
-    # Accumulate gradients along path from baseline to input
+    # Accumulate gradients along path from baseline to input using midpoint rule
     accum_grads = torch.zeros_like(cloned_input)
-    delta = cloned_input - baseline
+    delta = cloned_input - baseline_t
 
     for step in range(1, steps + 1):
-        alpha = float(step) / float(steps)
-        interpolated = (baseline + alpha * delta).detach().clone().requires_grad_(True)
+        alpha = (float(step) - 0.5) / float(steps)
+        interpolated = (baseline_t + alpha * delta).detach().clone().requires_grad_(True)
         step_out = model(interpolated).reshape(-1)
         step_score = step_out[target]
         step_grad = torch.autograd.grad(
@@ -166,18 +214,34 @@ def _compute_integrated_gradients(
         accum_grads += step_grad
 
     avg_grad = accum_grads / float(steps)
-    ig_attribution = (delta * avg_grad).abs()
+    ig_attribution = delta * avg_grad
+    if abs is True:
+        ig_attribution = ig_attribution.abs()
 
     return ig_attribution, target, score_val
 
 
-def _compute_grad_cam(model: Any, input_tensor: Any, target: int | None, torch: Any):
-    # Find last convolutional layer
+def _compute_grad_cam(
+    model: Any,
+    input_tensor: Any,
+    target: int | None,
+    torch: Any,
+    layer: str | None = None,
+):
     conv_layer = None
-    for _, module in reversed(list(model.named_modules())):
-        if "conv" in type(module).__name__.lower():
-            conv_layer = module
-            break
+    if layer is not None:
+        for name, module in model.named_modules():
+            if name == layer or type(module).__name__ == layer:
+                conv_layer = module
+                break
+        if conv_layer is None:
+            raise SeeDLError(f"Target layer {layer!r} not found in model.")
+    else:
+        # Find last convolutional layer
+        for _, module in reversed(list(model.named_modules())):
+            if "conv" in type(module).__name__.lower():
+                conv_layer = module
+                break
 
     if conv_layer is None:
         raise SeeDLError("Grad-CAM requires at least one convolutional layer in the model.")
@@ -200,17 +264,29 @@ def _compute_grad_cam(model: Any, input_tensor: Any, target: int | None, torch: 
         cloned_input = input_tensor.detach().clone().requires_grad_(True)
         output = model(cloned_input)
         flat_out = output.reshape(-1)
+        if flat_out.numel() == 0:
+            raise SeeDLError("Model produced empty output.")
         if target is None:
             target = int(flat_out.argmax().item())
+        elif target < 0 or target >= flat_out.numel():
+            raise SeeDLError(
+                f"Target index {target} is out of bounds for model output with {flat_out.numel()} element(s)."
+            )
         score = flat_out[target]
         score_val = float(score.item())
 
         model.zero_grad(set_to_none=True)
         score.backward(retain_graph=False)
 
-        assert feature_maps is not None and gradients is not None
-        # Global average pooling of gradients over spatial dimensions
-        weights = gradients.mean(dim=(-2, -1), keepdim=True)
+        if feature_maps is None or gradients is None:
+            raise SeeDLError(
+                "Failed to capture feature maps or gradients for Grad-CAM. "
+                "Ensure the target layer is connected to the model output."
+            )
+
+        # Global average pooling of gradients over spatial dimensions (dims >= 2)
+        spatial_dims = tuple(range(2, gradients.ndim)) if gradients.ndim > 2 else ()
+        weights = gradients.mean(dim=spatial_dims, keepdim=True) if spatial_dims else gradients
         cam = (weights * feature_maps).sum(dim=1, keepdim=True)
         cam = torch.relu(cam)  # ReLU on weighted sum
 
@@ -221,7 +297,20 @@ def _compute_grad_cam(model: Any, input_tensor: Any, target: int | None, torch: 
         else:
             cam = torch.zeros_like(cam)
 
-        return cam.squeeze(), target, score_val
+        if cam.ndim >= 2:
+            if cam.shape[0] == 1 and cam.shape[1] == 1:
+                result_cam = cam[0, 0]
+            elif cam.shape[1] == 1:
+                result_cam = cam.squeeze(1)
+            else:
+                result_cam = cam.squeeze()
+        else:
+            result_cam = cam
+
+        if result_cam.ndim == 0:
+            result_cam = result_cam.reshape(1, 1)
+
+        return result_cam, target, score_val
     finally:
         h1.remove()
         h2.remove()

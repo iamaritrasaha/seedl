@@ -89,3 +89,16 @@ def test_batch_norm_standardization():
 def test_unknown_concept_error_lists_options():
     with pytest.raises(SeeDLError, match="Supported concepts"):
         sd.learn("quantum_entangled_attention")
+
+
+def test_educational_invalid_parameters():
+    # Dropout p out of range
+    with pytest.raises(SeeDLError, match="Dropout probability"):
+        sd.learn("dropout", p=-0.1)
+
+    with pytest.raises(SeeDLError, match="Dropout probability"):
+        sd.learn("dropout", p=1.0)
+
+    # Gradient descent invalid steps
+    with pytest.raises(SeeDLError, match="steps must be a positive integer"):
+        sd.learn("gradient_descent", steps=0)

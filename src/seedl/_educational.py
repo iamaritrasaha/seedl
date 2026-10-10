@@ -57,6 +57,10 @@ def _learn_gradient_descent(
     w_init: float = 3.5,
 ) -> tuple[str, dict[str, Any], str, list[str]]:
     """Simulate gradient descent on quadratic loss surface L(w) = 0.5 * w^2."""
+    if not isinstance(steps, int) or steps < 1:
+        raise SeeDLError("steps must be a positive integer.")
+    if lr <= 0:
+        raise SeeDLError("lr must be a positive number.")
     w = float(w_init)
     trajectory: list[dict[str, float]] = []
 
@@ -266,6 +270,8 @@ def _learn_attention() -> tuple[str, dict[str, Any], str, list[str]]:
 
 def _learn_dropout(p: float = 0.5) -> tuple[str, dict[str, Any], str, list[str]]:
     """Demonstrate inverted dropout unit masking and scaling."""
+    if not (0.0 <= p < 1.0):
+        raise SeeDLError("Dropout probability p must be in the range [0.0, 1.0).")
     inputs = [1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0]
     # Deterministic mask pattern for demonstration: alternate drops
     mask = [1.0, 0.0, 1.0, 0.0, 1.0, 1.0, 0.0, 1.0]

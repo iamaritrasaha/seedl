@@ -85,3 +85,45 @@ def test_tabular_dataset_inspection():
     assert view.kind == "dataset_tabular"
     assert view.data["features"] == 4
     assert len(view.data["feature_stats"]) == 4
+
+
+def test_predictions_empty_raises_error():
+    from seedl.exceptions import SeeDLError
+
+    with pytest.raises(SeeDLError, match="Cannot inspect empty predictions"):
+        sd.predictions([])
+
+
+def test_predictions_regression_mismatched_targets_raises_error():
+    from seedl.exceptions import SeeDLError
+
+    preds = [1.0, 2.0, 3.0]
+    targets = [1.0, 2.0]  # Only 2 targets for 3 predictions
+    with pytest.raises(SeeDLError, match="Shape mismatch"):
+        sd.predictions(preds, targets=targets, task="regression")
+
+
+def test_predictions_binary_probability_preserved():
+    # Pass single probability 0.7
+    kind, data, summary, notes = inspect_predictions(
+        [0.7], labels=["Negative", "Positive"], task="classification"
+    )
+    assert kind == "classification_predictions"
+    assert data["top_class"] == "Positive"
+    assert abs(data["top_prob"] - 0.7) < 1e-4
+    assert abs(data["all_probs"][0] - 0.3) < 1e-4
+    assert abs(data["all_probs"][1] - 0.7) < 1e-4
+
+
+def test_compare_predictions_class_count_mismatch_delta():
+    from seedl._predictions import compare_predictions
+
+    preds_a = [0.6, 0.4]
+    preds_b = [0.2, 0.3, 0.5]  # Model B has a 3rd class with prob 0.5
+
+    kind, data, summary, notes = compare_predictions(preds_a, preds_b)
+    rows_by_class = {row["class"]: row for row in data["rows"]}
+
+    assert abs(rows_by_class["Class 0"]["delta"] - (-0.4)) < 1e-4
+    assert abs(rows_by_class["Class 1"]["delta"] - (-0.1)) < 1e-4
+    assert abs(rows_by_class["Class 2"]["delta"] - 0.5) < 1e-4  # 0.5 - 0.0 = 0.5

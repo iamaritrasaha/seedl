@@ -48,8 +48,18 @@ def inspect_convolution(
     elif hasattr(kernel, "tolist"):
         kernel = kernel.tolist()
 
+    if not isinstance(image, list) or not image or not isinstance(image[0], list):
+        raise SeeDLError("image must be a non-empty 2D numeric matrix.")
+    if not isinstance(kernel, list) or not kernel or not isinstance(kernel[0], list):
+        raise SeeDLError("kernel must be a non-empty 2D numeric matrix.")
+
     h_in, w_in = len(image), len(image[0])
     k_h, k_w = len(kernel), len(kernel[0])
+
+    if h_in == 0 or w_in == 0:
+        raise SeeDLError("image must be a non-empty 2D numeric matrix.")
+    if k_h == 0 or k_w == 0:
+        raise SeeDLError("kernel must be a non-empty 2D numeric matrix.")
 
     if stride < 1:
         raise SeeDLError("stride must be a positive integer.")

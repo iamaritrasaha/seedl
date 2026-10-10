@@ -1,11 +1,14 @@
-"""Tests for model architecture inspection, parameter counting, and shape tracing."""
-
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 import seedl as sd
 from seedl._models import inspect_model_architecture
+
+if TYPE_CHECKING:
+    pass
 
 
 def test_model_architecture_parameter_counting():

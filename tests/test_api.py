@@ -4,12 +4,16 @@ import importlib.util
 import math
 import subprocess
 import sys
+from typing import TYPE_CHECKING
 
 import pytest
 
 import seedl as sd
 from seedl.exceptions import SeeDLError, UnsupportedObjectError
 from seedl.view import Visualization
+
+if TYPE_CHECKING:
+    import torch
 
 
 def test_package_import_does_not_load_optional_dependencies() -> None:
@@ -310,7 +314,9 @@ def test_torch_nested_convolutional_model_shapes_and_state_are_preserved() -> No
     example = torch.randn(2, 3, 20, 20, requires_grad=True)
     example_copy = example.detach().clone()
     parameter_copies = [parameter.detach().clone() for parameter in model.parameters()]
-    gradient_copies = [parameter.grad.clone() for parameter in model.parameters()]
+    gradient_copies = [
+        parameter.grad.clone() for parameter in model.parameters() if parameter.grad is not None
+    ]
     buffer_copies = [buffer.detach().clone() for buffer in model.buffers()]
     training_states = [module.training for module in model.modules()]
     hook_counts = [
@@ -341,7 +347,7 @@ def test_torch_nested_convolutional_model_shapes_and_state_are_preserved() -> No
         for parameter, saved in zip(model.parameters(), parameter_copies, strict=True)
     )
     assert all(
-        torch.equal(parameter.grad, saved)
+        parameter.grad is not None and torch.equal(parameter.grad, saved)
         for parameter, saved in zip(model.parameters(), gradient_copies, strict=True)
     )
     assert all(
@@ -534,7 +540,9 @@ def test_torch_gpu_tensor_model_and_gradient_paths_when_available() -> None:
     example = torch.randn(2, 3, 16, 16, device=device, requires_grad=True)
     example_copy = example.detach().clone()
     parameter_copies = [parameter.detach().clone() for parameter in model.parameters()]
-    gradient_copies = [parameter.grad.clone() for parameter in model.parameters()]
+    gradient_copies = [
+        parameter.grad.clone() for parameter in model.parameters() if parameter.grad is not None
+    ]
     states = [module.training for module in model.modules()]
 
     architecture = sd.see(model, input=example, backend="svg")
@@ -552,6 +560,6 @@ def test_torch_gpu_tensor_model_and_gradient_paths_when_available() -> None:
         for parameter, saved in zip(model.parameters(), parameter_copies, strict=True)
     )
     assert all(
-        torch.equal(parameter.grad, saved)
+        parameter.grad is not None and torch.equal(parameter.grad, saved)
         for parameter, saved in zip(model.parameters(), gradient_copies, strict=True)
     )

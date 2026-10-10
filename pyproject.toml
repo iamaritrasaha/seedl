@@ -36,6 +36,7 @@ select = ["E", "F", "I", "UP", "B"]
 ignore = ["E501"]
 
 [tool.mypy]
+files = ["src"]
 python_version = "3.10"
 ignore_missing_imports = true
 check_untyped_defs = true

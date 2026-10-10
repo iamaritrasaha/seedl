@@ -101,3 +101,41 @@ def test_embeddings_cosine_similarity_and_pca():
     view = sd.embeddings(vectors, labels=labels, backend="svg")
     assert view.kind == "embeddings"
     assert "<svg" in view.to_figure()
+
+
+def test_cross_attention_rectangular_matrix():
+    # 2 queries, 4 keys (cross-attention)
+    weights = [
+        [
+            [0.1, 0.4, 0.3, 0.2],
+            [0.2, 0.3, 0.1, 0.4],
+        ]
+    ]  # (1 head, 2 queries, 4 keys)
+    data, summary, notes = inspect_attention(weights)
+    assert len(data["matrix"]) == 2  # 2 rows (queries)
+    assert len(data["matrix"][0]) == 4  # 4 columns (keys)
+    assert data["is_causal"] is False  # Non-square cannot be causal
+
+
+def test_embeddings_degenerate_and_rank1_vectors():
+    # Single vector (rank 1)
+    data_1, _, _ = inspect_embeddings([[1.0, 2.0, 3.0]])
+    assert len(data_1["pca_points"]) == 1
+    assert len(data_1["pca_points"][0]) == 2  # Guaranteed 2D coordinates
+
+    # Collinear vectors (rank 1)
+    collinear = [[1.0, 2.0], [2.0, 4.0], [3.0, 6.0]]
+    data_col, _, _ = inspect_embeddings(collinear)
+    assert len(data_col["pca_points"]) == 3
+    assert all(len(p) == 2 for p in data_col["pca_points"])
+
+
+def test_convolution_empty_and_malformed_inputs():
+    with pytest.raises(SeeDLError, match="image must be a non-empty 2D"):
+        inspect_convolution([])
+
+    with pytest.raises(SeeDLError, match="image must be a non-empty 2D"):
+        inspect_convolution([[]])
+
+    with pytest.raises(SeeDLError, match="kernel must be a non-empty 2D"):
+        inspect_convolution([[1.0, 2.0], [3.0, 4.0]], kernel=[])

@@ -14,11 +14,15 @@ def exponential_smoothing(values: list[float], weight: float = 0.6) -> list[floa
     """Compute exponential moving average of a numeric sequence."""
     if not values:
         return []
-    smoothed = []
-    last = values[0]
+    weight = max(0.0, min(1.0, float(weight)))
+    smoothed: list[float] = []
+    last: float | None = None
     for val in values:
         if math.isfinite(val):
-            last = last * weight + (1 - weight) * val
+            if last is None:
+                last = float(val)
+            else:
+                last = last * weight + (1.0 - weight) * float(val)
             smoothed.append(last)
         else:
             smoothed.append(val)
@@ -159,7 +163,9 @@ def parse_training_history(
                 )
 
     lengths = [len(v) for v in metrics.values()]
-    summary = f"{len(metrics)} metric(s), {min(lengths)}–{max(lengths)} epochs"
+    min_l, max_l = min(lengths), max(lengths)
+    epochs_str = f"{min_l} epoch(s)" if min_l == max_l else f"{min_l}–{max_l} epochs"
+    summary = f"{len(metrics)} metric(s), {epochs_str}"
 
     return {"groups": output_groups, "metrics": metrics}, summary, notes
 
@@ -298,18 +304,41 @@ class Tracker:
     def save(self, filepath: str) -> None:
         """Save history dictionary to a JSON file."""
         with open(filepath, "w", encoding="utf-8") as f:
-            json.dump(self.history(), f, indent=2)
+            payload = {"name": self.name, **self.history()}
+            json.dump(payload, f, indent=2)
 
     @classmethod
     def load(cls, filepath: str) -> Tracker:
         """Load history from a JSON file."""
-        tracker = cls()
-        with open(filepath, encoding="utf-8") as f:
-            data = json.load(f)
+        try:
+            with open(filepath, encoding="utf-8") as f:
+                data = json.load(f)
+        except Exception as exc:
+            raise SeeDLError(f"Could not load tracker file {filepath}: {exc}") from exc
+
+        if not isinstance(data, dict):
+            raise SeeDLError(f"Invalid tracker data in {filepath}: expected a JSON object.")
+
+        name = str(data.pop("name", "run"))
+        tracker = cls(name=name)
         epochs = data.pop("epochs", None)
         if epochs:
-            tracker._epochs = [float(e) for e in epochs]
-        tracker._history = {k: [float(v) for v in seq] for k, seq in data.items()}
+            if not isinstance(epochs, list):
+                raise SeeDLError(f"Invalid epochs sequence in {filepath}: expected a list.")
+            try:
+                tracker._epochs = [float(e) for e in epochs]
+            except (TypeError, ValueError) as exc:
+                raise SeeDLError(f"Invalid epoch value in {filepath}: {exc}") from exc
+
+        for k, seq in data.items():
+            if not isinstance(seq, list):
+                raise SeeDLError(
+                    f"Invalid metric sequence for {k!r} in {filepath}: expected a list."
+                )
+            try:
+                tracker._history[k] = [float(v) for v in seq]
+            except (TypeError, ValueError) as exc:
+                raise SeeDLError(f"Invalid metric value in {k!r} in {filepath}: {exc}") from exc
         return tracker
 
     def __enter__(self) -> Tracker:

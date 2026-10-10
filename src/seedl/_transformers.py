@@ -38,9 +38,11 @@ def inspect_attention(
         rank = 3
         dims = dims[1:]
 
-    # If 3D (heads, seq, seq), handle head selection or average
+    # If 3D (heads, seq_q, seq_k), handle head selection or average
     num_heads = dims[0] if rank == 3 else 1
-    seq_len = dims[-1]
+    query_len = dims[-2]
+    key_len = dims[-1]
+    seq_len = key_len
 
     if rank == 3:
         if head is not None:
@@ -53,16 +55,16 @@ def inspect_attention(
             selected_matrix = [
                 [
                     sum(raw[h][i][j] for h in range(num_heads)) / float(num_heads)
-                    for j in range(seq_len)
+                    for j in range(key_len)
                 ]
-                for i in range(seq_len)
+                for i in range(query_len)
             ]
             active_head_str = f"Average of {num_heads} heads"
     else:
         selected_matrix = raw
         active_head_str = "Single head"
 
-    token_names = [tokens[i] if tokens and i < len(tokens) else f"T{i}" for i in range(seq_len)]
+    token_names = [tokens[i] if tokens and i < len(tokens) else f"T{i}" for i in range(key_len)]
 
     # Verify softmax property (rows sum to ~1.0)
     is_softmax = True
@@ -72,15 +74,16 @@ def inspect_attention(
             is_softmax = False
             break
 
-    # Check for causal mask (upper triangle is zero)
-    is_causal = True
-    for i in range(seq_len):
-        for j in range(i + 1, seq_len):
-            if abs(float(selected_matrix[i][j])) > 1e-5:
-                is_causal = False
+    # Check for causal mask (upper triangle is zero; only applies to square self-attention)
+    is_causal = query_len == key_len
+    if is_causal:
+        for i in range(query_len):
+            for j in range(i + 1, key_len):
+                if abs(float(selected_matrix[i][j])) > 1e-5:
+                    is_causal = False
+                    break
+            if not is_causal:
                 break
-        if not is_causal:
-            break
 
     summary = (
         f"Transformer Attention: {seq_len} tokens · {active_head_str} ({num_heads} total heads)"

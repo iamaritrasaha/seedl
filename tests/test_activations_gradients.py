@@ -1,12 +1,15 @@
-"""Tests for activation capture, gradient flow analysis, and diagnostic indicators."""
-
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 import pytest
 
 import seedl as sd
 from seedl._activations import capture_activations
 from seedl._gradients import inspect_gradients
+
+if TYPE_CHECKING:
+    pass
 
 
 def test_activations_dead_units_and_saturation():
@@ -121,3 +124,46 @@ def test_gradients_zero_and_missing():
     data2, summary2, notes2 = inspect_gradients(model)
     assert data2["zero_count"] >= 1
     assert any("zero" in note.lower() for note in notes2)
+
+
+def test_gradients_l2_norm_and_nonfinite_alert():
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
+
+    model = nn.Linear(3, 1, bias=False)
+    # Norm of [3.0, 4.0, 0.0] is 5.0
+    model.weight.grad = torch.tensor([[3.0, 4.0, 0.0]])
+
+    data, summary, notes = inspect_gradients(model)
+    row = data["layers"][0]
+    assert row["norm"] is not None
+    assert abs(row["norm"] - 5.0) < 1e-4
+    assert row["trainable"] is True
+
+    # Test non-finite gradient note
+    model.weight.grad = torch.tensor([[float("nan"), 1.0, 0.0]])
+    data_nan, _, notes_nan = inspect_gradients(model)
+    assert any("non-finite" in note.lower() for note in notes_nan)
+
+
+def test_dead_unit_heuristics_do_not_flag_non_activation_layers():
+    torch = pytest.importorskip("torch")
+    nn = torch.nn
+
+    # A Linear layer whose weights happen to be mostly zero (e.g. pruned/sparse)
+    class PrunedNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.fc = nn.Linear(10, 10)
+            self.relu = nn.ReLU()
+
+        def forward(self, x):
+            return self.relu(self.fc(x))
+
+    model = PrunedNet()
+    # Positive inputs, normal ReLU activation
+    x = torch.ones(2, 10) * 5.0
+    data, _, notes = capture_activations(model, x)
+
+    # Should not flag fc as dead units if fc is not an activation layer
+    assert not any("fc" in note for note in notes if "dead unit" in note.lower())

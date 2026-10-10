@@ -92,3 +92,39 @@ def test_training_renderers_plotly_and_matplotlib():
     fig_mpl = view_mpl.to_figure()
     assert hasattr(fig_mpl, "axes")
     plt.close(fig_mpl)
+
+
+def test_exponential_smoothing_leading_nan_not_poisoning():
+    # If first value is NaN, subsequent values must not become NaN!
+    vals = [float("nan"), 2.0, 4.0]
+    smoothed = exponential_smoothing(vals, weight=0.5)
+    assert len(smoothed) == 3
+    assert math.isnan(smoothed[0])
+    # Index 1 should be 2.0
+    assert abs(smoothed[1] - 2.0) < 1e-6
+    # Index 2 should be 2.0 * 0.5 + 4.0 * 0.5 = 3.0
+    assert abs(smoothed[2] - 3.0) < 1e-6
+
+
+def test_tracker_load_malformed_and_name_preservation(tmp_path):
+    from seedl.exceptions import SeeDLError
+
+    # Test name preservation
+    tracker = Tracker("my_custom_run")
+    tracker.log(epoch=1, loss=0.5)
+    p = tmp_path / "tracker_run.json"
+    tracker.save(str(p))
+
+    loaded = Tracker.load(str(p))
+    assert loaded.name == "my_custom_run"
+
+    # Test malformed JSON (array instead of dict)
+    p_bad = tmp_path / "bad.json"
+    p_bad.write_text("[1, 2, 3]", encoding="utf-8")
+    with pytest.raises(SeeDLError, match="Invalid tracker data"):
+        Tracker.load(str(p_bad))
+
+
+def test_single_epoch_summary():
+    data, summary, _ = parse_training_history({"loss": [0.42]})
+    assert "1 epoch(s)" in summary

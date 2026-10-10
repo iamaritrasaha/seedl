@@ -100,8 +100,10 @@ def inspect_embeddings(
 def _compute_pca_2d(vectors: list[list[float]]) -> tuple[list[list[float]], float]:
     """Compute analytical 2D PCA projection and explained variance."""
     n = len(vectors)
+    if n == 0:
+        return [], 0.0
     d = len(vectors[0])
-    if n == 0 or d < 2:
+    if d < 2:
         return [[0.0, 0.0] for _ in vectors], 0.0
 
     # Center vectors
@@ -114,13 +116,19 @@ def _compute_pca_2d(vectors: list[list[float]]) -> tuple[list[list[float]], floa
 
         X = np.array(centered, dtype=np.float64)
         u, s, vt = np.linalg.svd(X, full_matrices=False)
-        proj = np.dot(X, vt[:2].T)
+        if vt.shape[0] >= 2:
+            proj = np.dot(X, vt[:2].T)
+        elif vt.shape[0] == 1:
+            p1 = np.dot(X, vt[:1].T)
+            proj = np.hstack([p1, np.zeros((n, 1), dtype=np.float64)])
+        else:
+            proj = np.zeros((n, 2), dtype=np.float64)
         total_var = np.sum(s**2)
         exp_var = float(np.sum(s[:2] ** 2) / total_var) if total_var > 0 else 0.0
         return proj.tolist(), exp_var
     except ImportError:
         pass
 
-    # Simple 2D fallback: first two coordinate axes with variance
+    # Simple 2D fallback: first two coordinate axes
     proj = [[row[0], row[1] if d > 1 else 0.0] for row in centered]
     return proj, 0.5

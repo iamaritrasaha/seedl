@@ -492,12 +492,13 @@ def plotly_network(view: Any) -> Any:
 
     footer_annot = dict(
         x=0,
-        y=-0.23 if spatial and graph.get("explore") else -0.17,
+        y=-0.23 if spatial and graph.get("explore") else -0.15,
         xref="paper",
         yref="paper",
         text=_neuron_detail_card(selected_node, graph),
         showarrow=False,
         xanchor="left",
+        yanchor="top",
         align="left",
         font=dict(size=11, color=fg if has_selection else muted),
         bgcolor=bg if has_selection else None,
@@ -542,12 +543,13 @@ def plotly_network(view: Any) -> Any:
     overview_annots = annotations[:-1] + [
         dict(
             x=0,
-            y=-0.23 if spatial and graph.get("explore") else -0.17,
+            y=-0.23 if spatial and graph.get("explore") else -0.15,
             xref="paper",
             yref="paper",
             text=_neuron_detail_card(None, graph),
             showarrow=False,
             xanchor="left",
+            yanchor="top",
             font=dict(size=11, color=muted),
         )
     ]
@@ -621,12 +623,13 @@ def plotly_network(view: Any) -> Any:
         n_card_annot = annotations[:-1] + [
             dict(
                 x=0,
-                y=-0.23 if spatial and graph.get("explore") else -0.17,
+                y=-0.23 if spatial and graph.get("explore") else -0.15,
                 xref="paper",
                 yref="paper",
                 text=_neuron_detail_card(n, graph),
                 showarrow=False,
                 xanchor="left",
+                yanchor="top",
                 align="left",
                 font=dict(size=11, color=fg),
                 bgcolor=bg,
@@ -685,7 +688,7 @@ def plotly_network(view: Any) -> Any:
         subtitle += "<br>" + "<br>".join(html.escape(n) for n in view.data["visual_notes"])
     figure.update_layout(
         title=dict(
-            text=f"<b>{view.title}</b><br><sup>{subtitle}</sup>",
+            text=f"<b>{html.escape(view.title)}</b><br><sup>{subtitle}</sup>",
             x=0.04,
             y=0.97,
             yanchor="top",
@@ -1358,7 +1361,14 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
         "nodes": node_data,
         "layers": layers_data,
     }
-    graph_json = json.dumps(graph_payload).replace("</", "<\\/")
+    # Use unicode escaping for <, >, and & so embedded JSON cannot terminate
+    # the surrounding <script> element regardless of tag casing (e.g. </sCrIpT>, <!--, etc.).
+    graph_json = (
+        json.dumps(graph_payload)
+        .replace("<", "\\u003c")
+        .replace(">", "\\u003e")
+        .replace("&", "\\u0026")
+    )
 
     return f"""
 (function() {{
@@ -1373,7 +1383,8 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
             .replace(/&/g, '&amp;')
             .replace(/</g, '&lt;')
             .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;');
     }}
 
     function initInteractive() {{
@@ -1418,7 +1429,7 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
             if (inEdges.length > 0) {{
                 var inStrs = inEdges.slice(0, 6).map(function(e) {{
                     var w = 'w=' + (e.weight >= 0 ? '+' : '') + Number(e.weight).toPrecision(3);
-                    return '[' + e.source + '] ' + w;
+                    return '[' + escHtml(e.source) + '] ' + w;
                 }});
                 lines.push('<b>Incoming (' + inEdges.length + '):</b> ' + inStrs.join(', ') + (inEdges.length > 6 ? ', …' : ''));
             }} else {{
@@ -1429,7 +1440,7 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
             if (outEdges.length > 0) {{
                 var outStrs = outEdges.slice(0, 6).map(function(e) {{
                     var w = 'w=' + (e.weight >= 0 ? '+' : '') + Number(e.weight).toPrecision(3);
-                    return '[' + e.target + '] ' + w;
+                    return '[' + escHtml(e.target) + '] ' + w;
                 }});
                 lines.push('<b>Outgoing (' + outEdges.length + '):</b> ' + outStrs.join(', ') + (outEdges.length > 6 ? ', …' : ''));
             }} else {{

@@ -228,3 +228,164 @@ def test_html_export_payload_size():
     assert size_mb < 5.0, f"HTML export payload too large: {size_mb:.2f} MB"
     assert "plotly-graph-div" in html_content
     assert "__seedl_select_neuron" in html_content
+
+
+@pytest.mark.skipif(not _HAS_PLAYWRIGHT_BROWSER, reason="Playwright Chromium browser not available")
+def test_browser_pointer_drag_rotation_and_selection_lifecycle():
+    """Verify that pointer dragging rotates the 3D scene without triggering selection, and subsequent clicks function."""
+    from playwright.sync_api import sync_playwright
+
+    model = nn.Sequential(nn.Linear(2, 3), nn.ReLU(), nn.Linear(3, 1))
+    x = torch.tensor([[1.0, 2.0]])
+    v = sd.see(model, input=x, view="3d")
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        v.save(f.name)
+        html_path = f.name
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1200, "height": 800})
+            page.goto("file://" + html_path)
+            page.wait_for_selector(".plotly-graph-div")
+            page.wait_for_timeout(800)
+
+            # 1. Check initial camera
+            cam_init = page.evaluate(
+                '() => document.getElementsByClassName("plotly-graph-div")[0].layout.scene.camera.eye'
+            )
+
+            # 2. Perform pointer drag across the scene center
+            page.mouse.move(600, 400)
+            page.mouse.down()
+            page.mouse.move(750, 300, steps=10)
+            page.mouse.up()
+            page.wait_for_timeout(500)
+
+            # 3. Verify camera changed
+            cam_dragged = page.evaluate(
+                '() => document.getElementsByClassName("plotly-graph-div")[0].layout.scene.camera.eye'
+            )
+            assert cam_init != cam_dragged, "Scene camera should rotate during mouse drag"
+
+            # 4. Verify dragging did NOT select any neuron
+            annot_drag = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "NEURON INSPECTION" not in annot_drag, (
+                "Pointer drag must not trigger neuron selection"
+            )
+
+            # 5. Click neuron 0:0 and verify selection
+            page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                var nodeCurve = -1;
+                for (var i = 0; i < gd.data.length; i++) {
+                    if (gd.data[i].meta && gd.data[i].meta.role === 'nodes') {
+                        nodeCurve = i;
+                        break;
+                    }
+                }
+                gd.emit('plotly_click', {
+                    points: [{ curveNumber: nodeCurve, pointNumber: 0, customdata: '0:0' }]
+                });
+            }""")
+            page.wait_for_timeout(400)
+            annot_0 = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "0:0" in annot_0
+            assert "NEURON INSPECTION" in annot_0
+
+            # 6. Click neuron 1:1 and verify selection switched
+            page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                var nodeCurve = -1;
+                for (var i = 0; i < gd.data.length; i++) {
+                    if (gd.data[i].meta && gd.data[i].meta.role === 'nodes') {
+                        nodeCurve = i;
+                        break;
+                    }
+                }
+                gd.emit('plotly_click', {
+                    points: [{ curveNumber: nodeCurve, pointNumber: 1, customdata: '1:1' }]
+                });
+            }""")
+            page.wait_for_timeout(400)
+            annot_1 = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "1:1" in annot_1
+
+            # 7. Clear selection and verify overview restored
+            page.evaluate("window.__seedl_clear_selection()")
+            page.wait_for_timeout(400)
+            annot_clear = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "SeeDL Overview" in annot_clear
+
+            browser.close()
+    finally:
+        if os.path.exists(html_path):
+            os.remove(html_path)
+
+
+@pytest.mark.skipif(not _HAS_PLAYWRIGHT_BROWSER, reason="Playwright Chromium browser not available")
+def test_html_security_mixed_case_script_tags():
+    """Verify that mixed-case </sCrIpT>, </SCRIPT>, <!-- sequences in user-controlled labels cannot terminate script elements."""
+    from playwright.sync_api import sync_playwright
+
+    model = nn.Sequential(nn.Linear(2, 3), nn.ReLU(), nn.Linear(3, 1))
+    v = sd.see(model, view="3d")
+    # Attack vectors targeting HTML parser termination
+    v.data["neuron_graph"]["layers"][0]["label"] = "</sCrIpT><script>alert('xss1')</script>"
+    v.data["neuron_graph"]["layers"][1]["label"] = (
+        "<!-- </SCRIPT> <script>alert('xss2')</script> -->"
+    )
+    v.data["neuron_graph"]["layers"][0]["module"] = "\"></script><script>alert('xss3')</script>"
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        v.save(f.name)
+        html_path = f.name
+
+    try:
+        html_text = open(html_path, encoding="utf-8").read()
+        # Verify JSON serialization uses unicode escapes so </script> never appears in script body
+        assert "</sCrIpT>" not in html_text
+        assert "</SCRIPT>" not in html_text
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            dialog_triggered = []
+            page.on("dialog", lambda d: dialog_triggered.append(d.message))
+
+            page.goto("file://" + html_path)
+            page.wait_for_selector(".plotly-graph-div")
+
+            # Verify that page loaded and JS initialized without syntax or parser error
+            is_func = page.evaluate("typeof window.__seedl_select_neuron === 'function'")
+            assert is_func, "JS environment must initialize cleanly"
+            assert len(dialog_triggered) == 0, "No script injection should execute"
+
+            # Select neuron and verify safe rendering
+            page.evaluate("window.__seedl_select_neuron('0:0')")
+            card_text = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert len(dialog_triggered) == 0
+            assert "<script>" not in card_text
+            assert "&lt;script&gt;" in card_text
+
+            browser.close()
+    finally:
+        if os.path.exists(html_path):
+            os.remove(html_path)

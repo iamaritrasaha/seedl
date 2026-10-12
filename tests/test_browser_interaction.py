@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import os
 import tempfile
+from pathlib import Path
 
 import pytest
 import torch
@@ -389,3 +390,199 @@ def test_html_security_mixed_case_script_tags():
     finally:
         if os.path.exists(html_path):
             os.remove(html_path)
+
+
+@pytest.mark.skipif(not _HAS_PLAYWRIGHT_BROWSER, reason="Playwright Chromium browser not available")
+def test_browser_real_pointer_click_on_webgl_neuron():
+    """Verify that physical mouse pointer clicks (with pixel coordinates) on visible WebGL neurons select them."""
+    from playwright.sync_api import sync_playwright
+
+    model = nn.Sequential(nn.Linear(2, 3), nn.ReLU(), nn.Linear(3, 1))
+    x = torch.tensor([[1.0, 2.0]])
+    v = sd.see(model, input=x, view="3d")
+
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        v.save(f.name)
+        html_path = f.name
+
+    screenshot_dir = Path("/tmp/seedl_browser_test")
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page(viewport={"width": 1200, "height": 800})
+            page.goto("file://" + html_path)
+            page.wait_for_selector(".plotly-graph-div")
+            page.wait_for_timeout(1000)
+
+            # Record initial overview screenshot
+            page.screenshot(path=str(screenshot_dir / "real_click_01_overview.png"))
+
+            # Attach hover listener to track node detection
+            page.evaluate("""() => {
+                window.__nodeHovers = [];
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                gd.on('plotly_hover', (d) => {
+                    if (d && d.points && d.points[0]) {
+                        var pt = d.points[0];
+                        var tr = gd.data[pt.curveNumber];
+                        if (tr && tr.meta && tr.meta.role === 'nodes') {
+                            window.__nodeHovers.push({
+                                x: pt.x, y: pt.y, z: pt.z,
+                                customdata: pt.customdata,
+                                curve: pt.curveNumber,
+                                point: pt.pointNumber
+                            });
+                        }
+                    }
+                });
+            }""")
+
+            # Search canvas grid for a visible neuron marker
+            rect = page.evaluate("""() => {
+                var c = document.querySelector('canvas');
+                var r = c.getBoundingClientRect();
+                return { left: r.left, top: r.top, width: r.width, height: r.height };
+            }""")
+
+            target_point = None
+            for y_scan in range(int(rect["top"]) + 50, int(rect["top"] + rect["height"]) - 50, 15):
+                for x_scan in range(
+                    int(rect["left"]) + 50, int(rect["left"] + rect["width"]) - 50, 15
+                ):
+                    page.mouse.move(x_scan, y_scan)
+                    hovers = page.evaluate("window.__nodeHovers")
+                    if hovers:
+                        target_point = (x_scan, y_scan, hovers[-1]["customdata"])
+                        break
+                if target_point:
+                    break
+
+            assert target_point is not None, (
+                "A visible neuron marker must be detected on the canvas"
+            )
+            target_x, target_y, target_id = target_point
+
+            # Initial camera
+            cam_before = page.evaluate(
+                '() => document.getElementsByClassName("plotly-graph-div")[0].layout.scene.camera.eye'
+            )
+
+            # Perform REAL physical mouse pointer click on the neuron
+            page.mouse.move(target_x, target_y)
+            page.mouse.click(target_x, target_y)
+            page.wait_for_timeout(500)
+
+            # Check that neuron was selected by the mouse click
+            annot_after_click = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "NEURON INSPECTION" in annot_after_click
+            assert target_id in annot_after_click
+
+            # Check camera position preserved across selection
+            cam_after = page.evaluate(
+                '() => document.getElementsByClassName("plotly-graph-div")[0].layout.scene.camera.eye'
+            )
+            assert cam_before["x"] == pytest.approx(cam_after["x"], abs=1e-3)
+            assert cam_before["y"] == pytest.approx(cam_after["y"], abs=1e-3)
+            assert cam_before["z"] == pytest.approx(cam_after["z"], abs=1e-3)
+
+            # Take screenshot with neuron selected
+            page.screenshot(path=str(screenshot_dir / "real_click_02_selected.png"))
+
+            # Clear selection via API
+            page.evaluate("window.__seedl_clear_selection()")
+            page.wait_for_timeout(400)
+            annot_cleared = page.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return gd.layout.annotations[gd.layout.annotations.length - 1].text;
+            }""")
+            assert "SeeDL Overview" in annot_cleared
+
+            browser.close()
+    finally:
+        if os.path.exists(html_path):
+            os.remove(html_path)
+
+
+@pytest.mark.skipif(not _HAS_PLAYWRIGHT_BROWSER, reason="Playwright Chromium browser not available")
+def test_browser_quantum_bloch_and_circuit_inspection():
+    """Verify in-browser rendering and visual integrity of Bloch sphere and Quantum Circuit HTML exports."""
+    from playwright.sync_api import sync_playwright
+
+    # 1. Bloch sphere 3D visualization
+    v_bloch = sd.bloch("+", backend="plotly")
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        v_bloch.save(f.name)
+        bloch_path = f.name
+
+    # 2. Quantum circuit visualization
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    v_qc = sd.circuit(qc, simulate=True, backend="plotly")
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as f:
+        v_qc.save(f.name)
+        qc_path = f.name
+
+    screenshot_dir = Path("/tmp/seedl_browser_test")
+    screenshot_dir.mkdir(parents=True, exist_ok=True)
+
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+
+            # Test Bloch sphere in browser
+            page_bloch = browser.new_page(viewport={"width": 1000, "height": 800})
+            page_bloch.goto("file://" + bloch_path)
+            page_bloch.wait_for_selector(".plotly-graph-div")
+            page_bloch.wait_for_timeout(800)
+
+            # Check that 3D scene and vector are present
+            bloch_info = page_bloch.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return {
+                    numTraces: gd.data.length,
+                    hasScene: !!gd.layout.scene,
+                    title: gd.layout.title ? gd.layout.title.text : ''
+                };
+            }""")
+            assert bloch_info["numTraces"] >= 2, (
+                "Bloch sphere should contain surface wireframe and statevector"
+            )
+            assert bloch_info["hasScene"] is True, "Bloch sphere must render as 3D WebGL scene"
+            page_bloch.screenshot(path=str(screenshot_dir / "quantum_01_bloch_sphere.png"))
+            page_bloch.close()
+
+            # Test Quantum circuit in browser
+            page_qc = browser.new_page(viewport={"width": 1100, "height": 700})
+            page_qc.goto("file://" + qc_path)
+            page_qc.wait_for_selector(".plotly-graph-div")
+            page_qc.wait_for_timeout(800)
+
+            qc_info = page_qc.evaluate("""() => {
+                var gd = document.getElementsByClassName('plotly-graph-div')[0];
+                return {
+                    numTraces: gd.data.length,
+                    annotations: gd.layout.annotations ? gd.layout.annotations.length : 0
+                };
+            }""")
+            assert qc_info["numTraces"] >= 2, (
+                "Quantum circuit must render qubit wires and gate traces"
+            )
+            assert qc_info["annotations"] >= 2, (
+                "Quantum circuit must render qubit wire labels and gate annotations"
+            )
+            page_qc.screenshot(path=str(screenshot_dir / "quantum_02_circuit.png"))
+            page_qc.close()
+
+            browser.close()
+    finally:
+        for p_file in (bloch_path, qc_path):
+            if os.path.exists(p_file):
+                os.remove(p_file)

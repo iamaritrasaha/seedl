@@ -37,6 +37,11 @@ def _is_qiskit_state(obj: Any) -> bool:
     return cls_name in {"Statevector", "DensityMatrix"} and "qiskit" in mod_name
 
 
+MAX_STATEVECTOR_DIM: int = 16_384  # 14 qubits
+MAX_DENSITY_MATRIX_DIM: int = 256  # 8 qubits (256 x 256 = 65,536 elements)
+MAX_CIRCUIT_OPS: int = 500
+
+
 def _validate_statevector_vec(vec: list[complex]) -> list[complex]:
     """Apply all scientific invariants to an already-parsed list of complex amplitudes.
 
@@ -50,7 +55,6 @@ def _validate_statevector_vec(vec: list[complex]) -> list[complex]:
     if (n & (n - 1)) != 0:
         raise ValueError(f"Statevector dimension ({n}) must be a power of 2 for qubit systems.")
 
-    MAX_STATEVECTOR_DIM = 16_384  # 14 qubits
     if n > MAX_STATEVECTOR_DIM:
         raise ValueError(
             f"Statevector dimension ({n}) exceeds maximum supported limit of "
@@ -87,10 +91,13 @@ def parse_statevector(state: Any) -> list[complex]:
     """
     if _is_qiskit_state(state):
         # Extract raw data from Qiskit Statevector, then apply the SAME validation
-        # as the native path.  The previous code returned amplitudes without any
-        # checks, allowing zero-norm, non-power-of-two, and unnormalised inputs to
-        # pass silently.
+        # as the native path. Enforce dimension limits before expensive conversions.
         data = getattr(state, "data", state)
+        if hasattr(data, "__len__") and len(data) > MAX_STATEVECTOR_DIM:
+            raise ValueError(
+                f"Statevector dimension ({len(data)}) exceeds maximum supported limit of "
+                f"{MAX_STATEVECTOR_DIM} (14 qubits) to prevent memory exhaustion."
+            )
         if hasattr(data, "tolist"):
             data = data.tolist()
         try:
@@ -117,6 +124,12 @@ def parse_statevector(state: Any) -> list[complex]:
             f"Unrecognized state label {state!r}. Use '0', '1', '+', '-', '+i', or '-i'."
         )
 
+    if hasattr(state, "__len__") and len(state) > MAX_STATEVECTOR_DIM:
+        raise ValueError(
+            f"Statevector dimension ({len(state)}) exceeds maximum supported limit of "
+            f"{MAX_STATEVECTOR_DIM} (14 qubits) to prevent memory exhaustion."
+        )
+
     if hasattr(state, "tolist"):
         state = state.tolist()
 
@@ -125,6 +138,11 @@ def parse_statevector(state: Any) -> list[complex]:
         if state and isinstance(state[0], (list, tuple)):
             raise ValueError(
                 "Provided input is a 2D matrix. Use parse_density_matrix or sd.density_matrix()."
+            )
+        if len(state) > MAX_STATEVECTOR_DIM:
+            raise ValueError(
+                f"Statevector dimension ({len(state)}) exceeds maximum supported limit of "
+                f"{MAX_STATEVECTOR_DIM} (14 qubits) to prevent memory exhaustion."
             )
         try:
             vec = [complex(c) for c in state]
@@ -150,9 +168,20 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
     """Parse, validate, and check physical properties of a density matrix."""
     if _is_qiskit_state(rho):
         data = getattr(rho, "data", rho)
+        if hasattr(data, "__len__") and len(data) > MAX_DENSITY_MATRIX_DIM:
+            raise ValueError(
+                f"Density matrix dimension ({len(data)}x{len(data)}) exceeds maximum supported limit of "
+                f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
+            )
         if hasattr(data, "tolist"):
             data = data.tolist()
         rho = data
+
+    if hasattr(rho, "__len__") and len(rho) > MAX_DENSITY_MATRIX_DIM:
+        raise ValueError(
+            f"Density matrix dimension ({len(rho)}x{len(rho)}) exceeds maximum supported limit of "
+            f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
+        )
 
     if hasattr(rho, "tolist"):
         rho = rho.tolist()
@@ -161,19 +190,17 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
         raise ValueError("Density matrix must be a 2D square matrix of complex numbers.")
 
     n = len(rho)
+    if n > MAX_DENSITY_MATRIX_DIM:
+        raise ValueError(
+            f"Density matrix dimension ({n}x{n}) exceeds maximum supported limit of "
+            f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
+        )
     for row in rho:
         if len(row) != n:
             raise ValueError(f"Density matrix must be square (got shape {n} x {len(row)}).")
 
     if (n & (n - 1)) != 0:
         raise ValueError(f"Density matrix dimension ({n}) must be a power of 2.")
-
-    MAX_DENSITY_MATRIX_DIM = 256  # 8 qubits (256 x 256 = 65,536 elements)
-    if n > MAX_DENSITY_MATRIX_DIM:
-        raise ValueError(
-            f"Density matrix dimension ({n}x{n}) exceeds maximum supported limit of "
-            f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
-        )
 
     mat: list[list[complex]] = []
     for r in range(n):

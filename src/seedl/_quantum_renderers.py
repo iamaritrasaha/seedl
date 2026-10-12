@@ -580,9 +580,9 @@ def plotly_circuit(view: Any) -> Any:
         for q in target_qs:
             y = wire_y[q]
             hover_text = (
-                f"<b>Gate: {name}</b><br>"
+                f"<b>Gate: {html.escape(name)}</b><br>"
                 f"Target: q_{q}<br>"
-                f"Parameters: {inst['params']}<br>"
+                f"Parameters: {html.escape(str(inst['params']))}<br>"
                 f"Step: {step_idx + 1}"
             )
             fig.add_trace(
@@ -609,7 +609,7 @@ def plotly_circuit(view: Any) -> Any:
 
     fig.update_layout(
         title=dict(
-            text=f"<b>{view.title}</b><br><sup>Quantum Circuit · Depth: {data['depth']} · Operations: {data['num_ops']}</sup>",
+            text=f"<b>{html.escape(view.title)}</b><br><sup>Quantum Circuit · Depth: {data['depth']} · Operations: {data['num_ops']}</sup>",
             x=0.04,
             y=0.96,
             font=dict(size=22, color=fg),
@@ -713,7 +713,7 @@ def svg_circuit(view: Any) -> str:
             )
             txt_color = "#0f172a" if name in {"H", "Z"} else "#ffffff"
             svg_lines.append(
-                f'<text x="{x}" y="{y + 5}" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="{txt_color}" text-anchor="middle">{name}</text>'
+                f'<text x="{x}" y="{y + 5}" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="{txt_color}" text-anchor="middle">{html.escape(name)}</text>'
             )
 
     svg_lines.append("</svg>")

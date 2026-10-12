@@ -1544,6 +1544,33 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
             }}
         }};
 
+        var canvas = gd.querySelector('canvas');
+        if (canvas) {{
+            canvas.addEventListener('click', function(e) {{
+                try {{
+                    var scene = gd._fullLayout && gd._fullLayout.scene ? gd._fullLayout.scene._scene : null;
+                    var sel = scene && scene.glplot ? scene.glplot.selection : null;
+                    if (sel && sel.data && sel.object && scene.traces) {{
+                        for (var k in scene.traces) {{
+                            var tr = scene.traces[k];
+                            if (tr && tr.scatterPlot === sel.object && tr.data && tr.data.meta && tr.data.meta.role === 'nodes') {{
+                                var ptIdx = sel.data.index;
+                                var nodeId = tr.data.customdata ? tr.data.customdata[ptIdx] : null;
+                                if (!nodeId && tr.data.text && tr.data.meta.layer !== undefined) {{
+                                    nodeId = tr.data.meta.layer + ':' + tr.data.text[ptIdx];
+                                }}
+                                if (nodeId) {{
+                                    window.__seedl_select_neuron(nodeId);
+                                }}
+                            }}
+                        }}
+                    }}
+                }} catch (err) {{
+                    // Defensive fallback: Plotly standard plotly_click handles clicks if internals are unavailable
+                }}
+            }});
+        }}
+
         gd.on('plotly_click', function(data) {{
             if (!data || !data.points || data.points.length === 0) return;
             var pt = data.points[0];

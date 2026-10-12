@@ -59,7 +59,12 @@ sd.entanglement(bell_state)  # Bipartite entanglement diagnostic & von Neumann e
 ```
 
 > [!NOTE]
-> **Pre-release status**: SeeDL `0.1.0` has completed end-to-end CI and visual verification. Its initial PyPI release is pending maintainer tagging. Install directly from GitHub today using the instructions below!
+> **Version & Feature Status**:
+> - **Available in PyPI 0.1.0**: Classical deep learning toolkit (`sd.see()`, 2D synaptic graphs, activations, gradients, training tracking, explainability, PCA embeddings, loss landscapes, and pure SVG engine).
+> - **Available in Unreleased Source (0.2.0-dev)**: Interactive 3D WebGL neural networks with direct neuron clicking, 3D CNN spatial stacks, and the complete Quantum Computing subsystem (`sd.bloch()`, `sd.circuit()`, `sd.entanglement()`, `sd.statevector()`, `sd.density_matrix()`).
+> - **Planned for 0.2.0**: Official PyPI release of the audited quantum and interactive 3D capabilities.
+> - To use the quantum and 3D features today prior to the 0.2.0 PyPI release, install directly from GitHub:
+>   `pip install "seedl[quantum,plotly] @ git+https://github.com/iamaritrasaha/seedl.git"`
 
 ---
 

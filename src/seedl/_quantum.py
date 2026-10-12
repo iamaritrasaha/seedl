@@ -37,13 +37,67 @@ def _is_qiskit_state(obj: Any) -> bool:
     return cls_name in {"Statevector", "DensityMatrix"} and "qiskit" in mod_name
 
 
+def _validate_statevector_vec(vec: list[complex]) -> list[complex]:
+    """Apply all scientific invariants to an already-parsed list of complex amplitudes.
+
+    Validates: non-empty, power-of-two dimension, finite elements, normalisation.
+    Raises ValueError with a precise diagnostic on any violation.
+    """
+    if not vec:
+        raise ValueError("Statevector cannot be empty.")
+
+    n = len(vec)
+    if (n & (n - 1)) != 0:
+        raise ValueError(f"Statevector dimension ({n}) must be a power of 2 for qubit systems.")
+
+    MAX_STATEVECTOR_DIM = 16_384  # 14 qubits
+    if n > MAX_STATEVECTOR_DIM:
+        raise ValueError(
+            f"Statevector dimension ({n}) exceeds maximum supported limit of "
+            f"{MAX_STATEVECTOR_DIM} (14 qubits) to prevent memory exhaustion."
+        )
+
+    # Check for non-finite amplitudes (NaN / Inf)
+    for i, c in enumerate(vec):
+        if not (math.isfinite(c.real) and math.isfinite(c.imag)):
+            raise ValueError(
+                f"Statevector element [{i}] is not finite: {c!r}. "
+                "NaN and Inf amplitudes are not physically valid."
+            )
+
+    norm_sq = sum(abs(c) ** 2 for c in vec)
+    if norm_sq < 1e-12:
+        raise ValueError("Statevector has zero norm and cannot represent a quantum state.")
+    if abs(norm_sq - 1.0) > 1e-5:
+        raise ValueError(
+            f"Statevector is not normalized (sum of |c_i|² = {norm_sq:.6f} ≠ 1.0). "
+            "All valid quantum states must satisfy ⟨ψ|ψ⟩ = 1."
+        )
+    return vec
+
+
 def parse_statevector(state: Any) -> list[complex]:
-    """Parse and validate a statevector from complex numbers, arrays, or Qiskit objects."""
+    """Parse and validate a statevector from complex numbers, arrays, or Qiskit objects.
+
+    Every supported input representation is subject to the same scientific invariants:
+      - Non-empty.
+      - Dimension is a power of 2 (qubit system).
+      - All amplitudes are finite (no NaN or Inf).
+      - State is normalised: sum(|c_i|²) ≈ 1.
+    """
     if _is_qiskit_state(state):
+        # Extract raw data from Qiskit Statevector, then apply the SAME validation
+        # as the native path.  The previous code returned amplitudes without any
+        # checks, allowing zero-norm, non-power-of-two, and unnormalised inputs to
+        # pass silently.
         data = getattr(state, "data", state)
         if hasattr(data, "tolist"):
             data = data.tolist()
-        return [complex(c) for c in data]
+        try:
+            vec = [complex(c) for c in data]
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f"Qiskit Statevector contains non-numeric amplitudes: {exc}") from exc
+        return _validate_statevector_vec(vec)
 
     if isinstance(state, str):
         named = state.strip().lower()
@@ -78,24 +132,7 @@ def parse_statevector(state: Any) -> list[complex]:
             raise ValueError(
                 f"Statevector elements must be numeric complex numbers: {exc}"
             ) from exc
-
-        if not vec:
-            raise ValueError("Statevector cannot be empty.")
-
-        n = len(vec)
-        # Length must be a power of 2: 2^k
-        if (n & (n - 1)) != 0:
-            raise ValueError(f"Statevector dimension ({n}) must be a power of 2 for qubit systems.")
-
-        norm_sq = sum(abs(c) ** 2 for c in vec)
-        if abs(norm_sq - 1.0) > 1e-5:
-            if norm_sq < 1e-12:
-                raise ValueError("Statevector has zero norm and cannot be normalized.")
-            # If slightly unnormalized, raise informative error unless close
-            raise ValueError(
-                f"Statevector is not normalized (sum of probabilities = {norm_sq:.6f} != 1.0)."
-            )
-        return vec
+        return _validate_statevector_vec(vec)
 
     raise TypeError(
         f"Unsupported state input type {type(state).__name__}. "
@@ -131,14 +168,27 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
     if (n & (n - 1)) != 0:
         raise ValueError(f"Density matrix dimension ({n}) must be a power of 2.")
 
+    MAX_DENSITY_MATRIX_DIM = 256  # 8 qubits (256 x 256 = 65,536 elements)
+    if n > MAX_DENSITY_MATRIX_DIM:
+        raise ValueError(
+            f"Density matrix dimension ({n}x{n}) exceeds maximum supported limit of "
+            f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
+        )
+
     mat: list[list[complex]] = []
     for r in range(n):
         row_c = []
         for c in range(n):
             try:
-                row_c.append(complex(rho[r][c]))
+                val = complex(rho[r][c])
             except (TypeError, ValueError) as exc:
                 raise ValueError(f"Matrix element [{r}][{c}] is not numeric: {exc}") from exc
+            if not (math.isfinite(val.real) and math.isfinite(val.imag)):
+                raise ValueError(
+                    f"Matrix element [{r}][{c}] is not finite: {val!r}. "
+                    "NaN and Inf are not valid density matrix entries."
+                )
+            row_c.append(val)
         mat.append(row_c)
 
     # Check Hermiticity: rho == rho^dagger
@@ -159,20 +209,40 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
             f"Density matrix trace must be approximately 1.0 (got Tr(rho) = {tr:.5f} + {tr_imag:.5f}i)."
         )
 
-    # For 2x2, verify positive semi-definiteness:
-    # lambda = (Tr +- sqrt(Tr^2 - 4*det)) / 2 >= -eps
-    if n == 2:
-        det = (mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0]).real
-        disc = tr * tr - 4.0 * det
-        if disc < -1e-6:
-            raise ValueError("Density matrix has non-real eigenvalues.")
-        disc = max(0.0, disc)
-        eig1 = (tr + math.sqrt(disc)) / 2.0
-        eig2 = (tr - math.sqrt(disc)) / 2.0
-        if eig1 < -1e-5 or eig2 < -1e-5:
+    # Positive semidefiniteness: all eigenvalues >= -eps.
+    # Use NumPy's Hermitian eigensolver (eigvalsh) for all sizes; it exploits
+    # the Hermitian structure and is numerically stable.  For 2x2 matrices we
+    # could use the analytic formula, but eigvalsh is correct and consistent.
+    try:
+        import numpy as np
+
+        arr = np.array(mat, dtype=complex)
+        eigenvalues = np.linalg.eigvalsh(arr)  # real by Hermitian construction
+        min_eig = float(eigenvalues.min())
+        if min_eig < -1e-5:
             raise ValueError(
-                f"Density matrix must be positive semi-definite (eigenvalues: {eig1:.4f}, {eig2:.4f})."
+                f"Density matrix is not positive semi-definite "
+                f"(minimum eigenvalue = {min_eig:.6f} < 0). "
+                "Physical density operators must have non-negative eigenvalues."
             )
+    except ImportError:
+        # NumPy unavailable: fall back to analytic 2x2 formula.
+        # For larger matrices without NumPy we cannot validate PSD — emit a note
+        # but do not block.  NumPy is a dependency of the [quantum] extra.
+        if n == 2:
+            det = (mat[0][0] * mat[1][1] - mat[0][1] * mat[1][0]).real
+            disc = tr * tr - 4.0 * det
+            if disc < -1e-6:
+                raise ValueError(  # noqa: B904
+                    "Density matrix has non-real eigenvalues (complex discriminant)."
+                ) from None
+            disc = max(0.0, disc)
+            eig1 = (tr + math.sqrt(disc)) / 2.0
+            eig2 = (tr - math.sqrt(disc)) / 2.0
+            if eig1 < -1e-5 or eig2 < -1e-5:
+                raise ValueError(  # noqa: B904
+                    f"Density matrix must be positive semi-definite (eigenvalues: {eig1:.4f}, {eig2:.4f})."
+                ) from None
 
     return mat
 
@@ -510,7 +580,9 @@ def inspect_circuit(circuit: Any) -> dict[str, Any]:
     )
 
 
-def simulate_circuit_evolution(circuit: Any, max_qubits: int = 10) -> list[dict[str, Any]]:
+def simulate_circuit_evolution(
+    circuit: Any, max_qubits: int = 10, max_ops: int = 500
+) -> list[dict[str, Any]]:
     """Step-by-step statevector simulation of unitary operations in a QuantumCircuit."""
     if not _is_qiskit_circuit(circuit):
         raise TypeError("Simulation requires a Qiskit QuantumCircuit.")
@@ -519,6 +591,13 @@ def simulate_circuit_evolution(circuit: Any, max_qubits: int = 10) -> list[dict[
     if num_qubits > max_qubits:
         raise SeeDLError(
             f"Circuit simulation bounded at {max_qubits} qubits (circuit has {num_qubits})."
+        )
+
+    num_ops = len(circuit.data)
+    if num_ops > max_ops:
+        raise SeeDLError(
+            f"Circuit simulation bounded at {max_ops} operations (circuit has {num_ops}). "
+            "Set max_ops higher if you intentionally wish to simulate large circuits."
         )
 
     try:
@@ -583,54 +662,163 @@ def simulate_circuit_evolution(circuit: Any, max_qubits: int = 10) -> list[dict[
 
     steps.append(record_step("Init", 0, "Initial state |" + "0" * num_qubits + ">"))
 
+    # Track whether the statevector simulation has been halted by a non-unitary
+    # instruction (measurement, reset, conditional).  Once halted, we record
+    # the step but do NOT apply further unitary gates — doing so would operate on
+    # an invalid (un-collapsed) state and produce scientifically misleading output.
+    evolution_halted: bool = False
+    halt_reason: str = ""
+
+    # Non-unitary instruction names that collapse the statevector.
+    # "barrier" is a purely structural hint and does NOT modify the state.
+    _MEASUREMENT_OPS = {"measure"}
+    _RESET_OPS = {"reset"}
+    _CONDITIONAL_OPS = {"if_else", "c_if"}
+
     for idx, inst in enumerate(circuit.data):
         op = getattr(inst, "operation", inst[0] if isinstance(inst, tuple) else inst)
         raw_qargs = getattr(inst, "qubits", inst[1] if isinstance(inst, tuple) else [])
         qargs = list(raw_qargs) if raw_qargs is not None else []
-        op_name = getattr(op, "name", type(op).__name__)
+        raw_cargs = getattr(inst, "clbits", inst[2] if isinstance(inst, tuple) else [])
+        cargs = list(raw_cargs) if raw_cargs is not None else []
+        op_name = getattr(op, "name", type(op).__name__).lower()
 
-        if op_name in {"barrier", "measure"}:
-            # Keep previous state
+        q_ids = [
+            circuit.find_bit(q).index if hasattr(circuit, "find_bit") else circuit.qubits.index(q)
+            for q in qargs
+        ]
+
+        if op_name == "barrier":
+            # Barrier is a structural hint with no physical effect on the state.
             steps.append(
                 record_step(
-                    op_name.upper(),
+                    "BARRIER",
                     idx + 1,
-                    f"{op_name.capitalize()} on qubits {[circuit.find_bit(q).index for q in qargs]}",
+                    f"Barrier (structural only, no state change) on qubits {q_ids}",
                 )
             )
+            continue
+
+        if op_name in _MEASUREMENT_OPS:
+            # Record the pre-measurement superposition probabilities, then halt.
+            # Continuing unitary evolution after measurement would use a state that
+            # has been classically collapsed, producing scientifically wrong results.
+            c_ids = [
+                circuit.find_bit(c).index
+                if hasattr(circuit, "find_bit")
+                else circuit.clbits.index(c)
+                for c in cargs
+            ]
+            step = record_step(
+                "MEASURE",
+                idx + 1,
+                (
+                    f"Measurement of qubit(s) {q_ids} → classical bit(s) {c_ids}. "
+                    "Pre-measurement superposition probabilities shown. "
+                    "Unitary evolution halted: subsequent gates would operate on "
+                    "a classically collapsed state that cannot be faithfully represented "
+                    "by a single statevector."
+                ),
+            )
+            step["measurement_halt"] = True
+            step["measured_qubits"] = q_ids
+            step["classical_bits"] = c_ids
+            steps.append(step)
+            if not evolution_halted:
+                evolution_halted = True
+                halt_reason = f"MEASURE on qubit(s) {q_ids} at step {idx + 1}"
+            continue
+
+        if op_name in _RESET_OPS:
+            # Reset collapses the qubit to |0⟩ non-unitarily.
+            step = record_step(
+                "RESET",
+                idx + 1,
+                (
+                    f"Reset of qubit(s) {q_ids} to |0⟩. "
+                    "This is a non-unitary operation. "
+                    "Unitary evolution halted: reset discards quantum information "
+                    "and cannot be represented by a unitary statevector evolution."
+                ),
+            )
+            step["reset_halt"] = True
+            step["reset_qubits"] = q_ids
+            steps.append(step)
+            if not evolution_halted:
+                evolution_halted = True
+                halt_reason = f"RESET on qubit(s) {q_ids} at step {idx + 1}"
+            continue
+
+        # Check for conditional gates (c_if / if_else)
+        condition = getattr(op, "condition", None)
+        if condition is not None or op_name in _CONDITIONAL_OPS:
+            step = record_step(
+                op_name.upper(),
+                idx + 1,
+                (
+                    f"Conditional gate {op_name.upper()} on qubit(s) {q_ids}. "
+                    "Conditional operations depend on classical measurement outcomes "
+                    "and cannot be simulated by pure statevector evolution. "
+                    "Unitary evolution halted."
+                ),
+            )
+            step["conditional_halt"] = True
+            steps.append(step)
+            if not evolution_halted:
+                evolution_halted = True
+                halt_reason = f"conditional gate {op_name.upper()} at step {idx + 1}"
+            continue
+
+        # If evolution was already halted by a prior non-unitary op, record the
+        # remaining steps but do NOT apply them to the state.
+        if evolution_halted:
+            step = record_step(
+                op_name.upper(),
+                idx + 1,
+                (
+                    f"Gate {op_name.upper()} on qubit(s) {q_ids} NOT applied — "
+                    f"simulation was halted by {halt_reason}. "
+                    "Shown probabilities reflect the pre-halt state."
+                ),
+            )
+            step["post_halt"] = True
+            step["halt_reason"] = halt_reason
+            steps.append(step)
             continue
 
         try:
             # Evolve statevector with the unitary instruction
             current_state = current_state.evolve(
                 op,
-                [
-                    circuit.find_bit(q).index
-                    if hasattr(circuit, "find_bit")
-                    else circuit.qubits.index(q)
-                    for q in qargs
-                ],
+                q_ids,
             )
         except Exception as exc:
-            # If instruction is non-unitary or custom, stop simulation with note
-            steps.append(
-                record_step(
-                    op_name.upper(),
-                    idx + 1,
-                    f"Skipped non-unitary or unsupported instruction: {exc}",
-                )
+            # If instruction is non-unitary or custom (e.g. parameterised gates
+            # that Qiskit cannot automatically convert), record the step with a
+            # diagnostic and halt.  Do NOT silently skip and continue evolution
+            # on a potentially invalid state.
+            step = record_step(
+                op_name.upper(),
+                idx + 1,
+                (
+                    f"Could not apply {op_name.upper()} to qubit(s) {q_ids}: {exc}. "
+                    "This gate is unsupported, non-unitary, or requires unbound parameters. "
+                    "Unitary evolution halted to avoid producing misleading results."
+                ),
             )
+            step["unsupported_halt"] = True
+            step["error"] = str(exc)
+            steps.append(step)
+            if not evolution_halted:
+                evolution_halted = True
+                halt_reason = f"unsupported gate {op_name.upper()} at step {idx + 1}"
             continue
 
-        q_indices = [
-            circuit.find_bit(q).index if hasattr(circuit, "find_bit") else circuit.qubits.index(q)
-            for q in qargs
-        ]
         steps.append(
             record_step(
                 op_name.upper(),
                 idx + 1,
-                f"Apply {op_name.upper()} to qubit(s) {q_indices}",
+                f"Apply {op_name.upper()} to qubit(s) {q_ids}",
             )
         )
 

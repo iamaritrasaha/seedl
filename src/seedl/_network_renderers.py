@@ -1358,7 +1358,7 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
         "nodes": node_data,
         "layers": layers_data,
     }
-    graph_json = json.dumps(graph_payload)
+    graph_json = json.dumps(graph_payload).replace("</", "<\\/")
 
     return f"""
 (function() {{
@@ -1366,6 +1366,15 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
     var nodeMap = graphData.nodes;
     var spatial = graphData.spatial;
     var defaultEdgeOpacity = graphData.edge_opacity;
+
+    function escHtml(s) {{
+        if (s === null || s === undefined) return '';
+        return String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }}
 
     function initInteractive() {{
         var gd = document.getElementsByClassName('plotly-graph-div')[0];
@@ -1389,10 +1398,10 @@ def build_network_interactive_js(graph: dict[str, Any], spatial: bool) -> str:
             }}
             var layer = graphData.layers[node.layer];
             var lines = [];
-            var heading = '<b>NEURON INSPECTION: ' + layer.label + ' · Neuron #' + node.index + '</b> (id: ' + node.id + ')';
+            var heading = '<b>NEURON INSPECTION: ' + escHtml(layer.label) + ' · Neuron #' + node.index + '</b> (id: ' + escHtml(node.id) + ')';
             if (graphData.captured) heading += ' · Sample ' + graphData.sample;
             lines.push(heading);
-            lines.push('<b>Module:</b> ' + layer.module + ' · <b>Operation:</b> ' + layer.operation);
+            lines.push('<b>Module:</b> ' + escHtml(layer.module) + ' · <b>Operation:</b> ' + escHtml(layer.operation));
 
             var actStr = node.activation !== null ? Number(node.activation).toPrecision(5) : 'unavailable';
             var preStr = node.preactivation !== null ? Number(node.preactivation).toPrecision(5) : 'unavailable';

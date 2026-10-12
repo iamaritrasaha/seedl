@@ -817,7 +817,7 @@ def svg_statevector(view: Any) -> str:
     chart_h = height - top - 90
 
     bar_gap = chart_w / max(n, 1)
-    bar_w = max(18.0, bar_gap * 0.6)
+    bar_w = max(2.0, min(28.0, bar_gap * 0.75))
 
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
@@ -839,13 +839,14 @@ def svg_statevector(view: Any) -> str:
         svg_lines.append(
             f'<rect x="{bx}" y="{by}" width="{bar_w}" height="{bh}" rx="3" fill="{Q_CYAN}" opacity="0.9"><title>|{bs}⟩: {p:.2%}</title></rect>'
         )
-        if p >= 0.03:
+        if p >= 0.03 and bar_gap >= 24:
             svg_lines.append(
                 f'<text x="{bx + bar_w / 2}" y="{by - 6}" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="{fg}" text-anchor="middle">{p:.1%}</text>'
             )
-        svg_lines.append(
-            f'<text x="{bx + bar_w / 2}" y="{top + chart_h + 20}" font-family="system-ui, monospace" font-size="12" font-weight="600" fill="{muted}" text-anchor="middle">|{bs}⟩</text>'
-        )
+        if bar_gap >= 18 or p >= 0.05:
+            svg_lines.append(
+                f'<text x="{bx + bar_w / 2}" y="{top + chart_h + 20}" font-family="system-ui, monospace" font-size="{min(12, int(bar_gap * 0.6))}" font-weight="600" fill="{muted}" text-anchor="middle">|{bs}⟩</text>'
+            )
 
     svg_lines.append("</svg>")
     return "\n".join(svg_lines)

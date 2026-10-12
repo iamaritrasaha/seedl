@@ -779,10 +779,13 @@ def statevector(
     *,
     theme: str = "scientific",
     backend: str = "auto",
+    max_states: int = 64,
 ) -> Visualization:
     """Visualize quantum statevector amplitudes, measurement probabilities, and complex phases."""
     if theme not in {"light", "dark", "scientific", "minimal", "presentation"}:
         raise ValueError("theme must be light, dark, scientific, minimal, or presentation.")
+    if isinstance(max_states, bool) or not isinstance(max_states, int) or max_states < 1:
+        raise ValueError("max_states must be a positive integer.")
     import cmath
     import math
 
@@ -804,21 +807,47 @@ def statevector(
         }
         for i, c in enumerate(vec)
     ]
+
+    if dim > max_states:
+        # Retain the top basis states by measurement probability
+        ranked_indices = sorted(range(dim), key=lambda i: probs[i], reverse=True)[:max_states]
+        selected_indices = sorted(ranked_indices)
+        probs_view = [probs[i] for i in selected_indices]
+        phases_view = [phases[i] for i in selected_indices]
+        basis_labels_view = [basis_labels[i] for i in selected_indices]
+        amplitudes_view = [amplitudes[i] for i in selected_indices]
+        truncated = True
+    else:
+        probs_view = probs
+        phases_view = phases
+        basis_labels_view = basis_labels
+        amplitudes_view = amplitudes
+        truncated = False
+
     data = {
         "theme": theme,
         "dim": dim,
         "num_qubits": num_qubits,
-        "probabilities": probs,
-        "phases": phases,
-        "basis_states": basis_labels,
-        "amplitudes": amplitudes,
+        "probabilities": probs_view,
+        "phases": phases_view,
+        "basis_states": basis_labels_view,
+        "amplitudes": amplitudes_view,
+        "truncated": truncated,
+        "total_states": dim,
     }
     selected_backend = resolve_backend(backend)
     summary = f"Statevector: {num_qubits} qubits ({dim} computational basis states) · Normalized"
+    if truncated:
+        summary += f" · Top {max_states} states displayed"
     notes = [
         f"Probabilities P(i) = |c_i|² sum to {sum(probs):.6f}.",
         "Phase angles mapped to continuous colormap in radians [-π, +π].",
     ]
+    if truncated:
+        notes.append(
+            f"Visualizing top {max_states} of {dim} computational basis states by probability "
+            f"({dim - max_states} states truncated for visualization performance)."
+        )
     result = Visualization(
         kind="statevector",
         title=f"Quantum Statevector ({num_qubits} Qubits)",

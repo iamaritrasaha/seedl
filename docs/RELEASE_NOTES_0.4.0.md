@@ -135,8 +135,7 @@ diff_view.save("feature_comparison.html")
   - `max_spatial_dim` (default 128; downsampled via adaptive average pooling when exceeded)
   - `max_seq_len` (default 256)
   - `max_heads` (default 32)
-- **Memory Scope**: Retention limits apply to stored visualization payloads on CPU. They are not process-wide or GPU memory limits. Peak GPU allocations during PyTorch model forward passes depend on the model and input size.
-- **Model Buffer Safety**: Module tracking bounds buffer cloning to small tracking buffers (`numel <= 8192`) to prevent GPU/CPU allocation spikes.
+- **Model Buffer Preservation**: Model inspection snapshots and restores all registered model buffers (including buffers modified during forward passes or in eval mode) to guarantee model state integrity. Temporary CPU/GPU memory during inspection is proportional to registered buffer sizes.
 - **Receptive Fields**: Feature map coordinates represent activation tensor indices, not theoretical receptive fields back to pixel space.
 
 ---
@@ -156,4 +155,4 @@ diff_view.save("feature_comparison.html")
 - **Source Distribution**: A clean sdist installation passed all core zero-dependency checks on **Python 3.13**.
 - **Code Quality & Packaging**: Ruff lint/format, mypy type checks, `uv lock --check`, `twine check --strict`, and `scripts/verify_release.py --tag v0.4.0 --check-dist` passed cleanly.
 - **Website Compatibility**: Verified isolated build and provenance checks (`generate.py` and `check.py`) using published `seedl==0.3.0`.
-- **Status**: Release candidate prepared locally for review; unpushed, untagged, and not yet published to PyPI.
+- **Status**: Release candidate prepared for review on GitHub (PR #12); untagged and not yet published to PyPI.

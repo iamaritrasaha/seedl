@@ -67,7 +67,7 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **SeeDL 0.2.0 (current stable release)**: Unifies classical deep learning and quantum information visualization in a single lightweight library.
+> **SeeDL 0.3.0 (current stable release)**: Unifies classical deep learning and quantum information visualization in a single lightweight library.
 > Install the full interactive 3D and quantum suite:
 > `pip install "seedl[quantum,plotly]"` or `pip install "seedl[all]"`
 
@@ -559,7 +559,7 @@ sd.see(model, backend="matplotlib")  # Publication-ready Matplotlib plot
 
 ## 📚 Documentation & Resources
 
-- **[Official Website & Playground](website/README.md)**: Local preview, reproducible SeeDL 0.2.0 demos, documentation, and manual GitHub Pages deployment.
+- **[Official Website & Playground](website/README.md)**: Local preview, reproducible SeeDL 0.3.0 demos, documentation, and manual GitHub Pages deployment.
 - **[Interactive Showcase Notebook](examples/neural_network_explorer.ipynb)**: Complete, cell-by-cell walkthrough demonstrating 2D/3D networks, neuron selection, forward exploration, loss landscapes, and embeddings.
 - **[Advanced 3D & Quantum Showcase](examples/advanced_3d_quantum_showcase.ipynb)**: Deep-dive notebook demonstrating direct 3D neuron selection, CNN spatial maps, 3D Bloch spheres, quantum circuit evolution, Bell state entanglement, and density matrices.
 - **[Visual Acceptance Specification](docs/VISUAL_ACCEPTANCE.md)**: Comprehensive verification criteria, tested architectures, and capability boundaries.

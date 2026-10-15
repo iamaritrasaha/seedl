@@ -331,3 +331,41 @@ def test_cnn_singleton_spatial_dimensions(shape, expected_downsampled, expected_
     assert "<svg" in view.to_figure("svg")
     assert view.to_figure("plotly") is not None
     assert view.to_figure("matplotlib") is not None
+
+
+def test_cnn_large_buffer_preservation_and_exception_cleanup():
+    """Verify that buffers exceeding 8192 elements are properly restored and hooks cleaned up."""
+
+    class LargeBufferModel(nn.Module):
+        def __init__(self, fail: bool = False):
+            super().__init__()
+            self.conv = nn.Conv2d(1, 2, 3, padding=1)
+            self.register_buffer("large_buf", torch.zeros(10000))
+            self.fail = fail
+
+        def forward(self, x):
+            self.large_buf.add_(1.0)
+            out = self.conv(x)
+            if self.fail:
+                raise RuntimeError("Simulated forward error")
+            return out
+
+    # 1. Normal execution
+    model = LargeBufferModel(fail=False)
+    model.eval()
+    assert model.large_buf.sum().item() == 0.0
+
+    sd.features(model, input=torch.randn(1, 1, 8, 8))
+    assert model.large_buf.sum().item() == 0.0
+    assert len(model._forward_hooks) == 0
+    assert len(model.conv._forward_hooks) == 0
+
+    # 2. Cleanup after forward pass exception
+    failing_model = LargeBufferModel(fail=True)
+    failing_model.eval()
+    with pytest.raises(sd.SeeDLError, match="Failed to inspect CNN feature maps"):
+        sd.features(failing_model, input=torch.randn(1, 1, 8, 8))
+
+    assert failing_model.large_buf.sum().item() == 0.0
+    assert len(failing_model._forward_hooks) == 0
+    assert len(failing_model.conv._forward_hooks) == 0

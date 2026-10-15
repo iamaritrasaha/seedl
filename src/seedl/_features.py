@@ -188,9 +188,8 @@ def capture_feature_maps(
             dict(module._buffers),
             set(module._non_persistent_buffers_set),
             {
-                b_name: b_val.detach().clone()
+                b_name: b_val.detach().clone() if b_val is not None else None
                 for b_name, b_val in module._buffers.items()
-                if b_val is not None and b_val.numel() <= 8192
             },
         )
         for _, module in model.named_modules()
@@ -313,10 +312,14 @@ def capture_feature_maps(
                 module._non_persistent_buffers_set = non_persistent
                 module._buffers = orig_buffers
                 for b_name, b_saved in saved_vals.items():
-                    if orig_buffers.get(b_name) is not None and b_saved is not None:
-                        if orig_buffers[b_name].shape != b_saved.shape:
-                            orig_buffers[b_name].resize_(b_saved.shape)
-                        orig_buffers[b_name].copy_(b_saved)
+                    if b_saved is None:
+                        orig_buffers[b_name] = None
+                        continue
+                    current_buf = orig_buffers.get(b_name)
+                    if current_buf is None or current_buf.shape != b_saved.shape:
+                        orig_buffers[b_name] = b_saved.clone()
+                    else:
+                        current_buf.copy_(b_saved)
         for module, orig_mode in orig_training_modes:
             module.training = orig_mode
 

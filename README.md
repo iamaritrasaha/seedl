@@ -67,19 +67,19 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **SeeDL 0.2.0**: Unifies classical deep learning and quantum information visualization in a single lightweight library.
+> **SeeDL 0.2.0 (current stable release)**: Unifies classical deep learning and quantum information visualization in a single lightweight library.
 > Install the full interactive 3D and quantum suite:
 > `pip install "seedl[quantum,plotly]"` or `pip install "seedl[all]"`
 
 ---
 
-## 0.3.0 development — unreleased
+## 0.3.0 release preparation — not yet published
 
-The package version remains **0.2.0**. Development functionality now includes bounded recording of real PyTorch training passes, 3D training playback with loss and gradient inspection, aligned before/after snapshot comparison, and quantum gate-by-gate before/after state inspection.
+This source branch prepares **0.3.0**; it does not claim a PyPI release. The release adds bounded recording of real PyTorch training passes, 3D training playback with loss and gradient inspection, aligned before/after snapshot comparison, and quantum gate-by-gate before/after state inspection.
 
 Use `with sd.watch(model) as run:` (or `sd.track`) and call `run.capture(step=..., epoch=..., loss=loss)` **after forward/backward and before `optimizer.step()`**. `run.playback()` / `sd.see(run)` provide inline playback; `.save("training.html")` exports offline controls. Compare retained observations with `sd.compare(run.snapshots[0], run.snapshots[-1])`. Quantum playback uses `sd.circuit(qc, simulate=True)` and marks post-measurement/reset states unavailable.
 
-See the [API, bounds and limitations](docs/live-neural-intelligence.md) and [runnable MLP / quantum example](examples/live_neural_intelligence.py). Snapshot count, retained bytes and HTML payloads are bounded; missing data stays unavailable. New CNN feature-explorer controls are deferred.
+Read the [0.3.0 release notes](docs/RELEASE_NOTES_0.3.0.md), [API, bounds and limitations](docs/live-neural-intelligence.md) and [runnable MLP / quantum example](examples/live_neural_intelligence.py). Snapshot count, retained bytes and HTML payloads are bounded; missing data stays unavailable. New CNN feature-explorer controls are deferred.
 
 ---
 

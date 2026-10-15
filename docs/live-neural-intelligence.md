@@ -1,6 +1,6 @@
-# Live neural intelligence — 0.3.0 development (unreleased)
+# Live neural intelligence — 0.3.0 release preparation
 
-The package version remains **0.2.0**. This branch adds recorded training playback and gate-by-gate quantum inspection. Run the complete [example](../examples/live_neural_intelligence.py) with:
+The source package version is **0.3.0**; publication is pending. This release adds recorded training playback and gate-by-gate quantum inspection. Run the complete [example](../examples/live_neural_intelligence.py) with:
 
 ```bash
 uv run --extra all python examples/live_neural_intelligence.py --output-dir /tmp/seedl-live
@@ -93,7 +93,7 @@ Measurement, reset, conditional operations and unsupported/unbound gates halt pu
 
 Serialized HTML content (frames, controls, initial figure and circuit diagram) is capped at 32 MiB before embedding the Plotly runtime. Reduce retained snapshots, neuron/connection budgets or circuit size if export exceeds the cap. Export construction needs temporary CPU memory proportional to the frame payload; the recorder's byte budget is not a process-wide memory limit. Playback is recorded observation, not a background training dashboard. New CNN channel-selection and feature-map comparison controls are deferred; existing CNN visualization remains available.
 
-## Sprint verification — 2026-10-15
+## Historical development verification — 2026-10-15 (before the version bump)
 
 - Full Python 3.13 suite: **330 passed, 1 skipped** (CUDA/ROCm unavailable). An additional browser regression for literal template-like labels and script-tag escaping passed after the full run.
 - `ruff check .`, `ruff format --check .`, `mypy`, `uv lock --check`, `uv build --no-sources`, and `git diff --check` passed. Package metadata remains 0.2.0.

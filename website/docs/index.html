@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Documentation · SeeDL</title><meta name="description" content="SeeDL 0.2.0 — interactive visualization for deep learning and quantum computing. Explore real PyTorch networks, Bloch spheres, and quantum circuits.">
+<meta name="theme-color" content="#090e17"><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<link rel="stylesheet" href="../assets/style.css"><script src="../assets/site.js" defer></script></head>
+<body><a class="skip" href="#main">Skip to content</a><header class="header"><nav class="nav wrap" aria-label="Main navigation">
+<a class="brand" href="../index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.2.0</span></a>
+<button class="menu-button" data-menu aria-label="Toggle navigation" aria-controls="main-links" aria-expanded="false">☰</button>
+<div class="navlinks" id="main-links"><a href="../index.html">Overview</a><a href="../playground.html">Playground</a><a href="../docs/index.html" aria-current="page">Documentation</a><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a></div>
+<button class="theme-button" data-theme-toggle aria-label="Use light theme">☀</button></nav></header>
+<main id="main" class="wrap doc-layout"><aside class="docnav" aria-label="Documentation sections"><strong>SeeDL 0.2.0</strong><a href="#getting-started">Getting Started</a><a href="#installation">Installation</a><a href="#quickstart">Quickstart</a><a href="#neural-networks">Neural Network Visualization</a><a href="#interactive-3d">Interactive 3D Networks</a><a href="#quantum">Quantum Computing</a><a href="#bloch-spheres">Bloch Spheres</a><a href="#quantum-circuits">Quantum Circuits</a><a href="#statevectors">Statevectors</a><a href="#density-matrices">Density Matrices</a><a href="#entanglement">Entanglement</a><a href="#examples">Examples</a><a href="#api">API Reference</a></aside><article class="docs"><div class="eyebrow">Documentation / Version 0.2.0</div><h1>See what you're building.</h1><p>From your first visualization to interactive 3D networks and quantum states. These examples use the SeeDL 0.2.0 API.</p>
+<h2 id="getting-started">Getting Started</h2><p>SeeDL turns supported Python objects into inspectable visualizations. The core has no required third-party dependencies and includes an SVG renderer. Plotly adds interactive charts; PyTorch and Qiskit provide their respective integrations. Python 3.10 or newer is required.</p>
+<h2 id="installation">Installation</h2><div class="install-grid"><div class="install"><div class="install-top"><span>Core · no required dependencies</span><button class="copy" data-copy="pip install seedl" aria-label="Copy Core · no required dependencies installation command">Copy</button></div><code>pip install seedl</code></div><div class="install"><div class="install-top"><span>Advanced 3D · PyTorch + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[torch,plotly]&quot;" aria-label="Copy Advanced 3D · PyTorch + Plotly installation command">Copy</button></div><code>pip install &quot;seedl[torch,plotly]&quot;</code></div><div class="install"><div class="install-top"><span>Quantum · Qiskit + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[quantum,plotly]&quot;" aria-label="Copy Quantum · Qiskit + Plotly installation command">Copy</button></div><code>pip install &quot;seedl[quantum,plotly]&quot;</code></div><div class="install"><div class="install-top"><span>Complete scientific toolkit</span><button class="copy" data-copy="pip install &quot;seedl[all]&quot;" aria-label="Copy Complete scientific toolkit installation command">Copy</button></div><code>pip install &quot;seedl[all]&quot;</code></div></div>
+<h2 id="quickstart">Quickstart</h2><p>Start with a numeric sequence. This example works with the core installation alone.</p><pre><code>import seedl as sd
+
+view = sd.see([1, 4, 2, 8], backend=&quot;svg&quot;)
+view.save(&quot;first.svg&quot;)
+view.save(&quot;first.html&quot;)</code></pre><p>In a notebook, put <code>view</code> last in a cell to display it. In a Python script, use <code>view.show()</code>. <code>view.figure</code> returns the backend figure (or SVG text), and <code>view.data</code> contains the inspected data.</p>
+<h2 id="neural-networks">Neural Network Visualization</h2><p>Install <code>seedl[torch,plotly]</code> for this guide. For supported feed-forward models, SeeDL maps actual weight matrices to neuron connections. Unsupported structures use an architecture view; SeeDL does not invent connections.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Linear(3, 5), nn.ReLU(), nn.Linear(5, 2))
+x = torch.tensor([[0.8, -0.4, 0.6]])
+view = sd.see(model, input=x, view=&quot;neurons&quot;, backend=&quot;plotly&quot;)
+view.save(&quot;neurons.html&quot;)</code></pre><p>Providing <code>input</code> runs one local forward pass in evaluation mode without gradients, using temporary inspection hooks. Only run models you trust. Omitting input still allows parameter inspection; missing activations remain unavailable.</p>
+<h2 id="interactive-3d">Interactive 3D Networks</h2><pre><code>view = sd.see(model, input=x, view=&quot;3d&quot;, theme=&quot;scientific&quot;)
+view.save(&quot;network.html&quot;)</code></pre><p>Open the exported HTML to orbit, pan, zoom, and click neurons. Selection highlights incoming cyan and outgoing amber connections. The neuron menu also supports selection. Reset view restores the camera; Overview clears selection.</p><p>Bound large graphs with <code>max_neurons</code> and <code>max_connections</code>. <code>min_weight</code> filters small weights. Values are sampled or omitted explicitly, rather than filled in. <a href="../playground.html#network">Try the live explorer</a>.</p>
+<h2 id="quantum">Quantum Computing</h2><p>Install <code>seedl[quantum,plotly]</code> for all examples below. State calculations are performed locally in Python. The public website serves precomputed outputs. Bloch plots describe one qubit; they cannot represent an entire entangled multi-qubit state.</p>
+<h2 id="bloch-spheres">Bloch Spheres</h2><pre><code>import seedl as sd
+
+view = sd.bloch(&quot;+&quot;, backend=&quot;plotly&quot;)
+view.save(&quot;bloch.html&quot;)
+# Named states: &quot;0&quot;, &quot;1&quot;, &quot;+&quot;, &quot;-&quot;, &quot;+i&quot;, &quot;-i&quot;
+# Also accepts a single-qubit statevector or 2×2 density matrix.</code></pre><p>Coordinates obey x = Tr(ρX), y = Tr(ρY), z = Tr(ρZ). Pure states have unit length; mixed states lie inside the sphere. For α|0⟩ + β|1⟩, x = 2 Re(α*β), y = 2 Im(α*β), z = |α|² − |β|².</p><table><thead><tr><th>State</th><th>Vector (x, y, z)</th></tr></thead><tbody><tr><td>|0⟩ / |1⟩</td><td>(0, 0, +1) / (0, 0, −1)</td></tr><tr><td>|+⟩ / |−⟩</td><td>(+1, 0, 0) / (−1, 0, 0)</td></tr><tr><td>|+i⟩ / |−i⟩</td><td>(0, +1, 0) / (0, −1, 0)</td></tr></tbody></table>
+<h2 id="quantum-circuits">Quantum Circuits</h2><pre><code>from qiskit import QuantumCircuit
+import seedl as sd
+
+qc = QuantumCircuit(2)
+qc.h(0)
+qc.cx(0, 1)
+sd.see(qc, backend=&quot;plotly&quot;).save(&quot;bell.html&quot;)</code></pre><p>In Qiskit's |q₁q₀⟩ basis order, H on q₀ takes |00⟩ to (|00⟩ + |01⟩)/√2. CX with control q₀ and target q₁ produces (|00⟩ + |11⟩)/√2. Hover over circuit gates to inspect them. <code>sd.see(qc, simulate=True)</code> can also request supported bounded circuit evolution; the playground shows the circuit diagram only.</p>
+<h2 id="statevectors">Statevectors</h2><pre><code>import math
+import seedl as sd
+
+bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
+sd.statevector(bell, backend=&quot;plotly&quot;).save(&quot;amplitudes.html&quot;)</code></pre><p>Inspect complex amplitudes, phases, and measurement probabilities in the computational basis. Input must be normalized and have power-of-two length.</p>
+<h2 id="density-matrices">Density Matrices</h2><pre><code>import seedl as sd
+
+rho = [[0.5, 0], [0, 0.5]]
+sd.density_matrix(rho, backend=&quot;plotly&quot;).save(&quot;mixed.html&quot;)</code></pre><p>A single-qubit density matrix is rendered as a Bloch sphere. This maximally mixed state has r = (0, 0, 0) and purity Tr(ρ²) = 1/2. Larger supported matrices use a matrix view. Inputs must be valid Hermitian, positive semidefinite, unit-trace density operators.</p>
+<h2 id="entanglement">Entanglement</h2><pre><code>import math
+import seedl as sd
+
+bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
+sd.entanglement(bell, backend=&quot;plotly&quot;).save(&quot;entanglement.html&quot;)</code></pre><p>For a pure two-qubit input, SeeDL takes a partial trace and computes reduced-state von Neumann entropy in bits. A Bell pair has entropy 1 bit per subsystem. Reduced-state entropy alone is not an entanglement measure for general mixed states.</p>
+<h2 id="examples">Examples</h2><p><a href="../playground.html">Open the interactive playground</a> for complete demo source. Explore the repository's <a href="https://github.com/iamaritrasaha/seedl/tree/main/examples">notebooks and Python examples</a>, the <a href="https://github.com/iamaritrasaha/seedl/blob/main/README.md">full README</a>, and the <a href="https://github.com/iamaritrasaha/seedl/blob/main/docs/RELEASE_NOTES_0.2.0.md">0.2.0 release notes</a>.</p>
+<h2 id="api">API Reference</h2><p>All functions below return a <code>Visualization</code>. For complete signatures and implementation details, see the <a href="https://github.com/iamaritrasaha/seedl/blob/v0.2.0/src/seedl/api.py">0.2.0 API source</a> and <a href="https://github.com/iamaritrasaha/seedl/blob/v0.2.0/src/seedl/view.py">Visualization reference</a>.</p><table><thead><tr><th>Entry point</th><th>Purpose / key options</th></tr></thead><tbody><tr><td><code>sd.see(obj, **options)</code></td><td>Automatic inspection. input, backend, view, theme, max_neurons, max_connections, select_neuron.</td></tr><tr><td><code>sd.bloch(state, **options)</code></td><td>Single-qubit state. view="3d", theme, backend.</td></tr><tr><td><code>sd.statevector(state, **options)</code></td><td>Amplitudes and probabilities. max_states, theme, backend.</td></tr><tr><td><code>sd.density_matrix(rho, **options)</code></td><td>Density operator inspection. theme, backend.</td></tr><tr><td><code>sd.entanglement(state, **options)</code></td><td>Two-qubit subsystem diagnostics. theme, backend.</td></tr><tr><td><code>view.save(filepath)</code></td><td>Export HTML, SVG, or PNG; raster exports may require additional backend tooling.</td></tr><tr><td><code>view.to_figure(backend=None)</code></td><td>Return the selected backend figure or SVG text.</td></tr><tr><td><code>view.explore(select_neuron=None)</code></td><td>Return an interactive figure with supported exploration controls.</td></tr><tr><td><code>view.data / view.metadata</code></td><td>Inspected data and visualization metadata.</td></tr></tbody></table><p class="notice">This site documents the stable 0.2.0 API. Generated assets are built from that checkout. Scientific calculations run in Python; exported browser interaction does not retrain or re-execute models.</p></article></main>
+<footer class="footer wrap"><span><a class="brand" href="../index.html">SeeDL</a> &nbsp; Scientific insight, made visible.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>

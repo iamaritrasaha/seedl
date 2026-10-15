@@ -45,6 +45,14 @@ def save_visualization(
 
 def _save_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.backend == "plotly" and (
+        view.kind == "training_playback"
+        or (view.kind == "quantum_circuit" and view.data.get("simulate"))
+    ):
+        from ._playback import playback_html
+
+        path.write_text(playback_html(view), encoding="utf-8")
+        return
     if view.backend == "plotly":
         fig = view.figure
         if hasattr(fig, "write_html"):

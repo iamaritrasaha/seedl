@@ -270,7 +270,14 @@ def _extract_floats(values: Any, label: str) -> list[float]:
 class Tracker:
     """Lightweight in-memory experiment and training metric recorder."""
 
-    def __init__(self, name: str = "run") -> None:
+    def __init__(self, name: str = "run", *, model: Any = None, **capture_options: Any) -> None:
+        self._recorder: Any = None
+        if model is not None:
+            from ._recording import TrainingRecorder
+
+            self._recorder = TrainingRecorder(model, **capture_options)
+        elif capture_options:
+            raise ValueError("Capture options require a model.")
         self.name = name
         self._history: dict[str, list[float]] = {}
         self._epochs: list[float] = []
@@ -341,8 +348,45 @@ class Tracker:
                 raise SeeDLError(f"Invalid metric value in {k!r} in {filepath}: {exc}") from exc
         return tracker
 
+    @property
+    def snapshots(self) -> tuple[Any, ...]:
+        """Retained immutable training snapshots, oldest first."""
+        return tuple(self._recorder.snapshots) if self._recorder else ()
+
+    @property
+    def recording_stats(self) -> dict[str, int]:
+        """Encoded retained payload bytes and eviction count; excludes temporary render data."""
+        return {
+            "snapshots": len(self.snapshots),
+            "bytes": self._recorder.nbytes if self._recorder else 0,
+            "dropped": self._recorder.dropped if self._recorder else 0,
+        }
+
+    def capture(
+        self, *, step: int | None = None, epoch: int | float | None = None, loss: Any = None
+    ) -> Any:
+        """Record the observed forward and current weights/gradients before optimizer.step().
+
+        Use within a model tracker context. Missing gradients remain missing. No model
+        evaluation, backward, optimizer step, or parameter mutation is performed here.
+        ``every`` selects capture calls, and oldest snapshots are evicted at either limit.
+        Metric history from ``log`` is independent and remains unbounded for compatibility.
+        """
+        if self._recorder is None:
+            raise SeeDLError("Pass a model to sd.watch()/sd.track() to record training snapshots.")
+        return self._recorder.capture(step=step, epoch=epoch, loss=loss)
+
+    def playback(self, *, backend: str = "auto", color_by: str = "activation") -> Any:
+        """Visualize retained training passes with kernel-free HTML playback."""
+        from ._playback import training_view
+
+        return training_view(self, backend=backend, color_by=color_by)
+
     def __enter__(self) -> Tracker:
+        if self._recorder is not None:
+            self._recorder.start()
         return self
 
     def __exit__(self, exc_type: Any, exc_val: Any, exc_tb: Any) -> None:
-        pass
+        if self._recorder is not None:
+            self._recorder.close()

@@ -631,6 +631,10 @@ def plotly_circuit(view: Any) -> Any:
         margin=dict(l=70, r=40, t=100, b=50),
     )
 
+    for trace in fig.data:
+        if "markers" in (trace.mode or "") and trace.x is not None and len(trace.x) == 1:
+            trace.customdata = [int(trace.x[0]) + 1]
+            trace.meta = {"role": "operation"}
     return fig
 
 

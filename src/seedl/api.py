@@ -218,6 +218,15 @@ def see(
 
     # Handle tracker instances
     if isinstance(obj, Tracker):
+        if obj.snapshots:
+            if input is not None or slice is not None:
+                raise SeeDLError("Recorded playback does not accept input= or slice=.")
+            result = obj.playback(
+                backend=selected_backend,
+                color_by="gradient" if color_by == "gradient" else "activation",
+            )
+            _show_result(result)
+            return result
         obj = obj.history()
 
     if input is not None and not is_torch_module(obj):
@@ -585,14 +594,19 @@ def embeddings(
     return view
 
 
-def watch(model: Any | None = None, name: str = "run") -> Tracker:
-    """Create a lightweight metric and gradient tracker."""
-    return Tracker(name=name)
+def watch(model: Any | None = None, name: str = "run", **capture_options: Any) -> Tracker:
+    """Create a metric tracker; with a model, also record bounded training snapshots.
+
+    Capture options: max_snapshots=64, max_bytes=8 MiB, every=1,
+    max_values=2048, max_neurons=100, max_connections=1500, sample=0.
+    Use as a context manager and call capture() before optimizer.step().
+    """
+    return Tracker(name=name, model=model, **capture_options)
 
 
-def track(model: Any | None = None, name: str = "run") -> Tracker:
-    """Context manager for tracking training metrics across epochs or steps."""
-    return Tracker(name=name)
+def track(model: Any | None = None, name: str = "run", **capture_options: Any) -> Tracker:
+    """Alias of watch(); existing metric-only tracking remains supported."""
+    return watch(model=model, name=name, **capture_options)
 
 
 def attention(
@@ -735,6 +749,9 @@ def circuit(
     circuit: Any,
     *,
     simulate: bool = False,
+    max_qubits: int = 10,
+    max_ops: int = 500,
+    max_bytes: int = 32 * 1024 * 1024,
     theme: str = "scientific",
     backend: str = "auto",
 ) -> Visualization:
@@ -751,7 +768,9 @@ def circuit(
     data["theme"] = theme
     data["simulate"] = simulate
     if simulate:
-        data["evolution"] = simulate_circuit_evolution(circuit)
+        data["evolution"] = simulate_circuit_evolution(
+            circuit, max_qubits=max_qubits, max_ops=max_ops, max_bytes=max_bytes
+        )
     selected_backend = resolve_backend(backend)
     summary = f"Quantum Circuit: {data['num_qubits']} qubits · Depth {data['depth']} · {data['num_ops']} gates"
     notes = [
@@ -760,7 +779,9 @@ def circuit(
     ]
     if simulate:
         notes.append(
-            f"Statevector evolution calculated across {len(data['evolution'])} circuit steps."
+            f"Statevector evolution calculated across {len(data['evolution'])} circuit steps. "
+            "Playback shows before/after states; post-halt states are unavailable. "
+            "Basis charts show the first 64 states (full bounded state retained in data)."
         )
     result = Visualization(
         kind="quantum_circuit",

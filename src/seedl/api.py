@@ -48,7 +48,11 @@ def _summary(kind: str, data: dict[str, Any], metadata: dict[str, Any]) -> str:
         return f"Tabular dataset: {data.get('samples')} samples × {data.get('features')} features"
     if kind == "dataset_general":
         return f"Dataset with {data.get('count')} samples"
-    if kind in {"attention", "educational_attention"}:
+    if kind in {"feature_maps", "feature_comparison"}:
+        return str(
+            data.get("summary", metadata.get("Summary", f"{len(data.get('layers', []))} layer(s)"))
+        )
+    if kind in {"attention", "attention_comparison", "educational_attention"}:
         return f"Attention matrix ({data.get('seq_len')} tokens)"
     if kind == "embeddings":
         return f"Embeddings: {data.get('num_vectors')} vectors in {data.get('dim')}D"
@@ -121,8 +125,10 @@ def see(
         simulate: For quantum circuits, compute step-by-step statevector evolution.
     """
     _validate_max_points(max_points)
-    if view not in {"auto", "neurons", "3d", "architecture", "summary"}:
-        raise ValueError("view must be auto, neurons, 3d, architecture, or summary.")
+    if view not in {"auto", "neurons", "3d", "architecture", "summary", "features", "feature_maps"}:
+        raise ValueError(
+            "view must be auto, neurons, 3d, architecture, summary, features, or feature_maps."
+        )
     if theme not in {"light", "dark", "scientific", "minimal", "presentation"}:
         raise ValueError("theme must be light, dark, scientific, minimal, or presentation.")
     if color_by not in {"auto", "layer", "activation", "gradient"}:
@@ -183,7 +189,11 @@ def see(
             backend=backend,
         )
 
-    if view != "auto" and (not is_torch_module(obj) or compare is not None):
+    if (
+        view != "auto"
+        and view not in {"features", "feature_maps"}
+        and (not is_torch_module(obj) or compare is not None)
+    ):
         raise ValueError("Explicit view options require a model without compare=.")
     if view == "3d":
         if backend not in {"auto", "plotly"} or interactive is False:
@@ -199,6 +209,15 @@ def see(
     elif interactive is False and backend == "auto":
         backend = "svg"
     selected_backend = resolve_backend(backend)
+
+    if view in {"features", "feature_maps"}:
+        return features(
+            obj,
+            input=input,
+            batch_index=sample,
+            theme=theme,
+            backend=selected_backend,
+        )
 
     # Comparison shorthand: sd.see(model_a, compare=model_b)
     if compare is not None:
@@ -612,18 +631,124 @@ def track(model: Any | None = None, name: str = "run", **capture_options: Any) -
 def attention(
     weights: Any,
     *,
+    input: Any = None,
     tokens: list[str] | None = None,
+    query_tokens: list[str] | None = None,
+    key_tokens: list[str] | None = None,
     head: int | None = None,
+    compare_heads: tuple[int, int] | None = None,
+    batch_index: int = 0,
+    mask: Any = None,
+    max_seq_len: int = 256,
+    max_heads: int = 32,
+    theme: str = "scientific",
     backend: str = "auto",
 ) -> Visualization:
     """Visualize multi-head self-attention heatmaps, query-key tokens, and causal structure."""
     selected_backend = resolve_backend(backend)
     from ._transformers import inspect_attention
 
-    data, summary, notes = inspect_attention(weights, tokens=tokens, head=head)
+    data, summary, notes = inspect_attention(
+        weights,
+        input=input,
+        tokens=tokens,
+        query_tokens=query_tokens,
+        key_tokens=key_tokens,
+        head=head,
+        compare_heads=compare_heads,
+        batch_index=batch_index,
+        mask=mask,
+        max_seq_len=max_seq_len,
+        max_heads=max_heads,
+        theme=theme,
+    )
     view = Visualization(
         kind="attention",
         title="Transformer Attention",
+        summary=summary,
+        data=data,
+        notes=notes,
+        backend=selected_backend,
+    )
+    _show_result(view)
+    return view
+
+
+def features(
+    model_or_tensor: Any,
+    *,
+    input: Any = None,
+    layers: str | list[str] | None = None,
+    channel: int | None = None,
+    batch_index: int = 0,
+    max_channels: int = 64,
+    max_spatial_dim: int = 128,
+    theme: str = "scientific",
+    backend: str = "auto",
+) -> Visualization:
+    """Capture and interactively explore CNN feature maps, channel galleries, and spatial activations.
+
+    Supports PyTorch Conv2d modules, nested Sequential models, custom CNN modules,
+    and direct 4D/3D activation tensors [B, C, H, W] or [C, H, W].
+    """
+    selected_backend = resolve_backend(backend)
+    from ._features import capture_feature_maps
+
+    data, summary, notes = capture_feature_maps(
+        model_or_tensor,
+        example_input=input,
+        layers=layers,
+        channel=channel,
+        batch_index=batch_index,
+        max_channels=max_channels,
+        max_spatial_dim=max_spatial_dim,
+        theme=theme,
+    )
+    title = (
+        f"{type(model_or_tensor).__name__} Feature Maps"
+        if not hasattr(model_or_tensor, "ndim")
+        else "CNN Feature Maps"
+    )
+    view = Visualization(
+        kind="feature_maps",
+        title=title,
+        summary=summary,
+        data=data,
+        notes=notes,
+        backend=selected_backend,
+    )
+    _show_result(view)
+    return view
+
+
+feature_maps = features
+
+
+def vit_attention(
+    attention_weights: Any,
+    patch_grid: tuple[int, int],
+    *,
+    from_token: int = 0,
+    has_cls: bool = True,
+    head: int | None = None,
+    theme: str = "scientific",
+    backend: str = "auto",
+) -> Visualization:
+    """Reshape Vision Transformer token attention slice into a 2D spatial patch attention map."""
+    selected_backend = resolve_backend(backend)
+    from ._transformers import inspect_vit_attention
+
+    data, summary, notes = inspect_vit_attention(
+        attention_weights,
+        patch_grid=patch_grid,
+        from_token=from_token,
+        has_cls=has_cls,
+        head=head,
+        theme=theme,
+    )
+    view = Visualization(
+        kind="feature_maps",
+        title="ViT Patch Attention",
         summary=summary,
         data=data,
         notes=notes,

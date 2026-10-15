@@ -15,6 +15,8 @@ from .api import (
     embeddings,
     entanglement,
     explain,
+    feature_maps,
+    features,
     gradients,
     learn,
     loss_landscape,
@@ -22,6 +24,7 @@ from .api import (
     see,
     statevector,
     track,
+    vit_attention,
     watch,
 )
 from .exceptions import MissingDependencyError, SeeDLError, UnsupportedObjectError
@@ -46,6 +49,8 @@ __all__ = [
     "embeddings",
     "entanglement",
     "explain",
+    "feature_maps",
+    "features",
     "gradients",
     "learn",
     "loss_landscape",
@@ -53,6 +58,7 @@ __all__ = [
     "see",
     "statevector",
     "track",
+    "vit_attention",
     "watch",
 ]
 

@@ -73,13 +73,29 @@ sd.entanglement(bell_state)
 
 ---
 
-## 0.3.0 release preparation — not yet published
+## SeeDL 0.4.0 — Development Preview
 
-This source branch prepares **0.3.0**; it does not claim a PyPI release. The release adds bounded recording of real PyTorch training passes, 3D training playback with loss and gradient inspection, aligned before/after snapshot comparison, and quantum gate-by-gate before/after state inspection.
+This development branch introduces **Vision & Attention Intelligence** for SeeDL 0.4.0 (target milestone; currently in development, not yet published to PyPI). The current published release remains **0.3.0**.
 
-Use `with sd.watch(model) as run:` (or `sd.track`) and call `run.capture(step=..., epoch=..., loss=loss)` **after forward/backward and before `optimizer.step()`**. `run.playback()` / `sd.see(run)` provide inline playback; `.save("training.html")` exports offline controls. Compare retained observations with `sd.compare(run.snapshots[0], run.snapshots[-1])`. Quantum playback uses `sd.circuit(qc, simulate=True)` and marks post-measurement/reset states unavailable.
+### What's in 0.4.0 Development Preview:
+- **Interactive CNN Feature Map Explorer (`sd.features`)**:
+  - Genuine intermediate activations captured under `eval()` mode with zero autograd retention.
+  - Multi-channel gallery browsing, channel diagnostics (Min, Max, Mean, Sparsity, Signed ranges).
+  - Spatial coordinate inspection with live hover tooltips.
+  - Per-channel, layer-global, and zero-centered symmetric normalization modes.
+  - Aligned spatial feature map comparisons (`sd.compare`).
+- **Transformer Attention Explorer (`sd.attention`)**:
+  - Genuine multi-head attention matrix heatmaps ($Q_i \to K_j$).
+  - Individual head selection, averaged heads view, and head comparison ($Head_A \text{ vs } Head_B$).
+  - Query token selection with dynamic key attention distribution bar charts.
+  - Entropy focus metrics, causal mask detection, and cross-attention support ($seq_q \neq seq_k$).
+  - Transparent handling of `nn.MultiheadAttention` and user-supplied attention tensors without unverified assumptions.
+- **Vision Transformer (ViT) Patch Attention (`sd.vit_attention`)**:
+  - Reshapes token attention vectors (e.g. `[CLS]`) into authentic 2D spatial patch attention heatmaps.
+- **Offline Self-Contained HTML Exports**:
+  - Export responsive offline HTML files with full client-side interactivity, zero external CDN dependencies, and minimal payload size.
 
-Read the [0.3.0 release notes](docs/RELEASE_NOTES_0.3.0.md), [API, bounds and limitations](docs/live-neural-intelligence.md) and [runnable MLP / quantum example](examples/live_neural_intelligence.py). Snapshot count, retained bytes and HTML payloads are bounded; missing data stays unavailable. New CNN feature-explorer controls are deferred.
+See the [Vision & Attention Intelligence Documentation](docs/vision-attention-intelligence.md) and runnable examples in `examples/cnn_feature_explorer.py` and `examples/transformer_attention_explorer.py`.
 
 ---
 

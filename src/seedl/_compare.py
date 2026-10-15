@@ -33,6 +33,58 @@ def compare_objects(
         from ._snapshot_compare import compare_snapshots
 
         return compare_snapshots(obj_a, obj_b, names)
+
+    from .view import Visualization
+
+    if isinstance(obj_a, Visualization) and isinstance(obj_b, Visualization):
+        if obj_a.kind == "feature_maps" and obj_b.kind == "feature_maps":
+            from ._features import compare_feature_maps
+
+            data, summary, notes = compare_feature_maps(obj_a, obj_b, names=names)
+            return "feature_comparison", data, summary, notes
+
+        if obj_a.kind in {"attention", "educational_attention"} and obj_b.kind in {
+            "attention",
+            "educational_attention",
+        }:
+            from ._transformers import compare_attention_heads
+
+            mat_a = obj_a.data.get("matrix", [])
+            mat_b = obj_b.data.get("matrix", [])
+            q_toks = obj_a.data.get("query_tokens", obj_a.data.get("tokens", []))
+            k_toks = obj_a.data.get("key_tokens", obj_a.data.get("tokens", []))
+            cmp_res = compare_attention_heads([mat_a, mat_b], 0, 1, q_toks, k_toks, False)
+            cmp_res["names"] = names
+            summary = (
+                f"Attention Comparison: {names[0]} vs {names[1]} · "
+                f"MAE: {cmp_res['mae']:.4f} · Cosine Sim: {cmp_res['cosine_similarity']:.4f}"
+            )
+            notes = [
+                f"Comparing attention matrices: {names[0]} vs {names[1]}.",
+                f"Frobenius norm of difference: {cmp_res['frobenius_norm']:.4f}.",
+                f"Mean absolute difference: {cmp_res['mae']:.4f}.",
+            ]
+            payload = {
+                "presentation": "attention",
+                "matrix": cmp_res["diff_matrix"],
+                "all_heads": [mat_a, mat_b],
+                "query_tokens": q_toks,
+                "key_tokens": k_toks,
+                "head_comparison": cmp_res,
+                "num_heads": 2,
+                "captured_heads": 2,
+            }
+            return "attention_comparison", payload, summary, notes
+
+    # 4D CNN feature map tensors
+    ndim_a = getattr(obj_a, "ndim", None)
+    ndim_b = getattr(obj_b, "ndim", None)
+    if ndim_a == 4 and ndim_b == 4:
+        from ._features import compare_feature_maps
+
+        data, summary, notes = compare_feature_maps(obj_a, obj_b, names=names)
+        return "feature_comparison", data, summary, notes
+
     torch = _torch()
 
     # Model comparison

@@ -56,6 +56,47 @@ def render(view: Visualization, backend: str) -> Any:
 
         resolve_backend("plotly")
         return render_spatial(view)
+    if view.kind == "feature_maps":
+        from ._features import matplotlib_features, plotly_features, svg_features
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_features(view)
+        if backend == "matplotlib":
+            return matplotlib_features(view)
+        return svg_features(view)
+    if view.kind == "feature_comparison":
+        from ._features import (
+            matplotlib_feature_comparison,
+            plotly_feature_comparison,
+            svg_feature_comparison,
+        )
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_feature_comparison(view)
+        if backend == "matplotlib":
+            return matplotlib_feature_comparison(view)
+        return svg_feature_comparison(view)
+    if (
+        view.kind in {"attention", "attention_comparison"}
+        and view.data.get("presentation") == "attention"
+    ):
+        from ._transformers import (
+            matplotlib_attention,
+            plotly_attention,
+            plotly_attention_comparison,
+            svg_attention,
+            svg_attention_comparison,
+        )
+
+        resolve_backend(backend)
+        is_cmp = view.data.get("head_comparison") and view.data["head_comparison"].get("available")
+        if backend == "plotly":
+            return plotly_attention_comparison(view) if is_cmp else plotly_attention(view)
+        if backend == "matplotlib":
+            return matplotlib_attention(view)
+        return svg_attention_comparison(view) if is_cmp else svg_attention(view)
     if view.kind == "model" and view.data.get("presentation") == "cnn_3d":
         from ._cnn_spatial import plotly_cnn_3d, svg_cnn_3d
 

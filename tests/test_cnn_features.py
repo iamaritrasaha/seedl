@@ -274,3 +274,60 @@ def test_cnn_pure_python_list_bounded_capture():
     assert view.data["layers"][0]["channels"][0]["h"] == 64
     assert view.data["layers"][0]["channels"][0]["w"] == 64
     assert view.data["layers"][0]["original_spatial"] == (200, 200)
+
+
+def test_cnn_mixed_submodule_training_modes_preserved():
+    """Verify that every module's individual training flag is preserved when inspecting mixed models."""
+
+    class MixedModel(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.conv1 = nn.Conv2d(1, 4, 3, padding=1)
+            self.conv2 = nn.Conv2d(4, 4, 3, padding=1)
+
+        def forward(self, x):
+            return self.conv2(self.conv1(x))
+
+    model = MixedModel()
+    model.train(True)
+    model.conv2.eval()  # Explicit child in eval mode
+
+    assert model.training is True
+    assert model.conv1.training is True
+    assert model.conv2.training is False
+
+    sd.features(model, input=torch.randn(1, 1, 8, 8))
+
+    # All original flags must be precisely preserved
+    assert model.training is True
+    assert model.conv1.training is True
+    assert model.conv2.training is False
+
+
+@pytest.mark.parametrize(
+    "shape,expected_downsampled,expected_h,expected_w",
+    [
+        ((1, 1, 1, 256), True, 1, 128),
+        ((1, 1, 256, 1), True, 128, 1),
+        ((1, 1, 1, 1), False, 1, 1),
+    ],
+)
+def test_cnn_singleton_spatial_dimensions(shape, expected_downsampled, expected_h, expected_w):
+    """Verify feature maps with singleton spatial dimensions downsample and render cleanly."""
+    t = torch.randn(*shape)
+    view = sd.features(t, max_spatial_dim=128)
+
+    layer = view.data["layers"][0]
+    ch = layer["channels"][0]
+
+    assert layer["downsampled"] is expected_downsampled
+    assert layer["original_spatial"] == (shape[2], shape[3])
+    assert ch["h"] == expected_h
+    assert ch["w"] == expected_w
+    assert len(ch["grid"]) == expected_h
+    assert len(ch["grid"][0]) == expected_w
+
+    # Renderers must not crash
+    assert "<svg" in view.to_figure("svg")
+    assert view.to_figure("plotly") is not None
+    assert view.to_figure("matplotlib") is not None

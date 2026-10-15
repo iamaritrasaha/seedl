@@ -1,6 +1,6 @@
 # SeeDL 0.4.0 — Vision & Attention Intelligence
 
-Welcome to the **SeeDL 0.4.0 Development Preview**. This milestone expands SeeDL with interactive visual intelligence for Convolutional Neural Network (CNN) feature maps, Transformer multi-head attention routing, and intermediate neural representations.
+SeeDL 0.4.0 introduces interactive visual intelligence for Convolutional Neural Network (CNN) feature maps, Transformer multi-head attention routing, and intermediate neural representations.
 
 ---
 

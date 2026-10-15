@@ -73,11 +73,11 @@ sd.entanglement(bell_state)
 
 ---
 
-## SeeDL 0.4.0 — Development Preview
+## SeeDL 0.4.0 — Vision & Attention Intelligence (Release Preparation)
 
-This development branch introduces **Vision & Attention Intelligence** for SeeDL 0.4.0 (target milestone; currently in development, not yet published to PyPI). The current published release remains **0.3.0**.
+SeeDL 0.4.0 introduces **Vision & Attention Intelligence** for interactive CNN feature-map exploration, Multi-Head Transformer attention, and Vision Transformer patch routing.
 
-### What's in 0.4.0 Development Preview:
+### Key Capabilities in 0.4.0:
 - **Interactive CNN Feature Map Explorer (`sd.features`)**:
   - Genuine intermediate activations captured under `eval()` mode with zero autograd retention.
   - Multi-channel gallery browsing, channel diagnostics (Min, Max, Mean, Sparsity, Signed ranges).
@@ -88,8 +88,8 @@ This development branch introduces **Vision & Attention Intelligence** for SeeDL
   - Genuine multi-head attention matrix heatmaps ($Q_i \to K_j$).
   - Individual head selection, averaged heads view, and head comparison ($Head_A \text{ vs } Head_B$).
   - Query token selection with dynamic key attention distribution bar charts.
-  - Entropy focus metrics, causal mask detection, and cross-attention support ($seq_q \neq seq_k$).
-  - Transparent handling of `nn.MultiheadAttention` and user-supplied attention tensors without unverified assumptions.
+  - Mathematically validated Shannon entropy, causal mask detection, and cross-attention support ($seq_q \neq seq_k$).
+  - Transparent handling of `nn.MultiheadAttention`, explicit 3D tensor disambiguation, and user-supplied attention masks.
 - **Vision Transformer (ViT) Patch Attention (`sd.vit_attention`)**:
   - Reshapes token attention vectors (e.g. `[CLS]`) into authentic 2D spatial patch attention heatmaps.
 - **Offline Self-Contained HTML Exports**:

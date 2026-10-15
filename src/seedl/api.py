@@ -645,7 +645,28 @@ def attention(
     theme: str = "scientific",
     backend: str = "auto",
 ) -> Visualization:
-    """Visualize multi-head self-attention heatmaps, query-key tokens, and causal structure."""
+    """Visualize multi-head self-attention heatmaps, query-key tokens, and causal structure.
+
+    Parameters:
+        weights: PyTorch tensor [heads, L, S], [B, heads, L, S], [L, S], or
+            torch.nn.MultiheadAttention module (with input=...).
+        input: Required when passing an nn.MultiheadAttention module. PyTorch MHA
+            defaults to average_attn_weights=True; SeeDL requests per-head weights
+            (average_attn_weights=False) when supported to expose individual heads.
+        tokens: Token labels for square self-attention sequences.
+        query_tokens: Token labels for query sequence (rows).
+        key_tokens: Token labels for key sequence (columns).
+        head: Selected attention head index (default None displays average of heads).
+        compare_heads: Optional tuple of (head_a, head_b) for head comparison.
+        batch_index: Batch index to inspect for batched tensors (default 0).
+        is_batched: Disambiguate 3D tensors: True for [B, L, S] (averaged across heads),
+            False for [heads, L, S] (per-head attention).
+        mask: Optional attention mask matrix [L, S] or key padding mask [S].
+        max_seq_len: Bounded sequence length limit (default 256).
+        max_heads: Maximum heads to capture/preview (default 32).
+        theme: UI theme ('scientific', 'light', 'dark').
+        backend: Rendering backend ('auto', 'plotly', 'svg', 'matplotlib').
+    """
     selected_backend = resolve_backend(backend)
     from ._transformers import inspect_attention
 

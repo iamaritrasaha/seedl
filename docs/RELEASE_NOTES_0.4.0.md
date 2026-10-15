@@ -146,3 +146,14 @@ diff_view.save("feature_comparison.html")
 - Requires **Python 3.10+**.
 - **Zero mandatory dependencies**: Core functionality requires no third-party packages. `torch`, `numpy`, `plotly`, `matplotlib`, and `qiskit` remain optional extras.
 - Full backward compatibility: All SeeDL 0.3.0 training playback (`sd.watch`), quantum gate evolution (`sd.circuit`), MLP 3D exploration, metric tracking, and export APIs remain fully supported.
+
+---
+
+## Verification & Testing Results
+
+- **Full Test Suite**: **373 passed, 1 skipped** on Python 3.13 (1 accelerator-only test skipped because CUDA/ROCm is not available in the CPU test environment; no GPU testing is claimed).
+- **Multi-Version Wheel Compatibility**: Clean wheel installations passed core import, version verification, SVG rendering, and zero-mandatory-dependency checks on **Python 3.10, 3.11, 3.12, and 3.13**.
+- **Source Distribution**: A clean sdist installation passed all core zero-dependency checks on **Python 3.13**.
+- **Code Quality & Packaging**: Ruff lint/format, mypy type checks, `uv lock --check`, `twine check --strict`, and `scripts/verify_release.py --tag v0.4.0 --check-dist` passed cleanly.
+- **Website Compatibility**: Verified isolated build and provenance checks (`generate.py` and `check.py`) using published `seedl==0.3.0`.
+- **Status**: Release candidate prepared locally for review; unpushed, untagged, and not yet published to PyPI.

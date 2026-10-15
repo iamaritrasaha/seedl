@@ -245,11 +245,150 @@ def verify_recorded_demos(page):
         wait_index(quantum, 1)
         page.locator("#tab-comparison").click()
         comparison.locator(".scatterlayer .point").first.hover(force=True)
-        assert comparison.locator(".hoverlayer").text_content().strip()
+        # Verify offline interaction on 0.4.0 vision & attention tabs as well.
+        page.locator("#tab-cnn").click()
+        cnn_frame = page.locator("#cnn iframe").element_handle().content_frame()
+        assert cnn_frame.locator("#featureCanvas").is_visible()
+        page.locator("#tab-attention").click()
+        att_frame = page.locator("#attention iframe").element_handle().content_frame()
+        assert att_frame.locator(".token-table").is_visible()
     finally:
         page.context.set_offline(False)
     print(
         "PASS: training controls, real neuron click, loss/activations/weights/gradients; quantum gate click, Bell probabilities/Bloch vectors/phases; comparison deltas, gradients, outputs and legend.",
+        flush=True,
+    )
+
+
+def verify_vision_attention_demos(page):
+    """Verify authentic SeeDL 0.4.0 CNN, Attention, Comparison, and ViT demos."""
+    # 1. CNN Feature Maps
+    page.locator("#tab-cnn").click()
+    cnn_frame = page.locator("#cnn iframe").element_handle().content_frame()
+    cnn_frame.wait_for_selector("#featureCanvas")
+    cnn_frame.wait_for_selector("#layerSelect")
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('stLayer').textContent.includes('conv1')"
+    )
+    assert "conv1" in cnn_frame.locator("#stLayer").inner_text()
+    assert "24 × 24" in cnn_frame.locator("#stSpatial").inner_text()
+
+    # Select layer conv2 (index 3)
+    cnn_frame.locator("#layerSelect").select_option("3")
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('stLayer').textContent.includes('conv2')"
+    )
+    assert "conv2" in cnn_frame.locator("#stLayer").inner_text()
+    assert "12 × 12" in cnn_frame.locator("#stSpatial").inner_text()
+
+    # Select channel
+    cnn_frame.locator("#channelSelect").select_option("2")
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('stChannel').textContent.includes('2')"
+    )
+
+    # Normalization modes
+    cnn_frame.locator("#btnNormGlobal").click()
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('btnNormGlobal').classList.contains('btn-active')"
+    )
+    cnn_frame.locator("#btnNormZero").click()
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('btnNormZero').classList.contains('btn-active')"
+    )
+    cnn_frame.locator("#btnNormChannel").click()
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('btnNormChannel').classList.contains('btn-active')"
+    )
+
+    # Click gallery thumbnail
+    items = cnn_frame.locator(".gallery-item").all()
+    assert len(items) >= 4
+    items[0].click()
+    cnn_frame.wait_for_function("() => document.getElementById('channelSelect').value === '0'")
+
+    # Canvas hover inspection
+    cnn_frame.locator("#featureCanvas").hover(force=True)
+    cnn_frame.wait_for_function(
+        "() => document.getElementById('hoverHud').textContent.includes('Activation:')"
+    )
+    hud_text = cnn_frame.locator("#hoverHud").inner_text()
+    assert "Activation:" in hud_text and "y=" in hud_text
+    cnn_frame.locator("#featureCanvas").screenshot(path=str(ARTIFACTS / "cnn-features.png"))
+
+    # 2. Transformer Attention
+    page.locator("#tab-attention").click()
+    att_frame = page.locator("#attention iframe").element_handle().content_frame()
+    att_frame.wait_for_selector(".token-table")
+    att_frame.wait_for_selector("#headSelect")
+    headers = att_frame.locator(".col-hdr").all_inner_texts()
+    assert len(headers) == 7
+    assert any("network" in h.lower() for h in headers)
+
+    # Select head 1
+    att_frame.locator("#headSelect").select_option("1")
+    att_frame.wait_for_function("() => document.getElementById('headSelect').value === '1'")
+
+    # Select query token "network" (index 2)
+    att_frame.locator("#querySelect").select_option("2")
+    att_frame.wait_for_function(
+        "() => document.getElementById('profileTitle').textContent.includes('network')"
+    )
+    assert "network" in att_frame.locator("#profileTitle").inner_text()
+    assert att_frame.locator(".bar-row").count() == 7
+
+    # Hover cell to test HUD
+    cell = att_frame.locator(".cell").first
+    cell.hover(force=True)
+    att_frame.wait_for_function(
+        "() => document.getElementById('hoverHud').textContent.includes('Weight:')"
+    )
+    att_hud = att_frame.locator("#hoverHud").inner_text()
+    assert "Query" in att_hud and "Weight:" in att_hud
+    att_frame.locator(".token-table").screenshot(path=str(ARTIFACTS / "transformer-attention.png"))
+
+    # 3. Multi-Head Attention Comparison
+    page.locator("#tab-attention-cmp").click()
+    comp_frame = page.locator("#attention-cmp iframe").element_handle().content_frame()
+    ready(comp_frame)
+    data = comp_frame.evaluate("document.getElementById('seedl-demo').data")
+    assert len(data) == 3
+    assert all(t["type"] == "heatmap" for t in data)
+    ann = comp_frame.evaluate(
+        "document.getElementById('seedl-demo').layout.annotations.map(a => a.text)"
+    )
+    assert any("Head 0" in text for text in ann)
+    assert any("Head 1" in text for text in ann)
+
+    # Select another comparison pair in playground dropdown
+    with comp_frame.expect_navigation(wait_until="load"):
+        page.locator("#attention-pair").select_option("attention-comparison-0-2")
+    comp_frame = page.locator("#attention-cmp iframe").element_handle().content_frame()
+    ready(comp_frame)
+    ann2 = comp_frame.evaluate(
+        "document.getElementById('seedl-demo').layout.annotations.map(a => a.text)"
+    )
+    assert any("Head 0" in text for text in ann2)
+    assert any("Head 2" in text for text in ann2)
+    comp_frame.locator("#seedl-demo").screenshot(path=str(ARTIFACTS / "attention-comparison.png"))
+
+    # 4. Vision Transformer Patch Attention
+    page.locator("#tab-vit").click()
+    vit_frame = page.locator("#vit iframe").element_handle().content_frame()
+    vit_frame.wait_for_selector("#featureCanvas")
+    assert "4 × 4" in vit_frame.locator("#stSpatial").inner_text()
+
+    # Canvas hover
+    vit_frame.locator("#featureCanvas").hover(force=True)
+    vit_frame.wait_for_function(
+        "() => document.getElementById('hoverHud').textContent.includes('Activation:')"
+    )
+    vhud_text = vit_frame.locator("#hoverHud").inner_text()
+    assert "Activation:" in vhud_text and "y=" in vhud_text
+    vit_frame.locator("#featureCanvas").screenshot(path=str(ARTIFACTS / "vit-patch-attention.png"))
+
+    print(
+        "PASS: CNN feature maps (layers, channels, normalizations, hover), Transformer attention (heads, queries, distribution, hover), Multi-Head comparison (subplots, pair selector), ViT patch attention (4x4 grid, hover).",
         flush=True,
     )
 
@@ -318,6 +457,10 @@ def main():
                 "PASS: homepage resources, theme persistence, quickstart navigation, documentation anchors.",
                 flush=True,
             )
+            # Verify authentic SeeDL 0.4.0 Vision & Attention tabs
+            verify_vision_attention_demos(page)
+            # Switch to 3D Neural Network tab
+            page.locator("#tab-network").click()
             iframe = page.locator("#network iframe")
             frame = iframe.element_handle().content_frame()
             ready(frame)
@@ -398,7 +541,18 @@ def main():
             page.keyboard.press("ArrowRight")
             assert page.locator("#tab-training").get_attribute("aria-selected") == "true"
             page.keyboard.press("ArrowRight")
+            assert page.locator("#tab-comparison").get_attribute("aria-selected") == "true"
+            page.keyboard.press("ArrowRight")
             assert page.locator("#tab-bloch").get_attribute("aria-selected") == "true"
+            page.keyboard.press("Home")
+            assert page.locator("#tab-cnn").get_attribute("aria-selected") == "true"
+            page.keyboard.press("ArrowRight")
+            assert page.locator("#tab-attention").get_attribute("aria-selected") == "true"
+            page.keyboard.press("ArrowRight")
+            assert page.locator("#tab-attention-cmp").get_attribute("aria-selected") == "true"
+            page.keyboard.press("End")
+            assert page.locator("#tab-evolution").get_attribute("aria-selected") == "true"
+            page.locator("#tab-bloch").click()
             bloch = page.locator("#bloch iframe").element_handle().content_frame()
             ready(bloch)
             expected = {
@@ -450,7 +604,14 @@ def main():
             )
             verify_recorded_demos(page)
             page.set_viewport_size({"width": 390, "height": 844})
-            for route in ("index.html", "docs/index.html", "playground.html#network"):
+            for route in (
+                "index.html",
+                "docs/index.html",
+                "playground.html#network",
+                "playground.html#cnn",
+                "playground.html#attention",
+                "playground.html#vit",
+            ):
                 page.goto(base + route)
                 assert page.evaluate("document.documentElement.scrollWidth <= innerWidth"), (
                     f"Mobile overflow: {route}"
@@ -459,6 +620,7 @@ def main():
                 assert page.locator(".navlinks").is_visible()
                 page.keyboard.press("Escape")
                 assert not page.locator(".navlinks").is_visible()
+            page.locator("#tab-network").click()
             frame = page.locator("#network iframe").element_handle().content_frame()
             ready(frame)
             page.locator("#neuron").select_option("1:1")

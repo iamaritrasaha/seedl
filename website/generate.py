@@ -1,4 +1,4 @@
-"""Build deterministic SeeDL 0.3.0 demos; no server or CDN is needed at runtime.
+"""Build deterministic SeeDL 0.4.0 demos; no server or CDN is needed at runtime.
 
 Run from the repository root: .venv/bin/python website/generate.py
 """
@@ -26,6 +26,21 @@ from seedl._network_renderers import build_network_interactive_js
 from seedl._playback import playback_html
 
 ROOT = Path(__file__).resolve().parent
+
+
+class DemoCNN(torch.nn.Module):
+    """Small deterministic CNN with Conv2d, ReLU, and MaxPool2d."""
+
+    def __init__(self):
+        super().__init__()
+        self.conv1 = torch.nn.Conv2d(3, 8, kernel_size=3, padding=1)
+        self.relu1 = torch.nn.ReLU()
+        self.pool1 = torch.nn.MaxPool2d(2, 2)
+        self.conv2 = torch.nn.Conv2d(8, 16, kernel_size=3, padding=1)
+        self.relu2 = torch.nn.ReLU()
+
+    def forward(self, x):
+        return self.relu2(self.conv2(self.pool1(self.relu1(self.conv1(x)))))
 
 
 def training_example():
@@ -95,7 +110,7 @@ def export_playback(view, name):
     document = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{name} · SeeDL 0.3.0</title>"
+        f"<title>{name} · SeeDL 0.4.0</title>"
         '<script src="../assets/plotly.min.js"></script>'
         '<link rel="stylesheet" href="../assets/playback.css">'
         f"</head><body>{body}</body></html>"
@@ -135,8 +150,12 @@ def export(view, name: str, *, network: bool = False) -> None:
 
 
 def main() -> None:
-    if sd.__version__ != "0.3.0":
-        raise RuntimeError("Build these demos with the SeeDL 0.3.0 checkout.")
+    if sd.__version__ != "0.4.0":
+        raise RuntimeError(f"Build these demos with SeeDL 0.4.0, found {sd.__version__}.")
+    assert "site-packages" in str(Path(sd.__file__).resolve()), (
+        f"SeeDL must be imported from installed package, got {sd.__file__}"
+    )
+
     (ROOT / "demos").mkdir(exist_ok=True)
     (ROOT / "assets" / "plotly.min.js").write_text(plotly.offline.get_plotlyjs())
     shutil.copyfile(ROOT.parent / "docs/visuals/network-3d.jpg", ROOT / "assets/network.jpg")
@@ -145,6 +164,8 @@ def main() -> None:
         "The copyright and license notice are included in plotly.min.js.\n"
         "https://github.com/plotly/plotly.js/blob/master/LICENSE\n"
     )
+
+    # 1. 3D Neural Network (MLP)
     torch.manual_seed(20)
     model = torch.nn.Sequential(
         torch.nn.Linear(3, 5),
@@ -156,6 +177,7 @@ def main() -> None:
     sample = torch.tensor([[0.8, -0.4, 0.6]])
     neural = sd.see(model, input=sample, view="3d", theme="scientific", backend="plotly")
     export(neural, "network", network=True)
+
     manifest = {
         "seedl": sd.__version__,
         "torch": torch.__version__,
@@ -171,6 +193,8 @@ def main() -> None:
             "edges": len(neural.data["neuron_graph"]["edges"]),
         },
     }
+
+    # 2. Bloch Spheres (6 presets)
     expected = {
         "0": (0, 0, 1),
         "1": (0, 0, -1),
@@ -201,6 +225,8 @@ def main() -> None:
             "prob_0": view.data["prob_0"],
             "prob_1": view.data["prob_1"],
         }
+
+    # 3. Quantum Circuit & Entanglement
     qc = QuantumCircuit(2)
     qc.h(0)
     qc.cx(0, 1)
@@ -211,6 +237,8 @@ def main() -> None:
     bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
     ent = sd.entanglement(bell, backend="svg")
     manifest["bell"] = {"amplitudes": bell, "entanglement": ent.data}
+
+    # 4. Training Playback & Comparison
     run = training_example()
     export_playback(run.playback(backend="plotly"), "training")
     comparison = sd.compare(
@@ -233,26 +261,121 @@ def main() -> None:
         "snapshots": [snapshot.data for snapshot in run.snapshots],
         "comparison": comparison.data,
     }
+
+    # 5. Quantum State Evolution
     evolution = sd.circuit(qc, simulate=True, backend="plotly", theme="scientific")
     verify_evolution(evolution, qc)
     export_playback(evolution, "evolution")
-    # A phase gate makes the phase chart meaningful while preserving Bell probabilities.
     phased = qc.copy()
     phased.rz(math.pi / 2, 1)
     phase_view = sd.circuit(phased, simulate=True, backend="plotly", theme="scientific")
     verify_evolution(phase_view, phased)
     export_playback(phase_view, "evolution-phase")
     manifest["evolution"] = {"bell": evolution.data, "phase": phase_view.data}
+
+    # =========================================================================
+    # 6. CNN Feature Maps Explorer (NEW in SeeDL 0.4.0)
+    # =========================================================================
+    torch.manual_seed(42)
+    cnn_model = DemoCNN().eval()
+    cnn_sample = torch.randn(1, 3, 24, 24)
+    cnn_view = sd.features(cnn_model, input=cnn_sample)
+    cnn_view.save(ROOT / "demos/cnn-features.html")
+    (ROOT / "assets/cnn-features.svg").write_text(cnn_view.to_figure("svg"))
+
+    manifest["cnn"] = {
+        "seed": 42,
+        "input_shape": list(cnn_sample.shape),
+        "captured_layers": len(cnn_view.data["layers"]),
+        "layers": [
+            {
+                "name": layer["name"],
+                "type": layer["type"],
+                "shape": list(layer["original_shape"]),
+                "channels": len(layer["channels"]),
+                "downsampled": layer["downsampled"],
+                "stats": layer["layer_stats"],
+            }
+            for layer in cnn_view.data["layers"]
+        ],
+    }
+
+    # =========================================================================
+    # 7. Transformer Attention Explorer (NEW in SeeDL 0.4.0)
+    # =========================================================================
+    torch.manual_seed(42)
+    tokens = ["The", "neural", "network", "attends", "to", "these", "tokens"]
+    mha = torch.nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
+    attn_x = torch.randn(1, len(tokens), 16)
+    _, attn_weights = mha(attn_x, attn_x, attn_x, need_weights=True, average_attn_weights=False)
+    attn_view = sd.attention(attn_weights, tokens=tokens)
+    attn_view.save(ROOT / "demos/attention.html")
+    (ROOT / "assets/attention.svg").write_text(attn_view.to_figure("svg"))
+
+    manifest["attention"] = {
+        "seed": 42,
+        "tokens": tokens,
+        "num_heads": 4,
+        "weights_shape": list(attn_weights.shape),
+        "mean_entropy": attn_view.data["mean_entropy"],
+        "is_causal": attn_view.data["is_causal"],
+        "is_softmax": attn_view.data["is_softmax"],
+        "head_stats": attn_view.data["head_stats"],
+    }
+
+    # =========================================================================
+    # 8. Multi-Head Attention Comparisons (NEW in SeeDL 0.4.0)
+    # =========================================================================
+    cmp_pairs = [(0, 1), (0, 2), (1, 2), (2, 3)]
+    manifest["attention_comparison"] = {"pairs": {}}
+    for ha, hb in cmp_pairs:
+        cmp_v = sd.attention(attn_weights, tokens=tokens, compare_heads=(ha, hb), backend="plotly")
+        slug = "attention-comparison" if (ha, hb) == (0, 1) else f"attention-comparison-{ha}-{hb}"
+        export(cmp_v, slug)
+        h_cmp = cmp_v.data["head_comparison"]
+        manifest["attention_comparison"]["pairs"][f"{ha}-{hb}"] = {
+            "head_a": h_cmp["head_a"],
+            "head_b": h_cmp["head_b"],
+            "mae": h_cmp["mae"],
+            "frobenius_norm": h_cmp["frobenius_norm"],
+            "cosine_similarity": h_cmp["cosine_similarity"],
+            "max_abs_diff": h_cmp["max_abs_diff"],
+        }
+
+    # =========================================================================
+    # 9. Vision Transformer Patch Attention (NEW in SeeDL 0.4.0)
+    # =========================================================================
+    torch.manual_seed(42)
+    mha_vit = torch.nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
+    vit_q = torch.randn(1, 17, 16)
+    _, vit_weights = mha_vit(vit_q, vit_q, vit_q, need_weights=True, average_attn_weights=False)
+    vit_view = sd.vit_attention(vit_weights, patch_grid=(4, 4), from_token=0, has_cls=True)
+    vit_view.save(ROOT / "demos/vit-attention.html")
+    (ROOT / "assets/vit-attention.svg").write_text(vit_view.to_figure("svg"))
+
+    manifest["vit"] = {
+        "seed": 42,
+        "patch_grid": [4, 4],
+        "from_token": 0,
+        "has_cls": True,
+        "attention_shape": list(vit_weights.shape),
+        "stats": vit_view.data["layers"][0]["channels"][0]["stats"],
+        "grid": vit_view.data["layers"][0]["channels"][0]["grid"],
+    }
+
+    # Hash all generated HTML demos
     manifest["sha256"] = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted((ROOT / "demos").glob("*.html"))
     }
     (ROOT / "demos/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (ROOT / ".nojekyll").touch()
-    print(f"Built {len(manifest['sha256'])} authentic SeeDL demos; one shared Plotly bundle.")
+    print(f"Built {len(manifest['sha256'])} authentic SeeDL 0.4.0 demos; one shared Plotly bundle.")
 
 
 if __name__ == "__main__":
     with contextlib.redirect_stdout(io.StringIO()):
         main()
-    print("Built 12 SeeDL 0.3.0 demos, 16 training snapshots, and one shared local Plotly bundle.")
+    print(
+        "Built authentic SeeDL 0.4.0 demonstrations, training snapshots, and shared Plotly bundle."
+    )

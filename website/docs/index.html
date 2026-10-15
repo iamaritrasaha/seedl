@@ -39,7 +39,8 @@ mha = torch.nn.MultiheadAttention(
     batch_first=True,
 )
 
-x = torch.randn(1, 5, 16)
+tokens = [&quot;The&quot;, &quot;model&quot;, &quot;attends&quot;, &quot;to&quot;, &quot;tokens&quot;]
+x = torch.randn(1, len(tokens), 16)
 
 output, weights = mha(
     x, x, x,
@@ -47,11 +48,11 @@ output, weights = mha(
     average_attn_weights=False,
 )
 
-view = sd.attention(weights)
+view = sd.attention(weights, tokens=tokens)
 view.save(&quot;attention.html&quot;)</code></pre><p class="notice">Attention visualizations display observed routing weights P(K_j | Q_i), not causal explanations of model decisions or proofs of feature importance. Values are genuine and form a valid probability distribution where rows sum to ~1.0 with non-negative weights.</p><p><a href="../playground.html#attention">Explore Transformer attention →</a></p>
 
 <h2 id="head-comparison">Multi-Head Attention Comparison</h2><p>Compare routing shifts between any two heads side-by-side using SeeDL's built-in comparison engine. Evaluates the difference matrix, Mean Absolute Error (MAE), Frobenius norm of difference, and Cosine Similarity.</p><pre><code># Continue from attention weights above.
-cmp_view = sd.attention(weights, compare_heads=(0, 1), backend=&quot;plotly&quot;)
+cmp_view = sd.attention(weights, tokens=tokens, compare_heads=(0, 1), backend=&quot;plotly&quot;)
 cmp_view.save(&quot;attention_comparison.html&quot;)
 print(cmp_view.data[&quot;head_comparison&quot;][&quot;mae&quot;])
 print(cmp_view.data[&quot;head_comparison&quot;][&quot;cosine_similarity&quot;])</code></pre><p><a href="../playground.html#attention-cmp">Try the multi-head comparison →</a></p>

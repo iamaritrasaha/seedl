@@ -13,3 +13,11 @@ wheels/
 docs/visuals/*.html
 artifacts/
 examples/artifacts/
+
+# Reproducible website assets: python website/generate.py
+website/demos/
+website/assets/plotly.min.js
+website/assets/plotly-LICENSE.txt
+website/assets/network.jpg
+website/assets/bloch.svg
+website/assets/bell.svg

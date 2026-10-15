@@ -39,6 +39,8 @@ def _color_field(graph: dict[str, Any]) -> str | None:
 
 
 def _scale(graph: dict[str, Any]) -> float:
+    if graph.get("color_scale"):
+        return float(graph["color_scale"])
     field = _color_field(graph)
     return (
         max((abs(n[field]) for n in graph["nodes"] if field and n[field] is not None), default=1)
@@ -229,7 +231,9 @@ def plotly_network(view: Any) -> Any:
     trace_type = go.Scatter3d if spatial else go.Scatter
     figure = go.Figure()
     lookup = {n["id"]: n for n in graph["nodes"]}
-    scale = max((abs(e["weight"]) for e in graph["edges"]), default=1) or 1
+    scale = (
+        graph.get("weight_scale") or max((abs(e["weight"]) for e in graph["edges"]), default=1) or 1
+    )
     groups: dict[tuple[int, int, int], list[dict[str, Any]]] = {}
     for edge in graph["edges"]:
         groups.setdefault(
@@ -578,7 +582,9 @@ def plotly_network(view: Any) -> Any:
     # For compact models (<= 36 nodes), provide buttons for all individual neurons.
     # For large models (> 36 nodes), provide Overview and the selected neuron (if chosen),
     # preventing megabytes of redundant trace coordinate payloads across 80+ buttons.
-    if len(graph["nodes"]) <= 36:
+    if graph.get("playback"):
+        nodes_for_buttons = []
+    elif len(graph["nodes"]) <= 36:
         nodes_for_buttons = graph["nodes"]
     elif selected_node is not None:
         nodes_for_buttons = [selected_node]
@@ -999,7 +1005,9 @@ def svg_network(view: Any) -> str:
         _text(35, 80, view.title, fg, 25),
         _text(35, 106, graph["caption"], muted, 13),
     ]
-    scale = max((abs(e["weight"]) for e in graph["edges"]), default=1) or 1
+    scale = (
+        graph.get("weight_scale") or max((abs(e["weight"]) for e in graph["edges"]), default=1) or 1
+    )
     for edge in graph["edges"]:
         x1, y1 = positions[edge["source"]]
         x2, y2 = positions[edge["target"]]
@@ -1252,7 +1260,11 @@ def matplotlib_network(view: Any) -> Any:
     else:
         fig, ax = plt.subplots(figsize=(12, 8))
         lookup = {n["id"]: n for n in graph["nodes"]}
-        scale = max((abs(e["weight"]) for e in graph["edges"]), default=1) or 1
+        scale = (
+            graph.get("weight_scale")
+            or max((abs(e["weight"]) for e in graph["edges"]), default=1)
+            or 1
+        )
         segments = [
             [
                 (lookup[e["source"]]["x"], lookup[e["source"]]["y"]),

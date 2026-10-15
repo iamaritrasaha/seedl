@@ -608,12 +608,17 @@ def inspect_circuit(circuit: Any) -> dict[str, Any]:
 
 
 def simulate_circuit_evolution(
-    circuit: Any, max_qubits: int = 10, max_ops: int = 500
+    circuit: Any, max_qubits: int = 10, max_ops: int = 500, max_bytes: int = 32 * 1024 * 1024
 ) -> list[dict[str, Any]]:
     """Step-by-step statevector simulation of unitary operations in a QuantumCircuit."""
     if not _is_qiskit_circuit(circuit):
         raise TypeError("Simulation requires a Qiskit QuantumCircuit.")
 
+    from ._recording import _positive
+
+    _positive("max_qubits", max_qubits, 16)
+    _positive("max_ops", max_ops, 10_000)
+    _positive("max_bytes", max_bytes, 256 * 1024 * 1024)
     num_qubits = circuit.num_qubits
     if num_qubits > max_qubits:
         raise SeeDLError(
@@ -637,6 +642,8 @@ def simulate_circuit_evolution(
     # Initial state |0...0>
     current_state = Statevector.from_int(0, 2**num_qubits)
     steps: list[dict[str, Any]] = []
+
+    encoded_bytes = 0
 
     # Record Step 0: initial state
     def record_step(name: str, step_num: int, inst_desc: str) -> dict[str, Any]:
@@ -663,13 +670,13 @@ def simulate_circuit_evolution(
                     q_indices = [i for i in range(num_qubits) if i != q]
                     red_rho = partial_trace(current_state, q_indices).data.tolist()
                     bv = compute_bloch_vector(red_rho)
-                except Exception:
-                    bv = (0.0, 0.0, 0.0, 0.0)
+                except Exception as exc:
+                    raise SeeDLError("Could not calculate a reduced qubit state.") from exc
             qubit_bloch.append(bv)
 
         # Basis state labels (e.g. |00>, |01>)
         basis_labels = [format(i, f"0{num_qubits}b") for i in range(dim)]
-        return dict(
+        recorded = dict(
             step=step_num,
             name=name,
             description=inst_desc,
@@ -686,8 +693,32 @@ def simulate_circuit_evolution(
             ],
             bloch_vectors=qubit_bloch,
         )
+        return recorded
 
-    steps.append(record_step("Init", 0, "Initial state |" + "0" * num_qubits + ">"))
+    def append_step(step: dict[str, Any]) -> None:
+        nonlocal encoded_bytes
+        import json
+
+        halted = (bool(steps) and not steps[-1]["statevector_valid"]) or any(
+            step.get(key)
+            for key in (
+                "measurement_halt",
+                "reset_halt",
+                "conditional_halt",
+                "unsupported_halt",
+                "post_halt",
+            )
+        )
+        step["statevector_valid"] = not halted
+        step["state_role"] = "last valid pre-halt state" if halted else "after operation"
+        encoded_bytes += len(json.dumps(step, allow_nan=False).encode())
+        if encoded_bytes > max_bytes:
+            raise SeeDLError(
+                "Circuit evolution exceeds max_bytes. Reduce max_qubits/max_ops or use a smaller circuit."
+            )
+        steps.append(step)
+
+    append_step(record_step("Init", 0, "Initial state |" + "0" * num_qubits + ">"))
 
     # Track whether the statevector simulation has been halted by a non-unitary
     # instruction (measurement, reset, conditional).  Once halted, we record
@@ -717,7 +748,7 @@ def simulate_circuit_evolution(
 
         if op_name == "barrier":
             # Barrier is a structural hint with no physical effect on the state.
-            steps.append(
+            append_step(
                 record_step(
                     "BARRIER",
                     idx + 1,
@@ -750,7 +781,7 @@ def simulate_circuit_evolution(
             step["measurement_halt"] = True
             step["measured_qubits"] = q_ids
             step["classical_bits"] = c_ids
-            steps.append(step)
+            append_step(step)
             if not evolution_halted:
                 evolution_halted = True
                 halt_reason = f"MEASURE on qubit(s) {q_ids} at step {idx + 1}"
@@ -770,7 +801,7 @@ def simulate_circuit_evolution(
             )
             step["reset_halt"] = True
             step["reset_qubits"] = q_ids
-            steps.append(step)
+            append_step(step)
             if not evolution_halted:
                 evolution_halted = True
                 halt_reason = f"RESET on qubit(s) {q_ids} at step {idx + 1}"
@@ -790,7 +821,7 @@ def simulate_circuit_evolution(
                 ),
             )
             step["conditional_halt"] = True
-            steps.append(step)
+            append_step(step)
             if not evolution_halted:
                 evolution_halted = True
                 halt_reason = f"conditional gate {op_name.upper()} at step {idx + 1}"
@@ -810,7 +841,7 @@ def simulate_circuit_evolution(
             )
             step["post_halt"] = True
             step["halt_reason"] = halt_reason
-            steps.append(step)
+            append_step(step)
             continue
 
         try:
@@ -835,13 +866,13 @@ def simulate_circuit_evolution(
             )
             step["unsupported_halt"] = True
             step["error"] = str(exc)
-            steps.append(step)
+            append_step(step)
             if not evolution_halted:
                 evolution_halted = True
                 halt_reason = f"unsupported gate {op_name.upper()} at step {idx + 1}"
             continue
 
-        steps.append(
+        append_step(
             record_step(
                 op_name.upper(),
                 idx + 1,

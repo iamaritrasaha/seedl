@@ -34,6 +34,21 @@ def resolve_backend(backend: str) -> str:
 
 def render(view: Visualization, backend: str) -> Any:
     """Build a backend figure from a ``Visualization`` without changing its data."""
+    if view.kind == "training_playback":
+        from ._playback import playback_figure, static_training
+
+        resolve_backend(backend)
+        return playback_figure(view) if backend == "plotly" else static_training(view, backend)
+    if view.kind == "snapshot_comparison":
+        from ._snapshot_compare import render_comparison
+
+        resolve_backend(backend)
+        return render_comparison(view, backend)
+    if view.kind == "quantum_circuit" and view.data.get("simulate") and backend == "plotly":
+        from ._playback import playback_figure
+
+        resolve_backend(backend)
+        return playback_figure(view)
     if view.kind in {"embeddings", "loss_landscape"} and view.data.get("dimensions") == 3:
         if backend != "plotly":
             raise SeeDLError("This spatial view requires Plotly; export HTML for interactive 3D.")

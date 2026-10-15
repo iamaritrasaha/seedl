@@ -1,5 +1,6 @@
 """SeeDL: simple, deep-learning-aware visualizations."""
 
+from ._recording import TrainingSnapshot
 from ._training import Tracker
 from .api import (
     activations,
@@ -30,6 +31,7 @@ __all__ = [
     "MissingDependencyError",
     "SeeDLError",
     "Tracker",
+    "TrainingSnapshot",
     "UnsupportedObjectError",
     "Visualization",
     "activations",

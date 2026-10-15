@@ -325,7 +325,9 @@ def _build_graph(
     for index, stage in enumerate(stages):
         module = stage["module"]
         weight = module.weight.detach()
-        identity = parameter_ids.setdefault(id(module.weight), stage["name"] + ".weight")
+        identity = parameter_ids.setdefault(
+            id(module.weight), "weight" if stage["name"] == "(root)" else stage["name"] + ".weight"
+        )
         size = module.in_features * module.out_features
         indices = range((-offset) % stride, size, stride)
         # Gather only the bounded preview, even for large original parameter tensors.

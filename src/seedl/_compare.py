@@ -27,6 +27,12 @@ def compare_objects(
     max_points: int = 2_048,
 ) -> tuple[str, dict[str, Any], str, list[str]]:
     """Compare two compatible deep learning objects: models, training histories, or predictions."""
+    from ._recording import TrainingSnapshot
+
+    if isinstance(obj_a, TrainingSnapshot) and isinstance(obj_b, TrainingSnapshot):
+        from ._snapshot_compare import compare_snapshots
+
+        return compare_snapshots(obj_a, obj_b, names)
     torch = _torch()
 
     # Model comparison

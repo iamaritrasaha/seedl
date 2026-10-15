@@ -73,6 +73,16 @@ sd.entanglement(bell_state)
 
 ---
 
+## 0.3.0 development — unreleased
+
+The package version remains **0.2.0**. Development functionality now includes bounded recording of real PyTorch training passes, 3D training playback with loss and gradient inspection, aligned before/after snapshot comparison, and quantum gate-by-gate before/after state inspection.
+
+Use `with sd.watch(model) as run:` (or `sd.track`) and call `run.capture(step=..., epoch=..., loss=loss)` **after forward/backward and before `optimizer.step()`**. `run.playback()` / `sd.see(run)` provide inline playback; `.save("training.html")` exports offline controls. Compare retained observations with `sd.compare(run.snapshots[0], run.snapshots[-1])`. Quantum playback uses `sd.circuit(qc, simulate=True)` and marks post-measurement/reset states unavailable.
+
+See the [API, bounds and limitations](docs/live-neural-intelligence.md) and [runnable MLP / quantum example](examples/live_neural_intelligence.py). Snapshot count, retained bytes and HTML payloads are bounded; missing data stays unavailable. New CNN feature-explorer controls are deferred.
+
+---
+
 ## ✨ Why SeeDL?
 
 Most scientific and machine learning visualization tools either generate **static boxes of abstract module containers** (like Netron), spit out **dense ASCII tables of parameter tallies** (like TorchInfo), or rely on static text-based circuit printers.

@@ -117,6 +117,13 @@ class Visualization:
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         """Let IPython display the selected backend without an extra server."""
         del include, exclude
+        if self.backend == "plotly" and (
+            self.kind == "training_playback"
+            or (self.kind == "quantum_circuit" and self.data.get("simulate"))
+        ):
+            from ._playback import playback_html
+
+            return {"text/html": playback_html(self, full_html=False), "text/plain": str(self)}
         if self.backend == "plotly":
             figure = self.figure
             if hasattr(figure, "_repr_mimebundle_"):

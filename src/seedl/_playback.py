@@ -74,12 +74,21 @@ def training_figure(view: Visualization, index: int = 0) -> Any:
         figure.update_layout(updatemenus=[])
     else:
         figure = go.Figure()
+        gradient = view.data["color_by"] == "gradient"
         for name, parameter in snapshot["parameters"].items():
+            values = parameter["gradients"] if gradient else parameter["values"]
             figure.add_trace(
-                go.Scatter(x=parameter["indices"], y=parameter["values"], mode="markers", name=name)
+                go.Scatter(
+                    x=parameter["indices"],
+                    y=values if values is not None else [None] * len(parameter["indices"]),
+                    mode="markers",
+                    name=name,
+                )
             )
         figure.update_layout(
-            xaxis_title="Original flat parameter index", yaxis_title="Weight", height=600
+            xaxis_title="Original flat parameter index",
+            yaxis_title="Gradient" if gradient else "Weight",
+            height=600,
         )
     figure.update_layout(
         title_text=f"{html.escape(view.title)} · step {snapshot['step']} · epoch {snapshot['epoch']}",
@@ -300,11 +309,26 @@ def playback_html(
                 ),
                 default=None,
             )
+            parameter_count = sum(math.prod(p["shape"]) for p in snapshot["parameters"].values())
+            retained_count = sum(len(p["values"]) for p in snapshot["parameters"].values())
+            coverage = f"Parameter values retained: {retained_count}/{parameter_count}. "
+            output = snapshot["output"]
+            coverage += (
+                f"Output values retained: {len(output['values'])}/{math.prod(output['shape'])}. "
+                if output
+                else "Output unavailable. "
+            )
+            coverage += (
+                f"Connections retained: {len(graph['edges'])}/{graph['total_connections']}."
+                if graph
+                else "Neuron graph unavailable."
+            )
             frame = {
                 "label": f"Step {snapshot['step']} · epoch {snapshot['epoch']} · loss {snapshot['loss']} · sampled max |gradient| {gradient_max}",
                 "epoch": snapshot["epoch"],
                 "step": snapshot["step"],
                 "loss": snapshot["loss"],
+                "coverage": coverage,
                 "cards": cards,
             }
         else:
@@ -314,6 +338,7 @@ def playback_html(
                 "epoch": None,
                 "step": step["step"],
                 "cards": {},
+                "coverage": f"Basis states displayed per valid pane: {min(64, 2 ** view.data['num_qubits'])}/{2 ** view.data['num_qubits']}. Full bounded state remains in view.data.",
             }
         frame.update(data=figure["data"], layout=layout)
         total += len(json.dumps(frame, separators=(",", ":")).encode())
@@ -343,10 +368,15 @@ def playback_html(
         "FRAMES": payload,
         "TRAINING": "true" if training else "false",
         "CIRCUIT": circuit_payload,
+        "SUMMARY": json.dumps(
+            f"{count} retained snapshots; {view.metadata.get('bytes', 0)} encoded bytes; {view.metadata.get('dropped', 0)} evicted."
+            if training
+            else "Recorded quantum evolution; invalid post-halt states are unavailable."
+        ),
     }
     # Replace template tokens once; user labels must never be rescanned as tokens.
     script = re.sub(
-        r"__(FRAMES|TRAINING|CIRCUIT)__", lambda match: replacements[match[1]], _CONTROLLER
+        r"__(FRAMES|TRAINING|CIRCUIT|SUMMARY)__", lambda match: replacements[match[1]], _CONTROLLER
     )
     body = pio.to_html(
         playback_figure(view),
@@ -355,26 +385,39 @@ def playback_html(
         post_script=script,
         config={"responsive": True, "scrollZoom": True},
     )
+    prefix = (
+        f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(view.title)}</title></head><body style="margin:16px;font-family:system-ui">'
+        if full_html
+        else ""
+    )
+    suffix = "</body></html>" if full_html else ""
+    # Enforce the cap on actual serialized content, including escaping, the
+    # initial figure, circuit diagram and controls. Only the fixed runtime is excluded.
+    if len((prefix + body + suffix).encode("utf-8")) > MAX_EXPORT_BYTES:
+        raise SeeDLError(
+            "Playback payload exceeds 32 MiB. Retain fewer snapshots or reduce graph/circuit limits."
+        )
     if include_plotlyjs:
         from plotly.offline import get_plotlyjs
 
         # Multiple inline views reuse the loaded runtime while each output remains
         # independently displayable after a notebook reload or output clear.
         body = "<script>if (!window.Plotly) {" + get_plotlyjs() + "}</script>" + body
-    if not full_html:
-        return body
-    return f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(view.title)}</title></head><body style="margin:16px;font-family:system-ui">{body}</body></html>'
+    return prefix + body + suffix
 
 
 _CONTROLLER = r"""
 (function() {
  const gd = document.getElementById('{plot_id}');
  const frames = __FRAMES__, training = __TRAINING__;
- const circuit = __CIRCUIT__;
+ const circuit = __CIRCUIT__, summary = __SUMMARY__;
  const panel = document.createElement('section');
  panel.className = 'seedl-playback'; panel.setAttribute('aria-label', 'Recorded playback');
  panel.style.cssText = 'padding:12px;border:1px solid #94a3b8;border-radius:8px;font:14px system-ui;color:#0f172a;background:#f8fafc';
  panel.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button data-action="rewind">Rewind</button><button data-action="previous">Previous</button><button data-action="play">Play</button><button data-action="pause">Pause</button><button data-action="next">Next</button><label>Speed <select data-control="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label>Recorded step <select data-control="step"></select></label><label data-epoch-label>Epoch <select data-control="epoch"></select></label><label data-neuron-label>Neuron <select data-control="neuron"><option value="">Overview</option></select></label></div><input data-control="timeline" type="range" min="0" step="1" value="0" aria-label="Training or gate timeline" style="width:100%;margin:12px 0"><output data-status aria-live="polite"></output><div data-loss style="height:160px"></div><pre data-inspection style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre>';
+ const recording = document.createElement('p'); recording.dataset.recording = ''; recording.textContent = summary;
+ const coverage = document.createElement('p'); coverage.dataset.coverage = ''; coverage.textContent = frames[0].coverage;
+ panel.prepend(recording); panel.appendChild(coverage);
  gd.parentNode.insertBefore(panel, gd);
  const get = name => panel.querySelector('[data-control="'+name+'"]');
  const status = panel.querySelector('[data-status]'), inspection = panel.querySelector('[data-inspection]');
@@ -405,7 +448,7 @@ _CONTROLLER = r"""
      await Plotly.react(gd, clone(f.data), layout, {responsive:true,scrollZoom:true});
      current=index; hovered=null; timeline.value=index; steps.value=index;
      const epochIndex=frames.findIndex(v=>v.epoch===f.epoch); if(epochIndex>=0) epochs.value=epochIndex;
-     status.textContent=f.label; inspect();
+     status.textContent=f.label; coverage.textContent=f.coverage; inspect();
      if(training) await Plotly.restyle(lossDiv,{x:[[f.step]],y:[[f.loss]]},[1]);
      gd.dataset.seedlStep=String(f.step); gd.dataset.seedlIndex=String(index);
    } catch(error) {pause(); status.textContent='Playback error: '+error.message; throw error;}

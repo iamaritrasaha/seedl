@@ -235,7 +235,7 @@ class TrainingRecorder:
     ) -> TrainingSnapshot | None:
         if not self._handles:
             raise SeeDLError("Use `with sd.watch(model) as run:` before calling run.capture().")
-        step = self._calls if step is None else step
+        step = self._last_step + 1 if step is None else step
         if isinstance(step, bool) or not isinstance(step, int) or step <= self._last_step:
             raise ValueError("step must be a strictly increasing nonnegative integer.")
         epoch_value = _finite(epoch) if epoch is not None else None

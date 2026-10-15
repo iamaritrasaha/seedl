@@ -223,3 +223,21 @@ def test_playback_label_serialization_is_literal(browser, tmp_path):
     assert page.evaluate("window.seedlInjected === undefined")
     assert not errors
     page.close()
+
+
+def test_export_reports_evictions_and_sampling_in_the_rendered_panel(browser, tmp_path):
+    model = nn.Sequential(nn.Linear(2, 3), nn.Tanh(), nn.Linear(3, 1))
+    with sd.watch(model, max_values=3, max_connections=2, max_snapshots=1) as run:
+        for step in range(2):
+            model(torch.ones(1, 2)).sum().backward()
+            run.capture(step=step)
+    page = browser.new_page()
+    page.goto(run.playback().save(tmp_path / "coverage.html").as_uri())
+    page.wait_for_selector(".seedl-playback")
+    assert "1 evicted" in page.locator("[data-recording]").inner_text()
+    assert "1 retained snapshots" in page.locator("[data-recording]").inner_text()
+    coverage = page.locator("[data-coverage]").inner_text()
+    assert "Parameter values retained: 3/13" in coverage
+    assert "Output values retained: 1/1" in coverage
+    assert "Connections retained: 2/9" in coverage
+    page.close()

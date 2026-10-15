@@ -291,3 +291,46 @@ def test_timeline_color_and_weight_scales_stay_fixed():
         for snapshot in run.snapshots
         for edge in snapshot.data["graph"]["edges"]
     )
+
+
+def test_automatic_step_continues_after_explicit_step_with_sampling():
+    model = nn.Linear(2, 1)
+    with sd.watch(model, every=2) as run:
+        model(torch.ones(1, 2))
+        run.capture(step=10)
+        model(torch.ones(1, 2))
+        assert run.capture() is None
+        model(torch.ones(1, 2))
+        snapshot = run.capture()
+    assert snapshot.data["step"] == 12
+    assert [s.data["step"] for s in run.snapshots] == [10, 12]
+
+
+def test_large_model_gradient_preview_uses_gradients_and_preserves_missingness():
+    model = nn.Linear(80, 80, bias=False)
+    with sd.watch(model, max_values=4) as run:
+        model(torch.full((1, 80), 2.0)).sum().backward()
+        first = run.capture()
+        model.zero_grad(set_to_none=True)
+        model(torch.ones(1, 80))
+        run.capture()
+    from seedl._playback import training_figure
+
+    view = run.playback(color_by="gradient")
+    assert (
+        list(view.figure.data[0].y) == first.data["parameters"]["weight"]["gradients"] == [2.0] * 4
+    )
+    assert view.figure.layout.yaxis.title.text == "Gradient"
+    assert list(training_figure(view, 1).data[0].y) == [None] * 4
+
+
+def test_html_limit_counts_actual_serialization_and_initial_figure(monkeypatch):
+    from seedl import _playback
+
+    _, run = train(1)
+    view = run.playback()
+    view.title = "<" * 3000
+    content = _playback.playback_html(view, include_plotlyjs=False)
+    monkeypatch.setattr(_playback, "MAX_EXPORT_BYTES", len(content.encode()) - 100)
+    with pytest.raises(SeeDLError, match="Playback payload exceeds"):
+        _playback.playback_html(view, include_plotlyjs=False)

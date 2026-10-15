@@ -54,11 +54,11 @@ A snapshot larger than the byte budget raises an error. Parameter capture suppor
 
 Neuron wiring is available for the existing supported exact `Linear` / nested `Sequential` MLPs and activations. Nodes have stable `layer:index` identities. Edges use **`weight[destination, source]`**, and node gradient colors represent existing **bias gradients**; a bias-free neuron has no invented bias gradient. Edge hovers contain weight gradients. The status shows the maximum absolute gradient in the retained parameter sample. Weight widths and activation/gradient color scales are fixed across retained steps so playback values can be compared.
 
-Other models and graphs above the neuron budget use indexed parameter/output previews. They do not infer neuron connections or fabricate intermediate activations. Non-finite values and absent gradients remain unavailable. No optimizer steps or interpolation are synthesized. Training snapshot step labels must strictly increase; epoch labels are optional finite numbers. Timeline positions refer to retained snapshots, so evictions and `every` can produce gaps in the original step sequence.
+Other models and graphs above the neuron budget use indexed parameter/output previews. They do not infer neuron connections or fabricate intermediate activations. Non-finite values and absent gradients remain unavailable. No optimizer steps or interpolation are synthesized. Training snapshot step labels must strictly increase; epoch labels are optional finite numbers. Omitted step labels advance from the last explicit or automatic step. Timeline positions refer to retained snapshots, so evictions and `every` can produce gaps in the original step sequence.
 
 ## Playback and comparison
 
-The HTML controls provide play, pause, rewind, previous/next, speed, recorded-step selection, epoch selection, and a timeline. A loss curve follows the active recorded step. Select or click a neuron to inspect its current values; selection and the 3D camera persist during updates. Plotly is required for playback; SVG and Matplotlib show the first retained observation. `Visualization.figure` / `to_figure("plotly")` expose the first frame; inline notebook display and `.save("file.html")` / `.to_html()` provide the full controls. A composite export embeds one Plotly runtime, and multiple inline outputs reuse an already-loaded runtime.
+The HTML controls provide play, pause, rewind, previous/next, speed, recorded-step selection, epoch selection, and a timeline. A loss curve follows the active recorded step. The panel reports retained snapshot bytes, eviction count, and per-step parameter/output/connection coverage (or displayed quantum basis coverage). Select or click a neuron to inspect its current values; selection and the 3D camera persist during updates. Plotly is required for playback; SVG and Matplotlib show the first retained observation. `Visualization.figure` / `to_figure("plotly")` expose the first frame; inline notebook display and `.save("file.html")` / `.to_html()` provide the full controls. A composite export embeds one Plotly runtime, and multiple inline outputs reuse an already-loaded runtime.
 
 ```python
 initial, trained = run.snapshots[0], run.snapshots[-1]
@@ -91,7 +91,7 @@ Measurement, reset, conditional operations and unsupported/unbound gates halt pu
 
 ## Limits
 
-HTML frame payloads are capped at 32 MiB before embedding the Plotly runtime. Reduce retained snapshots, neuron/connection budgets or circuit size if export exceeds the cap. Export construction needs temporary CPU memory proportional to the frame payload; the recorder's byte budget is not a process-wide memory limit. Playback is recorded observation, not a background training dashboard. New CNN channel-selection and feature-map comparison controls are deferred; existing CNN visualization remains available.
+Serialized HTML content (frames, controls, initial figure and circuit diagram) is capped at 32 MiB before embedding the Plotly runtime. Reduce retained snapshots, neuron/connection budgets or circuit size if export exceeds the cap. Export construction needs temporary CPU memory proportional to the frame payload; the recorder's byte budget is not a process-wide memory limit. Playback is recorded observation, not a background training dashboard. New CNN channel-selection and feature-map comparison controls are deferred; existing CNN visualization remains available.
 
 ## Sprint verification — 2026-10-15
 

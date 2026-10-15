@@ -22,11 +22,11 @@ def release_tree(tmp_path):
         shutil.copyfile(ROOT / name, target)
     dist = tmp_path / "dist"
     dist.mkdir()
-    with zipfile.ZipFile(dist / "seedl-0.3.0-py3-none-any.whl", "w") as wheel:
-        wheel.writestr("seedl-0.3.0.dist-info/METADATA", "Name: seedl\nVersion: 0.3.0\n")
+    with zipfile.ZipFile(dist / "seedl-0.4.0-py3-none-any.whl", "w") as wheel:
+        wheel.writestr("seedl-0.4.0.dist-info/METADATA", "Name: seedl\nVersion: 0.4.0\n")
         wheel.writestr("seedl/py.typed", "")
-    with tarfile.open(dist / "seedl-0.3.0.tar.gz", "w:gz") as archive:
-        archive.add(tmp_path / "pyproject.toml", arcname="seedl-0.3.0/pyproject.toml")
+    with tarfile.open(dist / "seedl-0.4.0.tar.gz", "w:gz") as archive:
+        archive.add(tmp_path / "pyproject.toml", arcname="seedl-0.4.0/pyproject.toml")
     return tmp_path
 
 
@@ -49,22 +49,22 @@ def run_verifier(root, *args, ref=None):
 def test_branch_verification_does_not_require_tag(release_tree, ref, args):
     result = run_verifier(release_tree, *args, ref=ref)
     assert result.returncode == 0, result.stderr
-    assert "__version__: 0.3.0 (MATCH)" in result.stdout
+    assert "__version__: 0.4.0 (MATCH)" in result.stdout
     assert "Release tag:" not in result.stdout
     if args:
         assert "Wheel contents and METADATA verified" in result.stdout
         assert "Sdist found:" in result.stdout
 
 
-@pytest.mark.parametrize("tag", ["v0.3.0", "refs/tags/v0.3.0"])
+@pytest.mark.parametrize("tag", ["v0.4.0", "refs/tags/v0.4.0"])
 @pytest.mark.parametrize("args", [(), ("--check-dist",)])
 def test_explicit_matching_release_tag(release_tree, tag, args):
     result = run_verifier(release_tree, *args, "--tag", tag, ref="main")
     assert result.returncode == 0, result.stderr
-    assert "Release tag: v0.3.0 matches" in result.stdout
+    assert "Release tag: v0.4.0 matches" in result.stdout
 
 
-@pytest.mark.parametrize("tag", ["v0.1.0", "v0.2.0", "main", "", "refs/heads/v0.3.0"])
+@pytest.mark.parametrize("tag", ["v0.1.0", "v0.2.0", "v0.3.0", "main", "", "refs/heads/v0.4.0"])
 @pytest.mark.parametrize("args", [(), ("--check-dist",)])
 def test_explicit_invalid_tags_rejected(release_tree, tag, args):
     result = run_verifier(release_tree, *args, "--tag", tag)
@@ -79,7 +79,7 @@ def test_metadata_checks_still_required_without_tag(release_tree):
     assert "Version mismatch" in result.stderr
 
 
-@pytest.mark.parametrize("filename", ["seedl-0.3.0-py3-none-any.whl", "seedl-0.3.0.tar.gz"])
+@pytest.mark.parametrize("filename", ["seedl-0.4.0-py3-none-any.whl", "seedl-0.4.0.tar.gz"])
 def test_missing_distributions_rejected_without_tag(release_tree, filename):
     (release_tree / "dist" / filename).unlink()
     result = run_verifier(release_tree, "--check-dist", ref="main")
@@ -88,8 +88,8 @@ def test_missing_distributions_rejected_without_tag(release_tree, filename):
 
 
 def test_invalid_wheel_rejected_without_tag(release_tree):
-    with zipfile.ZipFile(release_tree / "dist/seedl-0.3.0-py3-none-any.whl", "w") as wheel:
-        wheel.writestr("seedl-0.3.0.dist-info/METADATA", "Name: seedl\nVersion: 0.9.9\n")
+    with zipfile.ZipFile(release_tree / "dist/seedl-0.4.0-py3-none-any.whl", "w") as wheel:
+        wheel.writestr("seedl-0.4.0.dist-info/METADATA", "Name: seedl\nVersion: 0.9.9\n")
     result = run_verifier(release_tree, "--check-dist", ref="main")
     assert result.returncode == 1
     assert "Wheel METADATA" in result.stderr

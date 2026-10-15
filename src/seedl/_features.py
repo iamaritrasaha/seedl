@@ -180,19 +180,21 @@ def capture_feature_maps(
     captured_layers: list[dict[str, Any]] = []
     handles = []
 
-    # Save original training mode and buffers
-    was_training = model.training
+    # Save original training mode for every submodule to preserve mixed modes
+    orig_training_modes = [(module, module.training) for module in model.modules()]
     saved_buffers = [
         (
             module,
             dict(module._buffers),
             set(module._non_persistent_buffers_set),
             {
-                b_name: b_val.detach().clone() if b_val is not None else None
+                b_name: b_val.detach().clone()
                 for b_name, b_val in module._buffers.items()
+                if b_val is not None and b_val.numel() <= 8192
             },
         )
         for _, module in model.named_modules()
+        if module._buffers
     ]
 
     def make_hook(layer_name: str, module_obj: Any):
@@ -239,7 +241,7 @@ def capture_feature_maps(
                     ch_mat = torch.nn.functional.adaptive_avg_pool2d(
                         ch_mat.unsqueeze(0).unsqueeze(0),
                         (target_h, target_w),
-                    ).squeeze()
+                    )[0, 0]
 
                 ch_grid = ch_mat.cpu().tolist()
                 stats = _compute_channel_stats(ch_grid)
@@ -315,7 +317,8 @@ def capture_feature_maps(
                         if orig_buffers[b_name].shape != b_saved.shape:
                             orig_buffers[b_name].resize_(b_saved.shape)
                         orig_buffers[b_name].copy_(b_saved)
-        model.train(was_training)
+        for module, orig_mode in orig_training_modes:
+            module.training = orig_mode
 
     if not captured_layers:
         raise SeeDLError(
@@ -435,7 +438,7 @@ def _capture_from_tensor(
                 ch_mat = torch.nn.functional.adaptive_avg_pool2d(
                     ch_mat.unsqueeze(0).unsqueeze(0),
                     (target_h, target_w),
-                ).squeeze()
+                )[0, 0]
             ch_grid = ch_mat.cpu().tolist() if hasattr(ch_mat, "cpu") else ch_mat.tolist()
         else:
             batch_item = t_4d[b_idx]
@@ -962,13 +965,24 @@ def svg_features(view: Any) -> str:
     width = 780
     height = 520
 
-    # Grid cell size
-    max_grid_px = 320
-    cell_w = max_grid_px / max(gw, 1)
-    cell_h = max_grid_px / max(gh, 1)
-    cell = min(cell_w, cell_h)
-    grid_render_w = cell * gw
-    grid_render_h = cell * gh
+    # Grid cell size with singleton dimension support
+    max_grid_px = 320.0
+    if gh == 1 and gw > 1:
+        cell_x = max_grid_px / max(gw, 1)
+        cell_y = min(40.0, max_grid_px)
+    elif gw == 1 and gh > 1:
+        cell_x = min(40.0, max_grid_px)
+        cell_y = max_grid_px / max(gh, 1)
+    elif gh == 1 and gw == 1:
+        cell_x = 120.0
+        cell_y = 120.0
+    else:
+        cell = min(max_grid_px / max(gw, 1), max_grid_px / max(gh, 1))
+        cell_x = cell
+        cell_y = cell
+
+    grid_render_w = cell_x * gw
+    grid_render_h = cell_y * gh
 
     gx0 = 40
     gy0 = 130
@@ -1002,10 +1016,10 @@ def svg_features(view: Any) -> str:
                 b_col = int(80 + norm * 160)
 
             fill = f"rgb({r_col},{g_col},{b_col})"
-            rx = gx0 + c * cell
-            ry = gy0 + r * cell
+            rx = gx0 + c * cell_x
+            ry = gy0 + r * cell_y
             rects.append(
-                f'<rect x="{rx:.1f}" y="{ry:.1f}" width="{cell:.1f}" height="{cell:.1f}" fill="{fill}">'
+                f'<rect x="{rx:.1f}" y="{ry:.1f}" width="{cell_x:.1f}" height="{cell_y:.1f}" fill="{fill}">'
                 f"<title>({r}, {c}): {val:.4f}</title></rect>"
             )
 
@@ -1517,10 +1531,24 @@ def features_html(view: Any) -> str:
       document.getElementById("stPositive").textContent = (stats.positive_fraction * 100).toFixed(1) + "%";
       document.getElementById("stDownsampled").textContent = layer.downsampled ? "Yes (Preview)" : "No (Native)";
 
-      // Setup canvas
-      const scale = Math.max(1, Math.floor(360 / Math.max(gw, gh)));
-      canvas.width = gw * scale;
-      canvas.height = gh * scale;
+      // Setup canvas with singleton dimension support
+      const maxCanvasPx = 360;
+      let scaleX = Math.max(1, Math.floor(maxCanvasPx / Math.max(gw, 1)));
+      let scaleY = Math.max(1, Math.floor(maxCanvasPx / Math.max(gh, 1)));
+      if (gh === 1 && gw > 1) {{
+        scaleY = Math.max(28, scaleX);
+      }} else if (gw === 1 && gh > 1) {{
+        scaleX = Math.max(28, scaleY);
+      }} else if (gh === 1 && gw === 1) {{
+        scaleX = 120;
+        scaleY = 120;
+      }} else {{
+        const uniformScale = Math.min(scaleX, scaleY);
+        scaleX = uniformScale;
+        scaleY = uniformScale;
+      }}
+      canvas.width = gw * scaleX;
+      canvas.height = gh * scaleY;
 
       let minV = stats.min;
       let maxV = stats.max;
@@ -1534,7 +1562,7 @@ def features_html(view: Any) -> str:
           const v = grid[r][c];
           const [cr, cg, cb] = getColor(v, minV, maxV, stats.has_negatives);
           ctx.fillStyle = `rgb(${{cr}},${{cg}},${{cb}})`;
-          ctx.fillRect(c * scale, r * scale, scale, scale);
+          ctx.fillRect(c * scaleX, r * scaleY, scaleX, scaleY);
         }}
       }}
 

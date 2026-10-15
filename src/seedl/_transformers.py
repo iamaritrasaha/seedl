@@ -402,7 +402,7 @@ def _run_mha_capture(mha_module: Any, example_input: Any) -> tuple[Any, str]:
     else:
         q = k = v = example_input
 
-    was_training = mha_module.training
+    orig_training_modes = [(m, m.training) for m in mha_module.modules()]
     mha_module.eval()
 
     try:
@@ -414,7 +414,8 @@ def _run_mha_capture(mha_module: Any, example_input: Any) -> tuple[Any, str]:
     except Exception as exc:
         raise SeeDLError(f"Failed to execute MultiheadAttention forward pass: {exc}") from exc
     finally:
-        mha_module.train(was_training)
+        for m, orig_mode in orig_training_modes:
+            m.training = orig_mode
 
     # In PyTorch, MultiheadAttention returns (attn_output, attn_weights)
     if isinstance(output, tuple) and len(output) >= 2:

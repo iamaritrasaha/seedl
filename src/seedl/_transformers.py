@@ -33,6 +33,7 @@ def inspect_attention(
     head: int | None = None,
     compare_heads: tuple[int, int] | None = None,
     batch_index: int = 0,
+    is_batched: bool | None = None,
     mask: Any = None,
     max_seq_len: int = 256,
     max_heads: int = 32,
@@ -50,7 +51,8 @@ def inspect_attention(
         head: Selected attention head index (default 0 or averaged).
         compare_heads: Optional tuple of (head_a, head_b) to compare.
         batch_index: Batch index to inspect for 4D batched tensors (default 0).
-        mask: Optional attention mask matrix [L, S].
+        is_batched: Explicitly disambiguate 3D tensors: True for [B, L, S], False for [heads, L, S].
+        mask: Optional attention mask matrix [L, S] or key mask [S].
         max_seq_len: Bounded sequence length limit (default 256).
         max_heads: Maximum heads to capture/preview (default 32).
         theme: UI theme ('scientific', 'light', 'dark').
@@ -95,6 +97,7 @@ def inspect_attention(
     b_idx = 0
     b_size = 1
     is_averaged = False
+    disambiguation_note: str | None = None
 
     if rank == 4:
         b_size = dims[0]
@@ -102,14 +105,33 @@ def inspect_attention(
         raw = raw[b_idx]
         rank = 3
         dims = dims[1:]
-    elif rank == 3 and dims[0] > max_heads and dims[1] == dims[2]:
-        # Potential batched 3D tensor [B, L, S] where B > max_heads
-        b_size = dims[0]
-        b_idx = min(max(0, batch_index), b_size - 1)
-        raw = raw[b_idx]
-        rank = 2
-        dims = dims[1:]
-        is_averaged = True
+    elif rank == 3:
+        # Disambiguate 3D tensor: [B, L, S] vs [heads, L, S]
+        treat_as_batched = False
+        if is_batched is True:
+            treat_as_batched = True
+        elif is_batched is False:
+            treat_as_batched = False
+        else:
+            if is_mha_module or batch_index > 0 or (dims[0] > max_heads and dims[1] == dims[2]):
+                treat_as_batched = True
+
+        if treat_as_batched:
+            b_size = dims[0]
+            b_idx = min(max(0, batch_index), b_size - 1)
+            raw = raw[b_idx]
+            rank = 2
+            dims = dims[1:]
+            is_averaged = True
+            disambiguation_note = (
+                f"Disambiguated 3D tensor as batched attention [batch={b_size}, queries={dims[0]}, keys={dims[1]}]. "
+                f"Displaying batch index {b_idx} (averaged across heads)."
+            )
+        else:
+            disambiguation_note = (
+                f"Disambiguated 3D tensor as multi-head attention [heads={dims[0]}, queries={dims[1]}, keys={dims[2]}]. "
+                "Specify is_batched=True if dimension 0 represents batch."
+            )
 
     # 3D: [heads, seq_q, seq_k]
     if rank == 3:
@@ -189,26 +211,67 @@ def inspect_attention(
     is_square = query_len == key_len
     is_cross_attention = not is_square
 
+    # Parse optional attention mask
+    mask_grid: list[list[bool]] | None = None
+    if mask is not None:
+        m_raw = mask
+        if hasattr(m_raw, "detach"):
+            m_raw = m_raw.detach().cpu()
+        if hasattr(m_raw, "tolist"):
+            m_raw = m_raw.tolist()
+
+        if isinstance(m_raw, (list, tuple)) and m_raw:
+            if not isinstance(m_raw[0], (list, tuple)):
+                # 1D key padding mask [key_len]
+                m_1d = [
+                    bool(v is True or (isinstance(v, (int, float)) and v <= -1e4))
+                    for v in m_raw[:key_len]
+                ]
+                while len(m_1d) < key_len:
+                    m_1d.append(False)
+                mask_grid = [list(m_1d) for _ in range(query_len)]
+            else:
+                # 2D mask [query_len, key_len]
+                mask_grid = []
+                for i in range(query_len):
+                    if i < len(m_raw) and isinstance(m_raw[i], (list, tuple)):
+                        row = [
+                            bool(v is True or (isinstance(v, (int, float)) and v <= -1e4))
+                            for v in m_raw[i][:key_len]
+                        ]
+                        while len(row) < key_len:
+                            row.append(False)
+                        mask_grid.append(row)
+                    else:
+                        mask_grid.append([False] * key_len)
+
     # Verify probability distribution (row sums) and non-negativity
     is_softmax = True
     has_negatives = False
-    row_entropies: list[float] = []
 
     for row in selected_matrix:
         row_sum = 0.0
-        entropy = 0.0
         for val in row:
             f_val = float(val)
             if f_val < 0.0:
                 has_negatives = True
             row_sum += f_val
-            if f_val > 1e-9:
-                entropy -= f_val * math.log2(f_val)
-        row_entropies.append(entropy)
         if abs(row_sum - 1.0) > 0.05:
             is_softmax = False
 
-    mean_entropy = sum(row_entropies) / len(row_entropies) if row_entropies else 0.0
+    mean_entropy: float | None = None
+    if is_softmax and not has_negatives:
+        row_entropies: list[float] = []
+        for row in selected_matrix:
+            r_sum = sum(float(val) for val in row)
+            entropy = 0.0
+            if r_sum > 0.0:
+                for val in row:
+                    p = max(0.0, float(val)) / r_sum
+                    if p > 1e-12:
+                        entropy -= p * math.log2(p)
+            row_entropies.append(entropy)
+        mean_entropy = sum(row_entropies) / len(row_entropies) if row_entropies else 0.0
 
     # Check for causal mask (only applicable to square self-attention)
     is_causal = is_square
@@ -256,6 +319,14 @@ def inspect_attention(
     ]
     if capture_note:
         notes.append(capture_note)
+    if disambiguation_note:
+        notes.append(disambiguation_note)
+    if mask_grid is not None:
+        num_masked = sum(sum(1 for cell in r if cell) for r in mask_grid)
+        if num_masked > 0:
+            notes.append(
+                f"Supplied attention mask applied: {num_masked} of {query_len * key_len} query-key pairs masked."
+            )
     if is_cross_attention:
         notes.append(
             f"Cross-attention detected: query sequence length ({query_len}) differs from key sequence length ({key_len})."
@@ -306,6 +377,7 @@ def inspect_attention(
         "mean_entropy": mean_entropy,
         "head_stats": head_stats,
         "head_comparison": head_comparison_payload,
+        "mask": mask_grid,
         "shape": tuple(dims),
     }
 
@@ -335,7 +407,10 @@ def _run_mha_capture(mha_module: Any, example_input: Any) -> tuple[Any, str]:
 
     try:
         with torch.no_grad():
-            output = mha_module(q, k, v)
+            try:
+                output = mha_module(q, k, v, average_attn_weights=False)
+            except TypeError:
+                output = mha_module(q, k, v)
     except Exception as exc:
         raise SeeDLError(f"Failed to execute MultiheadAttention forward pass: {exc}") from exc
     finally:
@@ -566,9 +641,15 @@ def plotly_attention(view: Any) -> Any:
             )
         )
 
+    entropy_val = data.get("mean_entropy")
+    entropy_str = (
+        f" · Entropy: {entropy_val:.2f} bits"
+        if entropy_val is not None
+        else " · Entropy: N/A (unnormalized/logits)"
+    )
     fig.update_layout(
         title=dict(
-            text=f"<b>{view.title}</b><br><sup>{view.summary} · Entropy: {data.get('mean_entropy', 0.0):.2f} bits</sup>",
+            text=f"<b>{view.title}</b><br><sup>{view.summary}{entropy_str}</sup>",
             x=0.04,
             y=0.96,
             font=dict(size=18, color=fg),
@@ -721,9 +802,10 @@ def svg_attention(view: Any) -> str:
                 else f"rgb({int(15 + norm * 40)},{int(30 + norm * 140)},{int(80 + norm * 175)})"
             )
 
+            k_title = html.escape(k_toks[j] if j < len(k_toks) else str(j))
             rects.append(
                 f'<rect x="{gx0 + j * cell:.1f}" y="{gy0 + i * cell:.1f}" width="{cell - 1:.1f}" height="{cell - 1:.1f}" fill="{fill}">'
-                f"<title>({q_label} → {k_toks[j]}): {val:.4f}</title></rect>"
+                f"<title>({q_label} → {k_title}): {val:.4f}</title></rect>"
             )
 
     for j in range(kw):
@@ -816,7 +898,9 @@ def attention_html(view: Any) -> str:
     data = view.data
     title = html.escape(view.title)
     summary = html.escape(view.summary)
-    payload_json = json.dumps(data)
+    payload_json = (
+        json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    )
 
     doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1039,6 +1123,16 @@ def attention_html(view: Any) -> str:
     let currentHeadIdx = DATA.selected_head_idx >= 0 ? DATA.selected_head_idx : 0;
     let currentQueryIdx = 0;
 
+    function escapeHtml(str) {{
+      if (str == null) return "";
+      return String(str)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }}
+
     const headSelect = document.getElementById("headSelect");
     const querySelect = document.getElementById("querySelect");
     const tableWrapper = document.getElementById("tableWrapper");
@@ -1096,18 +1190,19 @@ def attention_html(view: Any) -> str:
       // Render HTML matrix table
       let htmlStr = '<table class="token-table"><thead><tr><th></th>';
       for (let j = 0; j < kw; j++) {{
-        htmlStr += `<th class="col-hdr">${{kToks[j]}}</th>`;
+        htmlStr += `<th class="col-hdr">${{escapeHtml(kToks[j])}}</th>`;
       }}
       htmlStr += '</tr></thead><tbody>';
 
       for (let i = 0; i < qh; i++) {{
-        htmlStr += `<tr><td class="row-hdr">${{qToks[i]}}</td>`;
+        htmlStr += `<tr><td class="row-hdr">${{escapeHtml(qToks[i])}}</td>`;
         for (let j = 0; j < kw; j++) {{
           const val = mat[i][j];
+          const isMasked = DATA.mask && DATA.mask[i] && DATA.mask[i][j];
           const norm = Math.max(0, Math.min(1, val));
-          const r = Math.round(15 + norm * 40);
-          const g = Math.round(30 + norm * 140);
-          const b = Math.round(80 + norm * 175);
+          const r = isMasked ? 40 : Math.round(15 + norm * 40);
+          const g = isMasked ? 40 : Math.round(30 + norm * 140);
+          const b = isMasked ? 50 : Math.round(80 + norm * 175);
           htmlStr += `<td class="cell" style="background:rgb(${{r}},${{g}},${{b}});"
                        onmouseover="showHover(${{i}}, ${{j}}, ${{val}})"
                        onclick="selectQuery(${{i}})"></td>`;
@@ -1117,7 +1212,7 @@ def attention_html(view: Any) -> str:
       htmlStr += '</tbody></table>';
       tableWrapper.innerHTML = htmlStr;
 
-      document.getElementById("stEntropy").textContent = DATA.mean_entropy.toFixed(2);
+      document.getElementById("stEntropy").textContent = DATA.mean_entropy != null ? (DATA.mean_entropy.toFixed(2) + " bits") : "N/A (unnormalized/logits)";
       document.getElementById("stCausal").textContent = DATA.is_causal ? "Yes (Lower triangular)" : "No";
       document.getElementById("stSoftmax").textContent = DATA.is_softmax ? "Yes (~1.0 per row)" : "Unnormalized/Logits";
 
@@ -1127,7 +1222,9 @@ def attention_html(view: Any) -> str:
     window.showHover = function(qIdx, kIdx, val) {{
       const qTok = DATA.query_tokens[qIdx];
       const kTok = DATA.key_tokens[kIdx];
-      hoverHud.textContent = `Query [${{qIdx}}] "${{qTok}}" → Key [${{kIdx}}] "${{kTok}}" · Weight: ${{val.toFixed(4)}} (${{(val * 100).toFixed(1)}}%)`;
+      const isMasked = DATA.mask && DATA.mask[qIdx] && DATA.mask[qIdx][kIdx];
+      const maskStr = isMasked ? " · [Masked]" : "";
+      hoverHud.textContent = `Query [${{qIdx}}] "${{qTok}}" → Key [${{kIdx}}] "${{kTok}}" · Weight: ${{val.toFixed(4)}} (${{(val * 100).toFixed(1)}}%)${{maskStr}}`;
     }};
 
     window.selectQuery = function(qIdx) {{

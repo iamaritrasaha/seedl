@@ -439,7 +439,16 @@ def _capture_from_tensor(
             ch_grid = ch_mat.cpu().tolist() if hasattr(ch_mat, "cpu") else ch_mat.tolist()
         else:
             batch_item = t_4d[b_idx]
-            ch_grid = batch_item[c]
+            raw_grid = batch_item[c]
+            if downsampled:
+                step_r = max(1, h // target_h)
+                step_c = max(1, w // target_w)
+                ch_grid = [
+                    [raw_grid[r][col] for col in range(0, w, step_c)[:target_w]]
+                    for r in range(0, h, step_r)[:target_h]
+                ]
+            else:
+                ch_grid = raw_grid
 
         stats = _compute_channel_stats(ch_grid)
 
@@ -1051,8 +1060,8 @@ def svg_feature_comparison(view: Any) -> str:
         f'<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / FEATURE MAP COMPARISON</text>',
         f'<text x="40" y="70" font-family="system-ui, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
         f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{html.escape(view.summary)}</text>',
-        f'<text x="140" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{names[0]}</text>',
-        f'<text x="440" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{names[1]}</text>',
+        f'<text x="140" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[0]))}</text>',
+        f'<text x="440" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[1]))}</text>',
     ]
 
     # Draw previews of grid A and grid B
@@ -1164,7 +1173,9 @@ def features_html(view: Any) -> str:
     data = view.data
     title = html.escape(view.title)
     summary = html.escape(view.summary)
-    payload_json = json.dumps(data)
+    payload_json = (
+        json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    )
 
     doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1598,6 +1609,8 @@ def feature_comparison_html(view: Any) -> str:
     title = html.escape(view.title)
     summary = html.escape(view.summary)
     names = data.get("names", ("State A", "State B"))
+    name_a = html.escape(str(names[0]))
+    name_b = html.escape(str(names[1]))
 
     doc = f"""<!DOCTYPE html>
 <html lang="en">
@@ -1621,11 +1634,11 @@ def feature_comparison_html(view: Any) -> str:
     <div class="summary">{summary}</div>
     <div class="comparison-grid">
       <div class="panel">
-        <h3>{names[0]}</h3>
+        <h3>{name_a}</h3>
         <div>Shape: {data["layer_a"]["original_shape"]}</div>
       </div>
       <div class="panel">
-        <h3>{names[1]}</h3>
+        <h3>{name_b}</h3>
         <div>Shape: {data["layer_b"]["original_shape"]}</div>
       </div>
     </div>

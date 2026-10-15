@@ -241,3 +241,36 @@ def test_cnn_renderers_and_export():
         assert "SeeDL · Vision Intelligence" in content
         assert "featureCanvas" in content
         assert "channelSelect" in content
+
+
+def test_cnn_feature_comparison_export_escaping():
+    """Verify that feature comparison SVG and HTML export escape custom layer/state names."""
+    feat1 = torch.zeros(1, 1, 4, 4)
+    feat2 = torch.ones(1, 1, 4, 4)
+    v1 = sd.features(feat1)
+    v2 = sd.features(feat2)
+    view_cmp = sd.compare(v1, v2, names=("<script>alert('a')</script>", "State B & 'Quotes'"))
+
+    # SVG export escaping
+    svg_str = view_cmp.to_figure("svg")
+    assert "<script>alert" not in svg_str
+    assert "&lt;script&gt;alert" in svg_str
+
+    # HTML export escaping
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+        out_path = view_cmp.save(tmp.name)
+        html_text = Path(out_path).read_text(encoding="utf-8")
+        assert "<script>alert" not in html_text
+        assert "&lt;script&gt;alert" in html_text
+
+
+def test_cnn_pure_python_list_bounded_capture():
+    """Verify that pure Python nested lists are properly bounded and downsampled."""
+    # 2D list 200x200 (spatial dim > max_spatial_dim=128)
+    nested = [[float(r + c) for c in range(200)] for r in range(200)]
+    view = sd.features(nested, max_spatial_dim=64)
+
+    assert view.data["layers"][0]["downsampled"] is True
+    assert view.data["layers"][0]["channels"][0]["h"] == 64
+    assert view.data["layers"][0]["channels"][0]["w"] == 64
+    assert view.data["layers"][0]["original_spatial"] == (200, 200)

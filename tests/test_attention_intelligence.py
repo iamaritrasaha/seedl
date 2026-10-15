@@ -233,3 +233,86 @@ def test_attention_invalid_inputs_raise_seedl_error():
     # Head out of range
     with pytest.raises(SeeDLError, match="out of range"):
         sd.attention([[[0.5, 0.5], [0.5, 0.5]]], head=5)
+
+
+def test_attention_3d_tensor_disambiguation():
+    """Verify explicit and automatic disambiguation of 3D attention tensors."""
+    # 3D tensor: [2, 3, 3]
+    t3d = torch.ones(2, 3, 3) / 3.0
+
+    # 1. Explicitly treated as batched: [batch=2, seq_q=3, seq_k=3]
+    v_batched = sd.attention(t3d, is_batched=True, batch_index=1)
+    assert v_batched.data["is_averaged"] is True
+    assert v_batched.data["num_heads"] == 1
+    assert any("disambiguated 3d tensor as batched" in n.lower() for n in v_batched.notes)
+
+    # 2. Explicitly treated as multi-head: [heads=2, seq_q=3, seq_k=3]
+    v_heads = sd.attention(t3d, is_batched=False)
+    assert v_heads.data["num_heads"] == 2
+    assert any("disambiguated 3d tensor as multi-head" in n.lower() for n in v_heads.notes)
+
+
+def test_attention_invalid_distribution_disables_entropy():
+    """Verify that unnormalized logits or tensors with negatives report mean_entropy as None."""
+    # Raw unnormalized logits
+    logits = [
+        [3.0, -1.0, 0.5],
+        [0.0, 2.0, -2.0],
+    ]
+    data, summary, notes = inspect_attention(logits)
+    assert data["has_negatives"] is True
+    assert data["is_softmax"] is False
+    assert data["mean_entropy"] is None
+
+    # Render Plotly without error
+    view = sd.attention(logits, backend="plotly")
+    fig = view.to_figure("plotly")
+    assert fig is not None
+
+    # Export HTML without error
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+        out_path = view.save(tmp.name)
+        html_text = Path(out_path).read_text(encoding="utf-8")
+        assert "N/A (unnormalized/logits)" in html_text
+
+
+def test_attention_supplied_mask_handling():
+    """Verify that 1D key padding mask and 2D attention mask are tracked and noted."""
+    # 3x3 attention matrix
+    mat = [
+        [0.7, 0.3, 0.0],
+        [0.2, 0.8, 0.0],
+        [0.5, 0.5, 0.0],
+    ]
+    # Key padding mask: Key 2 is padding (True = masked)
+    mask_1d = [False, False, True]
+    data, summary, notes = inspect_attention(mat, mask=mask_1d)
+
+    assert data["mask"] is not None
+    assert len(data["mask"]) == 3
+    assert len(data["mask"][0]) == 3
+    assert data["mask"][0][2] is True
+    assert any("supplied attention mask" in n.lower() for n in notes)
+
+
+def test_attention_html_and_svg_export_escaping():
+    """Verify that malicious token strings with HTML/script tags are safely escaped."""
+    malicious_tokens = ["<b>Tok1</b>", "<script>alert(1)</script>", 'Tok & "Quote"']
+    mat = [
+        [0.5, 0.3, 0.2],
+        [0.1, 0.8, 0.1],
+        [0.3, 0.3, 0.4],
+    ]
+    view = sd.attention(mat, tokens=malicious_tokens, backend="svg")
+
+    # SVG export escaping
+    svg_str = view.to_figure("svg")
+    assert "<script>alert" not in svg_str
+    assert "&lt;script&gt;alert" in svg_str
+
+    # HTML export escaping
+    with tempfile.NamedTemporaryFile(suffix=".html", delete=False) as tmp:
+        out_path = view.save(tmp.name)
+        html_text = Path(out_path).read_text(encoding="utf-8")
+        assert "</script><script>alert" not in html_text
+        assert "escapeHtml" in html_text

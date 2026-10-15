@@ -1,14 +1,14 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Playground · SeeDL</title><meta name="description" content="SeeDL 0.2.0 — interactive visualization for deep learning and quantum computing. Explore real PyTorch networks, Bloch spheres, and quantum circuits.">
+<title>Live Intelligence Playground · SeeDL 0.3.0</title><meta name="description" content="SeeDL 0.3.0 — interactive visualization for deep learning and quantum computing. Explore real PyTorch training snapshots, loss timelines, neural networks, and Qiskit gate evolution.">
 <meta name="theme-color" content="#090e17"><link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./assets/style.css"><script src="./assets/site.js" defer></script><script src="./assets/playground.js" defer></script></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="header"><nav class="nav wrap" aria-label="Main navigation">
-<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.2.0</span></a>
+<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.3.0</span></a>
 <button class="menu-button" data-menu aria-label="Toggle navigation" aria-controls="main-links" aria-expanded="false">☰</button>
 <div class="navlinks" id="main-links"><a href="./index.html">Overview</a><a href="./playground.html" aria-current="page">Playground</a><a href="./docs/index.html">Documentation</a><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a></div>
 <button class="theme-button" data-theme-toggle aria-label="Use light theme">☀</button></nav></header>
-<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> SeeDL / Interactive laboratory</div><h1>A little interaction.<br><span class="accent">A lot of insight.</span></h1><p>Explore real SeeDL 0.2.0 visualizations. All model outputs are precomputed in Python; your browser handles the interaction.</p></div><section class="playground" aria-label="Interactive demonstrations"><div class="tabs" role="tablist" aria-label="Choose a demonstration"><button class="tab" id="tab-network" role="tab" aria-selected="true" aria-controls="network" tabindex="0" data-tab="network">01 &nbsp; Neural network</button><button class="tab" id="tab-bloch" role="tab" aria-selected="false" aria-controls="bloch" tabindex="-1" data-tab="bloch">02 &nbsp; Bloch sphere</button><button class="tab" id="tab-circuit" role="tab" aria-selected="false" aria-controls="circuit" tabindex="-1" data-tab="circuit">03 &nbsp; Bell circuit</button></div>
+<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> SeeDL / Interactive laboratory</div><h1>A little interaction.<br><span class="accent">A lot of insight.</span></h1><p>Explore real SeeDL 0.3.0 networks, recorded training, and gate-by-gate quantum evolution. All model outputs are precomputed in Python; your browser handles the interaction.</p></div><section class="playground" aria-label="Interactive demonstrations"><div class="tabs" role="tablist" aria-label="Choose a demonstration"><button class="tab" id="tab-network" role="tab" aria-selected="true" aria-controls="network" tabindex="0" data-tab="network">01 &nbsp; Neural Network Explorer</button><button class="tab" id="tab-training" role="tab" aria-selected="false" aria-controls="training" tabindex="-1" data-tab="training">02 &nbsp; Training Playback</button><button class="tab" id="tab-bloch" role="tab" aria-selected="false" aria-controls="bloch" tabindex="-1" data-tab="bloch">03 &nbsp; Bloch Sphere</button><button class="tab" id="tab-circuit" role="tab" aria-selected="false" aria-controls="circuit" tabindex="-1" data-tab="circuit">04 &nbsp; Quantum Circuit</button><button class="tab" id="tab-evolution" role="tab" aria-selected="false" aria-controls="evolution" tabindex="-1" data-tab="evolution">05 &nbsp; Quantum Evolution</button><button class="tab" id="tab-comparison" role="tab" aria-selected="false" aria-controls="comparison" tabindex="-1" data-tab="comparison">06 &nbsp; Training Comparison</button></div>
 <div id="network" role="tabpanel" aria-labelledby="tab-network"><div class="demo-layout"><div class="demo-stage"><iframe title="Interactive 3D PyTorch neural network" data-demo="network" loading="lazy"></iframe><div class="demo-caption">Drag to orbit · Scroll or pinch to zoom · Click a neuron to inspect</div></div><aside class="inspector"><h3>Inside the network</h3><p>A seeded PyTorch MLP.<br>3 → 5 → 3 → 2 neurons.<br>ReLU hidden activations.</p><label for="neuron">Inspect a neuron</label><select id="neuron"><option value="">Overview</option><option value="0:0">Input · neuron 0</option><option value="0:1">Input · neuron 1</option><option value="0:2">Input · neuron 2</option><option value="1:0">Hidden 1 · neuron 0</option><option value="1:1">Hidden 1 · neuron 1</option><option value="1:2">Hidden 1 · neuron 2</option><option value="1:3">Hidden 1 · neuron 3</option><option value="1:4">Hidden 1 · neuron 4</option><option value="2:0">Hidden 2 · neuron 0</option><option value="2:1">Hidden 2 · neuron 1</option><option value="2:2">Hidden 2 · neuron 2</option><option value="3:0">Output · neuron 0</option><option value="3:1">Output · neuron 1</option></select><span class="legend-key">Incoming connections</span><span class="legend-key out">Outgoing connections</span><button class="button" id="reset-network">Reset interaction ↺</button><h3>Captured input</h3><code>[0.8, −0.4, 0.6]</code><p class="mini">Weights and activations come from one real forward pass. This untrained network illustrates structure, not predictions.</p></aside></div><details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
 import seedl as sd
@@ -21,6 +21,31 @@ model = nn.Sequential(
 x = torch.tensor([[0.8, -0.4, 0.6]])
 view = sd.see(model, input=x, view=&quot;3d&quot;, theme=&quot;scientific&quot;)
 view.save(&quot;network.html&quot;)</code></pre></div></details></div>
+<div id="training" class="recorded-demo" role="tabpanel" aria-labelledby="tab-training" hidden>
+<h2>Training Playback</h2><p>Sixteen real forward/backward passes through a 2 → 4 → 1 PyTorch network. Play, pause, rewind, choose a step, or inspect a neuron. The loss chart, weights, activations, and existing gradients come from each captured pass. Live playback means recorded snapshots, not continuous training streamed from a server.</p>
+<div class="demo-stage"><iframe title="Training Playback" data-demo="training" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.3.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+torch.manual_seed(41)
+model = nn.Sequential(nn.Linear(2, 4), nn.Tanh(), nn.Linear(4, 1))
+x = torch.tensor([[1.0, -2.0]])
+optimizer = torch.optim.SGD(model.parameters(), lr=0.08)
+with sd.watch(model, name=&quot;Tiny regression&quot;, max_snapshots=16,
+              max_bytes=512_000, max_values=12,
+              max_neurons=12, max_connections=16) as run:
+    for step in range(16):
+        optimizer.zero_grad(set_to_none=True)
+        output = model(x)
+        loss = (output - 0.5).square().mean()
+        loss.backward()
+        run.capture(step=step, epoch=step // 4, loss=loss)
+        optimizer.step()  # Always AFTER capture.
+
+snapshot = run.snapshots[0]
+print(snapshot.data[&quot;loss&quot;], snapshot.data[&quot;parameters&quot;])
+run.playback(backend=&quot;plotly&quot;).save(&quot;training.html&quot;)</code></pre></div></details></div>
 <div id="bloch" role="tabpanel" aria-labelledby="tab-bloch" hidden><div class="demo-layout"><div class="demo-stage"><iframe title="Interactive single-qubit Bloch sphere" data-demo="bloch-plus" loading="lazy"></iframe><div class="demo-caption">Drag to rotate · Six independently computed SeeDL state exports</div></div><aside class="inspector"><h3>Choose a quantum state</h3><div class="states" role="group" aria-label="Predefined states"><button class="state" data-state="zero" aria-pressed="false">|0⟩</button><button class="state" data-state="one" aria-pressed="false">|1⟩</button><button class="state" data-state="plus" aria-pressed="true">|+⟩</button><button class="state" data-state="minus" aria-pressed="false">|−⟩</button><button class="state" data-state="plus-i" aria-pressed="false">|+i⟩</button><button class="state" data-state="minus-i" aria-pressed="false">|−i⟩</button></div><h3>Bloch vector (x, y, z)</h3><code id="bloch-vector" aria-live="polite">(1, 0, 0)</code><h3>Measurement in Z basis</h3><p id="bloch-prob">P(0) = 50% · P(1) = 50%</p><p class="mini">x = Tr(ρX), y = Tr(ρY), z = Tr(ρZ). Each of these pure states lies on the unit sphere.</p><a class="textlink" href="./docs/index.html#bloch-spheres">Read the Bloch guide →</a></aside></div><details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
 view = sd.bloch(&quot;+&quot;, backend=&quot;plotly&quot;)
 view.save(&quot;bloch.html&quot;)
@@ -31,5 +56,29 @@ import seedl as sd
 qc = QuantumCircuit(2)
 qc.h(0)
 qc.cx(0, 1)
-sd.see(qc, backend=&quot;plotly&quot;).save(&quot;bell.html&quot;)</code></pre></div></details></div><p class="notice">Reproducible, precomputed scientific demonstrations. Python and PyTorch do not run in this browser. Plotly/WebGL powers the 3D interaction; visualization canvases keep a dark palette in both site themes. <a class="textlink" href="./demos/manifest.json">Inspect build provenance ↗</a></p><noscript><p>JavaScript is required for interactive demos. Read the <a href="./docs/index.html">documentation</a> or return to the <a href="./index.html">static previews</a>.</p></noscript></section></main>
+sd.see(qc, backend=&quot;plotly&quot;).save(&quot;bell.html&quot;)</code></pre></div></details></div><div id="evolution" class="recorded-demo" role="tabpanel" aria-labelledby="tab-evolution" hidden>
+<h2>Quantum Evolution</h2><p>Select a gate in the diagram or timeline. Compare states before and after H and CX, including reduced-qubit Bloch vectors, basis probabilities, and amplitude phases. All states are checked against Qiskit. At the Bell state each local Bloch vector is zero; the joint state is still pure.</p><div class="evolution-presets"><label for="evolution-circuit">Circuit</label> <select id="evolution-circuit"><option value="evolution">Bell pair · H → CX</option><option value="evolution-phase">Bell pair + phase · H → CX → RZ(π/2)</option></select></div><p class="mini">Qiskit basis order: |q₁q₀⟩. Phases of zero-amplitude basis states are undefined. These demos contain only unitary gates. Measurement, reset, conditional, or unsupported operations halt SeeDL evolution; post-halt states are unavailable.</p>
+<div class="demo-stage"><iframe title="Quantum Evolution" data-demo="evolution" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.3.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>from qiskit import QuantumCircuit
+import seedl as sd
+
+qc = QuantumCircuit(2)
+qc.h(0)
+qc.cx(0, 1)
+view = sd.circuit(qc, simulate=True, backend=&quot;plotly&quot;)
+view.save(&quot;evolution.html&quot;)
+print(view.data[&quot;evolution&quot;][-1][&quot;probabilities&quot;])
+# Optional: rotate the Bell pair&#x27;s relative phase.
+qc.rz(1.5707963267948966, 1)
+sd.circuit(qc, simulate=True, backend=&quot;plotly&quot;).save(&quot;phase.html&quot;)</code></pre></div></details></div>
+<div id="comparison" class="recorded-demo" role="tabpanel" aria-labelledby="tab-comparison" hidden>
+<h2>Training Comparison</h2><p>Step 0 versus step 15 from the same recording and fixed input. Inspect parameter changes at original flat indices, captured activation distributions, sampled gradient statistics, and output differences. These comparisons describe retained samples, not every parameter. The final snapshot precedes the last optimizer update.</p><p class="notice">The comparison is rendered directly by sd.compare(run.snapshots[0], run.snapshots[-1]). No separate comparison engine runs in this website. <a class="textlink" href="./playground.html#training">Recordings and complete training source →</a></p>
+<div class="demo-stage"><iframe title="Training Comparison" data-demo="comparison" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.3.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code># Continue from the training example above.
+comparison = sd.compare(run.snapshots[0], run.snapshots[-1],
+                        names=(&quot;Step 0&quot;, &quot;Step 15&quot;), backend=&quot;plotly&quot;)
+comparison.save(&quot;comparison.html&quot;)
+print(comparison.data[&quot;parameters&quot;])
+print(comparison.data[&quot;outputs&quot;])</code></pre></div></details></div>
+<p class="notice">Reproducible, precomputed scientific demonstrations. Python and PyTorch do not run in this browser. Plotly/WebGL powers the 3D interaction; visualization canvases keep a dark palette in both site themes. <a class="textlink" href="./demos/manifest.json">Inspect build provenance ↗</a></p><noscript><p>JavaScript is required for interactive demos. Read the <a href="./docs/index.html">documentation</a> or return to the <a href="./index.html">static previews</a>.</p></noscript></section></main>
 <footer class="footer wrap"><span><a class="brand" href="./index.html">SeeDL</a> &nbsp; Scientific insight, made visible.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>

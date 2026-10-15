@@ -66,7 +66,38 @@ def main() -> None:
                 )
             checked += 1
     manifest = json.loads((ROOT / "demos/manifest.json").read_text())
-    assert manifest["seedl"] == "0.2.0"
+    assert manifest["seedl"] == "0.3.0"
+    assert len(manifest["sha256"]) == 12
+    for path in paths:
+        text = path.read_text()
+        assert 'class="version">0.3.0' in text
+        # Archived release notes remain available; current API links use 0.3.0.
+        assert "blob/v0.2.0/" not in text
+    training = manifest["training"]
+    snapshots = training["snapshots"]
+    assert len(snapshots) == 16 and training["stats"]["dropped"] == 0
+    assert training["device"] == "cpu"
+    assert [s["step"] for s in snapshots] == list(range(16))
+    assert snapshots[-1]["loss"] < snapshots[0]["loss"]
+    assert all(s["graph"] and s["complete"] for s in snapshots)
+    assert all(p["gradients"] is not None for s in snapshots for p in s["parameters"].values())
+    assert training["capture_boundary"] == "after backward, before optimizer.step"
+    assert training["comparison"]["steps"] == [0, 15]
+    for row in training["comparison"]["parameters"]:
+        assert row["status"] == "aligned"
+        assert row["delta"] == [b - a for a, b in zip(row["before"], row["after"], strict=True)]
+    # Reuse the independent Qiskit validator for the exact circuits shipped on the site.
+    from types import SimpleNamespace
+
+    from generate import verify_evolution
+    from qiskit import QuantumCircuit
+
+    qc = QuantumCircuit(2)
+    qc.h(0)
+    qc.cx(0, 1)
+    verify_evolution(SimpleNamespace(data=manifest["evolution"]["bell"]), qc)
+    qc.rz(math.pi / 2, 1)
+    verify_evolution(SimpleNamespace(data=manifest["evolution"]["phase"]), qc)
     assert len(manifest["bloch"]) == 6
     for slug, data in manifest["bloch"].items():
         assert math.isclose(sum(n * n for n in data["vector"]), 1, abs_tol=1e-12)
@@ -87,7 +118,16 @@ def main() -> None:
         html = path.read_text()
         assert html.count('src="../assets/plotly.min.js"') == 1
         assert "cdn.plot.ly" not in html
-    assert sum(p.stat().st_size for p in paths) < 50_000, "Initial HTML has grown unexpectedly"
+        assert "plotly.js v" not in html, "Duplicated inline Plotly runtime"
+        assert path.stat().st_size < 1_000_000, "Unbounded demo payload"
+        for link in Page(html).links:
+            parts = urlsplit(link)
+            if not parts.scheme and not parts.netloc and parts.path:
+                assert (path.parent / parts.path).is_file(), link
+                checked += 1
+    for name in ("training", "evolution", "evolution-phase"):
+        assert "seedl-playback" in (ROOT / f"demos/{name}.html").read_text()
+    assert sum(p.stat().st_size for p in paths) < 70_000, "Initial HTML has grown unexpectedly"
     # Execute visible Python examples as a reader would, preserving the model/x
     # variables shared by consecutive documentation examples. Exports go to temp.
     count = 0
@@ -98,7 +138,10 @@ def main() -> None:
             for path, page in pages.items():
                 namespace = {"__name__": "__website_example__"}
                 for snippet in page.snippets:
-                    if "import " not in snippet and not snippet.startswith("view = sd.see"):
+                    if not any(
+                        token in snippet
+                        for token in ("import ", "view = sd.see", "comparison = sd.compare")
+                    ):
                         continue
                     with contextlib.redirect_stdout(io.StringIO()):
                         exec(compile(snippet, str(path), "exec"), namespace)
@@ -106,7 +149,8 @@ def main() -> None:
     finally:
         os.chdir(previous)
     print(
-        f"PASS: {checked} local links/assets, 8 demo hashes, Bell/Bloch science, {count} Python examples."
+        f"PASS: {checked} local links/assets, {len(manifest['sha256'])} demo hashes, "
+        f"16 captured passes, Bell/Bloch/phase science, {count} Python examples."
     )
 
 

@@ -8,3 +8,5 @@
 @media(max-width:760px){.demo-stage{overflow-x:auto}.demo-stage iframe{width:720px;max-width:none}.demo-caption{min-width:300px;position:sticky;left:0}}
 
 .preview-load{font:inherit;color:#8aebd7;background:transparent;border:0;padding:0;text-decoration:underline;text-underline-offset:3px}.preview-load:disabled{text-decoration:none;cursor:default;color:#a1aec0}.preview-live{overflow:auto}.preview-live iframe{display:block;width:100%;min-width:680px;height:500px;border:0}
+
+.recorded-demo h2{font-size:1.8rem}.recorded-demo>p{max-width:900px}.recorded-demo iframe{height:1370px}.recorded-demo#evolution iframe{height:1730px}.recorded-demo#comparison iframe{height:850px}.evolution-presets{margin:18px 0}.evolution-presets select{font:inherit;color:var(--text);background:var(--panel);border:1px solid var(--line);border-radius:6px;max-width:100%;padding:10px}.recorded-demo .demo-stage iframe{width:100%;max-width:100%}@media(max-width:760px){.recorded-demo#comparison iframe{width:900px;max-width:none}}@media(max-width:760px){.recorded-demo iframe{height:1510px}.recorded-demo#evolution iframe{height:1850px}}

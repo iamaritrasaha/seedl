@@ -45,6 +45,24 @@ def save_visualization(
 
 def _save_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.kind == "feature_maps":
+        from ._features import features_html
+
+        path.write_text(features_html(view), encoding="utf-8")
+        return
+    if view.kind == "feature_comparison":
+        from ._features import feature_comparison_html
+
+        path.write_text(feature_comparison_html(view), encoding="utf-8")
+        return
+    if (
+        view.kind in {"attention", "attention_comparison"}
+        and view.data.get("presentation") == "attention"
+    ):
+        from ._transformers import attention_html
+
+        path.write_text(attention_html(view), encoding="utf-8")
+        return
     if view.backend == "plotly" and (
         view.kind == "training_playback"
         or (view.kind == "quantum_circuit" and view.data.get("simulate"))

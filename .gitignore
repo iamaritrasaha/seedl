@@ -21,3 +21,7 @@ website/assets/plotly-LICENSE.txt
 website/assets/network.jpg
 website/assets/bloch.svg
 website/assets/bell.svg
+website/assets/cnn-features.svg
+website/assets/attention.svg
+website/assets/vit-attention.svg
+graphify-out/

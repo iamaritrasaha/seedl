@@ -65,14 +65,23 @@ def main() -> None:
                     f"Missing anchor: {link}"
                 )
             checked += 1
+
     manifest = json.loads((ROOT / "demos/manifest.json").read_text())
-    assert manifest["seedl"] == "0.3.0"
-    assert len(manifest["sha256"]) == 12
+    assert manifest["seedl"] == "0.4.0", f"Expected manifest version 0.4.0, got {manifest['seedl']}"
+    demo_files = list((ROOT / "demos").glob("*.html"))
+    assert len(manifest["sha256"]) == len(demo_files)
+    assert len(manifest["sha256"]) >= 18, (
+        f"Expected at least 18 demos, got {len(manifest['sha256'])}"
+    )
+
     for path in paths:
         text = path.read_text()
-        assert 'class="version">0.3.0' in text
-        # Archived release notes remain available; current API links use 0.3.0.
-        assert "blob/v0.2.0/" not in text
+        assert 'class="version">0.4.0' in text, f"Outdated version badge in {path.name}"
+        # Current API links use 0.4.0; historical release notes links are preserved
+        assert "blob/v0.3.0/src/" not in text, f"Stale 0.3.0 API link in {path.name}"
+        assert "blob/v0.2.0/src/" not in text, f"Stale 0.2.0 API link in {path.name}"
+
+    # 1. Preserved 0.3.0 Training Provenance
     training = manifest["training"]
     snapshots = training["snapshots"]
     assert len(snapshots) == 16 and training["stats"]["dropped"] == 0
@@ -86,7 +95,8 @@ def main() -> None:
     for row in training["comparison"]["parameters"]:
         assert row["status"] == "aligned"
         assert row["delta"] == [b - a for a, b in zip(row["before"], row["after"], strict=True)]
-    # Reuse the independent Qiskit validator for the exact circuits shipped on the site.
+
+    # 2. Preserved 0.3.0 Quantum Provenance
     from types import SimpleNamespace
 
     from generate import verify_evolution
@@ -98,11 +108,13 @@ def main() -> None:
     verify_evolution(SimpleNamespace(data=manifest["evolution"]["bell"]), qc)
     qc.rz(math.pi / 2, 1)
     verify_evolution(SimpleNamespace(data=manifest["evolution"]["phase"]), qc)
+
     assert len(manifest["bloch"]) == 6
     for slug, data in manifest["bloch"].items():
         assert math.isclose(sum(n * n for n in data["vector"]), 1, abs_tol=1e-12)
         assert math.isclose(data["prob_0"] + data["prob_1"], 1, abs_tol=1e-12)
         assert (ROOT / f"demos/bloch-{slug}.html").is_file()
+
     assert [i["name"] for i in manifest["circuit"]["instructions"]] == ["h", "cx"]
     assert manifest["circuit"]["instructions"][1]["qubits"] == [0, 1]
     assert all(
@@ -112,24 +124,87 @@ def main() -> None:
         )
     )
     assert math.isclose(manifest["bell"]["entanglement"]["entropy_q0"], 1, abs_tol=1e-12)
+
+    # 3. New 0.4.0 CNN Provenance
+    cnn = manifest["cnn"]
+    assert cnn["seed"] == 42
+    assert cnn["captured_layers"] == 5
+    assert cnn["layers"][0]["name"] == "conv1"
+    assert cnn["layers"][0]["shape"] == [1, 8, 24, 24]
+    assert cnn["layers"][2]["name"] == "pool1"
+    assert cnn["layers"][2]["shape"] == [1, 8, 12, 12]
+    assert cnn["layers"][2]["downsampled"] is False  # Native resolution, no budget downsampling
+    assert (ROOT / "demos/cnn-features.html").is_file()
+    assert (ROOT / "assets/cnn-features.svg").is_file()
+
+    # 4. New 0.4.0 Transformer Attention Provenance
+    attn = manifest["attention"]
+    assert attn["seed"] == 42
+    assert attn["num_heads"] == 4
+    assert len(attn["tokens"]) == 7
+    assert attn["mean_entropy"] > 0
+    assert attn["is_softmax"] is True
+    assert (ROOT / "demos/attention.html").is_file()
+    assert (ROOT / "assets/attention.svg").is_file()
+
+    # 5. New 0.4.0 Attention Comparison Provenance
+    cmp_pair = manifest["attention_comparison"]["pairs"]["0-1"]
+    assert cmp_pair["head_a"] == 0 and cmp_pair["head_b"] == 1
+    assert cmp_pair["mae"] > 0
+    assert cmp_pair["frobenius_norm"] > 0
+    assert 0 <= cmp_pair["cosine_similarity"] <= 1.0
+    assert (ROOT / "demos/attention-comparison.html").is_file()
+
+    # 6. New 0.4.0 ViT Patch Attention Provenance
+    vit = manifest["vit"]
+    assert vit["seed"] == 42
+    assert vit["patch_grid"] == [4, 4]
+    assert vit["from_token"] == 0
+    assert vit["has_cls"] is True
+    assert len(vit["grid"]) == 4 and len(vit["grid"][0]) == 4
+    assert (ROOT / "demos/vit-attention.html").is_file()
+    assert (ROOT / "assets/vit-attention.svg").is_file()
+
+    # Check all demo files against manifest sha256 and size/CDN bounds
     for name, digest in manifest["sha256"].items():
         path = ROOT / "demos" / name
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, name
         html = path.read_text()
-        assert html.count('src="../assets/plotly.min.js"') == 1
         assert "cdn.plot.ly" not in html
-        assert "plotly.js v" not in html, "Duplicated inline Plotly runtime"
-        assert path.stat().st_size < 1_000_000, "Unbounded demo payload"
+        assert "cdn." not in html
+        assert "http://" not in html and "https://" not in html
+        assert path.stat().st_size < 1_000_000, f"Unbounded demo payload: {name}"
+
+        # Plotly demos share the single local Plotly bundle
+        if any(
+            token in name
+            for token in (
+                "network",
+                "bloch",
+                "bell",
+                "training",
+                "comparison",
+                "evolution",
+                "attention-comparison",
+            )
+        ):
+            assert html.count('src="../assets/plotly.min.js"') == 1, (
+                f"Missing shared Plotly in {name}"
+            )
+            assert "plotly.js v" not in html, f"Duplicated inline Plotly runtime in {name}"
+
         for link in Page(html).links:
             parts = urlsplit(link)
             if not parts.scheme and not parts.netloc and parts.path:
                 assert (path.parent / parts.path).is_file(), link
                 checked += 1
+
     for name in ("training", "evolution", "evolution-phase"):
         assert "seedl-playback" in (ROOT / f"demos/{name}.html").read_text()
-    assert sum(p.stat().st_size for p in paths) < 70_000, "Initial HTML has grown unexpectedly"
-    # Execute visible Python examples as a reader would, preserving the model/x
-    # variables shared by consecutive documentation examples. Exports go to temp.
+
+    assert sum(p.stat().st_size for p in paths) < 85_000, "Initial HTML has grown unexpectedly"
+
+    # Execute visible Python examples in temp directory
     count = 0
     previous = Path.cwd()
     try:
@@ -140,7 +215,12 @@ def main() -> None:
                 for snippet in page.snippets:
                     if not any(
                         token in snippet
-                        for token in ("import ", "view = sd.see", "comparison = sd.compare")
+                        for token in (
+                            "import ",
+                            "view = sd.see",
+                            "comparison = sd.compare",
+                            "cmp_view = sd.attention",
+                        )
                     ):
                         continue
                     with contextlib.redirect_stdout(io.StringIO()):
@@ -148,9 +228,10 @@ def main() -> None:
                     count += 1
     finally:
         os.chdir(previous)
+
     print(
         f"PASS: {checked} local links/assets, {len(manifest['sha256'])} demo hashes, "
-        f"16 captured passes, Bell/Bloch/phase science, {count} Python examples."
+        f"16 captured passes, Bell/Bloch/phase science, CNN/Attention/ViT science, {count} Python examples."
     )
 
 

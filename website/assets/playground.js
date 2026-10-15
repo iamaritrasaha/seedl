@@ -8,6 +8,8 @@ function activate(name, updateHash = true) {
   if (!tabs.some(tab => tab.dataset.tab === name)) name = 'network';
   tabs.forEach(tab => {
     const active = tab.dataset.tab === name;
+    if (!active) document.querySelector(`#${tab.dataset.tab} iframe`)?.contentDocument
+      ?.querySelectorAll('.plotly-graph-div').forEach(plot => plot.seedlPlayback?.pause());
     tab.setAttribute('aria-selected', String(active)); tab.tabIndex = active ? 0 : -1;
     document.getElementById(tab.dataset.tab).hidden = !active;
   });
@@ -54,6 +56,17 @@ document.querySelector('#reset-network').addEventListener('click', () => {
   neuron.value = '';
   // Reload the already cached export to restore camera, selection, and legend.
   networkFrame.src = networkFrame.src;
+});
+document.querySelector('#evolution-circuit').addEventListener('change', event => {
+  const frame = document.querySelector('#evolution iframe');
+  frame.contentDocument?.querySelectorAll('.plotly-graph-div')
+    .forEach(plot => plot.seedlPlayback?.pause());
+  frame.dataset.demo = event.target.value;
+  frame.src = `./demos/${frame.dataset.demo}.html`;
+});
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) frames.forEach(frame => frame.contentDocument
+    ?.querySelectorAll('.plotly-graph-div').forEach(plot => plot.seedlPlayback?.pause()));
 });
 let manifestPromise;
 function getManifest() {

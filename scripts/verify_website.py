@@ -66,6 +66,194 @@ def node_centers(png: bytes):
     return sorted(centers)
 
 
+def playback_ready(frame):
+    frame.wait_for_function(
+        """() => {const gd=document.querySelector('.plotly-graph-div');
+        return gd?.seedlPlayback && gd._fullLayout?.scene?._scene?.glplot;}"""
+    )
+
+
+def wait_index(frame, index):
+    frame.wait_for_function(
+        "i => document.querySelector('.plotly-graph-div').dataset.seedlIndex === String(i)",
+        arg=index,
+    )
+
+
+def close_values(actual, expected):
+    assert len(actual) == len(expected)
+    assert all(abs(a - b) < 1e-10 for a, b in zip(actual, expected, strict=True)), (
+        actual,
+        expected,
+    )
+
+
+def verify_recorded_demos(page):
+    manifest = json.loads((ROOT / "website/demos/manifest.json").read_text())
+    page.locator("#tab-training").click()
+    training = page.locator("#training iframe").element_handle().content_frame()
+    playback_ready(training)
+    panel = training.locator(".seedl-playback")
+    snapshots = manifest["training"]["snapshots"]
+    panel.locator('[data-control="neuron"]').select_option("1:0")
+    initial_card = panel.locator("[data-inspection]").inner_text()
+    assert "Activation" in initial_card and "gradient" in initial_card.lower()
+    panel.locator('[data-action="next"]').click()
+    wait_index(training, 1)
+    assert panel.locator("[data-inspection]").inner_text() != initial_card
+    # Exact rendered activations and hover weight/gradient data come from the recording.
+    for index in (1, 15):
+        panel.locator('[data-control="step"]').select_option(str(index))
+        wait_index(training, index)
+        actual = training.evaluate("""() => document.querySelector('.plotly-graph-div').data
+            .filter(t=>t.meta?.role==='nodes').map(t=>({ids:t.customdata, colors:t.marker.color}))""")
+        nodes = {n["id"]: n for n in snapshots[index]["graph"]["nodes"]}
+        for trace in actual:
+            if isinstance(trace["colors"], list):
+                close_values(trace["colors"], [nodes[id]["activation"] for id in trace["ids"]])
+        texts = training.evaluate(
+            "document.querySelector('.plotly-graph-div').data.flatMap(t=>t.text || []).join(' ')"
+        )
+        assert "Weight" in texts and "gradient" in texts.lower()
+        for edge in snapshots[index]["graph"]["edges"]:
+            label = f"{edge['source']} → {edge['target']}<br>Weight: {edge['weight']:.5g}<br>"
+            assert label in texts
+            assert f"Weight gradient: {edge['gradient']:.5g}" in texts
+        card = panel.locator("[data-inspection]").inner_text()
+        assert f"Bias gradient: {nodes['1:0']['gradient']:.5g}" in card
+    loss = training.evaluate("document.querySelector('[data-loss]').data[0].y")
+    close_values(loss, [s["loss"] for s in snapshots])
+    assert training.evaluate("document.querySelector('[data-loss]').data[1].x") == [15]
+    panel.locator('[data-action="previous"]').click()
+    wait_index(training, 14)
+    panel.locator('[data-control="timeline"]').focus()
+    page.keyboard.press("Home")
+    wait_index(training, 0)
+    panel.locator('[data-control="epoch"]').select_option("8")
+    wait_index(training, 8)
+    panel.locator('[data-action="rewind"]').click()
+    wait_index(training, 0)
+    panel.locator('[data-control="speed"]').select_option("4")
+    panel.locator('[data-action="play"]').click()
+    training.wait_for_function(
+        "document.querySelector('.plotly-graph-div').seedlPlayback.index >= 2"
+    )
+    panel.locator('[data-action="pause"]').click()
+    training.wait_for_timeout(350)
+    paused = training.evaluate("document.querySelector('.plotly-graph-div').seedlPlayback.index")
+    training.wait_for_timeout(350)
+    assert (
+        training.evaluate("document.querySelector('.plotly-graph-div').seedlPlayback.index")
+        == paused
+    )
+    # Physical pointer selection on the actual training network, not a dispatched Plotly event.
+    panel.locator('[data-control="neuron"]').select_option("")
+    graph = training.locator(".plotly-graph-div").first
+    graph.scroll_into_view_if_needed()
+    training.evaluate("""() => { window.neuronHover=null;
+      document.querySelector('.plotly-graph-div').on('plotly_hover', e=>{
+        const p=e.points[0]; if(p.data.meta?.role==='nodes') window.neuronHover=p.customdata;
+      }); }""")
+    canvas = training.locator("canvas").first.bounding_box()
+    point = None
+    for y in range(int(canvas["y"]) + 35, int(canvas["y"] + canvas["height"]) - 35, 18):
+        for x in range(int(canvas["x"]) + 35, int(canvas["x"] + canvas["width"]) - 35, 18):
+            page.mouse.move(x, y)
+            hovered = training.evaluate("window.neuronHover")
+            if hovered:
+                point = x, y, hovered
+                break
+        if point:
+            break
+    assert point, "No real training neuron reachable by pointer"
+    page.mouse.click(point[0], point[1])
+    training.wait_for_function(
+        'id => document.querySelector("[data-control=neuron]").value === id', arg=point[2]
+    )
+    graph.screenshot(path=str(ARTIFACTS / "training-network.png"))
+    # Navigation pauses a running recording without replacing the library's controller.
+    panel.locator('[data-action="play"]').click()
+    page.locator("#tab-evolution").click()
+    assert not training.evaluate(
+        "document.querySelector('.plotly-graph-div').seedlPlayback.playing"
+    )
+    quantum = page.locator("#evolution iframe").element_handle().content_frame()
+    playback_ready(quantum)
+    quantum.wait_for_selector("[data-seedl-circuit] .point")
+    gate = quantum.locator("[data-seedl-circuit] .scatterlayer .point").first
+    gate.scroll_into_view_if_needed()
+    gate.click(force=True)
+    wait_index(quantum, 1)
+    qp = quantum.locator(".seedl-playback")
+    qp.locator('[data-control="step"]').select_option("2")
+    wait_index(quantum, 2)
+    bars = quantum.evaluate(
+        "document.querySelector('.plotly-graph-div').data.filter(t=>t.type==='bar').map(t=>t.y)"
+    )
+    close_values(bars[0], [0.5, 0.5, 0, 0])
+    close_values(bars[1], [0.5, 0, 0, 0.5])
+    vectors = quantum.evaluate("""document.querySelector('.plotly-graph-div').data
+        .filter(t=>t.type==='scatter3d' && t.mode==='lines+markers+text' && t.scene==='scene2')
+        .map(t=>[t.x[1]-t.x[0],t.y[1],t.z[1]])""")
+    assert len(vectors) == 2
+    for vector in vectors:
+        close_values(vector, [0, 0, 0])
+    with quantum.expect_navigation(wait_until="load"):
+        page.locator("#evolution-circuit").select_option("evolution-phase")
+    quantum = page.locator("#evolution iframe").element_handle().content_frame()
+    playback_ready(quantum)
+    quantum.locator('[data-control="step"]').select_option("3")
+    wait_index(quantum, 3)
+    actual = quantum.evaluate("""document.querySelector('.plotly-graph-div').data
+        .filter(t=>t.type==='bar').map(t=>({p:t.y, phase:t.marker.color, amplitudes:t.customdata}))""")
+    expected = manifest["evolution"]["phase"]["evolution"][3]
+    close_values(actual[1]["p"], expected["probabilities"])
+    close_values(actual[1]["phase"], [a["phase"] for a in expected["amplitudes"]])
+    quantum.locator(".plotly-graph-div").first.screenshot(
+        path=str(ARTIFACTS / "quantum-evolution.png")
+    )
+    page.locator("#tab-comparison").click()
+    comparison = page.locator("#comparison iframe").element_handle().content_frame()
+    ready(comparison)
+    data = comparison.evaluate("document.getElementById('seedl-demo').data")
+    expected = manifest["training"]["comparison"]
+    for row in expected["parameters"]:
+        trace = next(t for t in data if t["name"] == row["name"])
+        close_values(trace["y"], row["delta"])
+    for side, name in [("before", "Step 0"), ("after", "Step 15")]:
+        trace = next(t for t in data if t["name"] == name + " |gradient|max")
+        close_values(trace["y"], [r["gradients"][side]["max_abs"] for r in expected["parameters"]])
+        trace = next(t for t in data if t["name"] == name + " output")
+        close_values(trace["y"], expected["outputs"][side])
+    # Actual legend toggling and data hover on the comparison plot.
+    comparison.locator(".legendtoggle").first.click()
+    comparison.wait_for_function(
+        "document.getElementById('seedl-demo').data[0].visible === 'legendonly'"
+    )
+    comparison.locator(".legendtoggle").first.click()
+    comparison.locator(".scatterlayer .point").first.hover(force=True)
+    assert comparison.locator(".hoverlayer").text_content().strip()
+    comparison.locator("#seedl-demo").screenshot(path=str(ARTIFACTS / "comparison.png"))
+    # Once loaded, all three demos remain interactive with the network disabled.
+    page.context.set_offline(True)
+    try:
+        page.locator("#tab-training").click()
+        panel.locator('[data-control="step"]').select_option("7")
+        wait_index(training, 7)
+        page.locator("#tab-evolution").click()
+        quantum.locator('[data-control="step"]').select_option("1")
+        wait_index(quantum, 1)
+        page.locator("#tab-comparison").click()
+        comparison.locator(".scatterlayer .point").first.hover(force=True)
+        assert comparison.locator(".hoverlayer").text_content().strip()
+    finally:
+        page.context.set_offline(False)
+    print(
+        "PASS: training controls, real neuron click, loss/activations/weights/gradients; quantum gate click, Bell probabilities/Bloch vectors/phases; comparison deltas, gradients, outputs and legend.",
+        flush=True,
+    )
+
+
 def main():
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(
@@ -208,6 +396,8 @@ def main():
             # Keyboard-operated tab list.
             page.locator("#tab-network").focus()
             page.keyboard.press("ArrowRight")
+            assert page.locator("#tab-training").get_attribute("aria-selected") == "true"
+            page.keyboard.press("ArrowRight")
             assert page.locator("#tab-bloch").get_attribute("aria-selected") == "true"
             bloch = page.locator("#bloch iframe").element_handle().content_frame()
             ready(bloch)
@@ -258,6 +448,7 @@ def main():
             print(
                 "PASS: physical neuron click, highlights, inspector, camera orbit/zoom/reset, six Bloch vectors, Bell rendering/hover."
             )
+            verify_recorded_demos(page)
             page.set_viewport_size({"width": 390, "height": 844})
             for route in ("index.html", "docs/index.html", "playground.html#network"):
                 page.goto(base + route)
@@ -275,6 +466,28 @@ def main():
                 "document.getElementById('seedl-demo').layout.annotations.at(-1).text.includes('1:1')"
             )
             page.screenshot(path=str(ARTIFACTS / "mobile.png"), full_page=True)
+            for name in ("training", "evolution", "comparison"):
+                page.locator(f"#tab-{name}").click()
+                iframe = page.locator(f"#{name} iframe")
+                frame = iframe.element_handle().content_frame()
+                if name == "comparison":
+                    ready(frame)
+                else:
+                    playback_ready(frame)
+                    panel = frame.locator(".seedl-playback")
+                    panel.locator('[data-action="next"]').click()
+                    wait_index(frame, 1)
+                    assert frame.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                    assert frame.evaluate(
+                        "document.querySelector('.plotly-graph-div')._fullLayout.width >= 700"
+                    ), "Mobile plots must retain readable axes and panels"
+                    if name == "evolution":
+                        assert not panel.locator('[data-control="neuron"]').is_visible()
+                        assert not panel.locator('[data-control="epoch"]').is_visible()
+                assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+                page.screenshot(path=str(ARTIFACTS / f"mobile-{name}.png"), full_page=True)
+                frame.locator(".plotly-graph-div").first.scroll_into_view_if_needed()
+                page.screenshot(path=str(ARTIFACTS / f"mobile-{name}-plot.png"))
             assert not errors, "\n".join(errors)
             assert all(
                 url.startswith(base) or url.startswith("data:") or url.startswith("blob:")

@@ -1,4 +1,4 @@
-"""Build deterministic SeeDL 0.2.0 demos; no server or CDN is needed at runtime.
+"""Build deterministic SeeDL 0.3.0 demos; no server or CDN is needed at runtime.
 
 Run from the repository root: .venv/bin/python website/generate.py
 """
@@ -13,15 +13,94 @@ import math
 import shutil
 from pathlib import Path
 
+import numpy as np
 import plotly
 import plotly.offline
+import qiskit
 import torch
 from qiskit import QuantumCircuit
+from qiskit.quantum_info import Pauli, Statevector, partial_trace
 
 import seedl as sd
 from seedl._network_renderers import build_network_interactive_js
+from seedl._playback import playback_html
 
 ROOT = Path(__file__).resolve().parent
+
+
+def training_example():
+    """Small CPU-only regression; captures belong to the pass before each update."""
+    torch.manual_seed(41)
+    model = torch.nn.Sequential(torch.nn.Linear(2, 4), torch.nn.Tanh(), torch.nn.Linear(4, 1)).cpu()
+    x = torch.tensor([[1.0, -2.0]])
+    optimizer = torch.optim.SGD(model.parameters(), lr=0.08)
+    with sd.watch(
+        model,
+        name="Tiny regression",
+        max_snapshots=16,
+        max_bytes=512_000,
+        max_values=12,
+        max_neurons=12,
+        max_connections=16,
+    ) as run:
+        for step in range(16):
+            optimizer.zero_grad(set_to_none=True)
+            output = model(x)
+            loss = (output - 0.5).square().mean()
+            loss.backward()
+            snapshot = run.capture(step=step, epoch=step // 4, loss=loss)
+            # Verify provenance at the capture boundary, before optimizer.step().
+            assert snapshot.data["output"]["values"] == output.detach().flatten().tolist()
+            for name, parameter in model.named_parameters():
+                captured = snapshot.data["parameters"][name]
+                indices = captured["indices"]
+                assert captured["values"] == parameter.detach().flatten()[indices].tolist()
+                assert captured["gradients"] == parameter.grad.flatten()[indices].tolist()
+            optimizer.step()
+    assert run.snapshots[-1].data["loss"] < run.snapshots[0].data["loss"]
+    assert run.recording_stats["dropped"] == 0
+    return run
+
+
+def verify_evolution(view, qc):
+    """Check every retained amplitude, probability, phase and Bloch vector with Qiskit."""
+    prefix = QuantumCircuit(qc.num_qubits)
+    for index, step in enumerate(view.data["evolution"]):
+        if index:
+            op = qc.data[index - 1]
+            prefix.append(op.operation, [qc.find_bit(q).index for q in op.qubits])
+        expected = Statevector.from_instruction(prefix)
+        assert step["statevector_valid"]
+        np.testing.assert_allclose(
+            [complex(a["real"], a["imag"]) for a in step["amplitudes"]],
+            expected.data,
+            atol=1e-12,
+        )
+        np.testing.assert_allclose(step["probabilities"], expected.probabilities(), atol=1e-12)
+        np.testing.assert_allclose(
+            [a["phase"] for a in step["amplitudes"]], np.angle(expected.data), atol=1e-12
+        )
+        for q, vector in enumerate(step["bloch_vectors"]):
+            reduced = partial_trace(expected, [i for i in range(qc.num_qubits) if i != q])
+            np.testing.assert_allclose(
+                vector[:3],
+                [reduced.expectation_value(Pauli(a)).real for a in "XYZ"],
+                atol=1e-12,
+            )
+
+
+def export_playback(view, name):
+    """Use the library export option; retain its controller without HTML surgery."""
+    body = playback_html(view, full_html=False, include_plotlyjs=False)
+    document = (
+        '<!doctype html><html lang="en"><head><meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f"<title>{name} · SeeDL 0.3.0</title>"
+        '<script src="../assets/plotly.min.js"></script>'
+        '<link rel="stylesheet" href="../assets/playback.css">'
+        f"</head><body>{body}</body></html>"
+    )
+    (ROOT / "demos" / f"{name}.html").write_text(document)
 
 
 def export(view, name: str, *, network: bool = False) -> None:
@@ -33,7 +112,7 @@ def export(view, name: str, *, network: bool = False) -> None:
         post_script = build_network_interactive_js(view.data["neuron_graph"], True)
     else:
         # Preset-only Bloch demos: gate shortcuts change the arrow without all
-        # the associated annotations in 0.2.0. Keep each export self-consistent.
+        # the associated annotations. Keep each export self-consistent.
         if view.kind == "bloch":
             fig.update_layout(updatemenus=[])
     body = fig.to_html(
@@ -56,8 +135,8 @@ def export(view, name: str, *, network: bool = False) -> None:
 
 
 def main() -> None:
-    if sd.__version__ != "0.2.0":
-        raise RuntimeError("Build these demos with the SeeDL 0.2.0 checkout.")
+    if sd.__version__ != "0.3.0":
+        raise RuntimeError("Build these demos with the SeeDL 0.3.0 checkout.")
     (ROOT / "demos").mkdir(exist_ok=True)
     (ROOT / "assets" / "plotly.min.js").write_text(plotly.offline.get_plotlyjs())
     shutil.copyfile(ROOT.parent / "docs/visuals/network-3d.jpg", ROOT / "assets/network.jpg")
@@ -81,6 +160,7 @@ def main() -> None:
         "seedl": sd.__version__,
         "torch": torch.__version__,
         "plotly": plotly.__version__,
+        "qiskit": qiskit.__version__,
         "seed": 20,
         "input": sample.tolist(),
         "output": model(sample).detach().tolist(),
@@ -131,6 +211,38 @@ def main() -> None:
     bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
     ent = sd.entanglement(bell, backend="svg")
     manifest["bell"] = {"amplitudes": bell, "entanglement": ent.data}
+    run = training_example()
+    export_playback(run.playback(backend="plotly"), "training")
+    comparison = sd.compare(
+        run.snapshots[0], run.snapshots[-1], names=("Step 0", "Step 15"), backend="plotly"
+    )
+    comparison.figure.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0f172a",
+        plot_bgcolor="#0f172a",
+        font_color="#edf3fa",
+    )
+    export(comparison, "comparison")
+    manifest["training"] = {
+        "seed": 41,
+        "device": "cpu",
+        "input": [[1.0, -2.0]],
+        "target": 0.5,
+        "capture_boundary": "after backward, before optimizer.step",
+        "stats": run.recording_stats,
+        "snapshots": [snapshot.data for snapshot in run.snapshots],
+        "comparison": comparison.data,
+    }
+    evolution = sd.circuit(qc, simulate=True, backend="plotly", theme="scientific")
+    verify_evolution(evolution, qc)
+    export_playback(evolution, "evolution")
+    # A phase gate makes the phase chart meaningful while preserving Bell probabilities.
+    phased = qc.copy()
+    phased.rz(math.pi / 2, 1)
+    phase_view = sd.circuit(phased, simulate=True, backend="plotly", theme="scientific")
+    verify_evolution(phase_view, phased)
+    export_playback(phase_view, "evolution-phase")
+    manifest["evolution"] = {"bell": evolution.data, "phase": phase_view.data}
     manifest["sha256"] = {
         path.name: hashlib.sha256(path.read_bytes()).hexdigest()
         for path in sorted((ROOT / "demos").glob("*.html"))
@@ -143,4 +255,4 @@ def main() -> None:
 if __name__ == "__main__":
     with contextlib.redirect_stdout(io.StringIO()):
         main()
-    print("Built 8 SeeDL demos, two SVG previews, and one shared local Plotly bundle.")
+    print("Built 12 SeeDL 0.3.0 demos, 16 training snapshots, and one shared local Plotly bundle.")

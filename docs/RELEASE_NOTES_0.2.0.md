@@ -1,4 +1,4 @@
-# SeeDL 0.2.0 Release Notes — The Spatial & Quantum Revolution
+# SeeDL 0.2.0 Release Notes: The Spatial & Quantum Revolution
 
 **Version:** `0.2.0`  
 **Release Date:** October 2026  
@@ -18,7 +18,7 @@ Throughout this milestone, SeeDL maintains its foundational architectural commit
 
 ---
 
-## 🚀 Track A — Advanced Interactive 3D Neural Networks
+## 🚀 Track A: Advanced Interactive 3D Neural Networks
 
 ### 1. Direct 3D Viewport Pointer Interaction
 - **Dual Event Binding**: Supports both native WebGL canvas click detection (via GPU color picking and raycast coordinates) and Plotly event dispatch (`plotly_click`).
@@ -38,7 +38,7 @@ Throughout this milestone, SeeDL maintains its foundational architectural commit
 
 ---
 
-## ⚛️ Track B — Quantum Information Visualization
+## ⚛️ Track B: Quantum Information Visualization
 
 ### 1. Interactive 3D Bloch Sphere (`sd.bloch`)
 - **Pauli Expectation Traces**: Computes exact Bloch vectors $r_i = \text{Tr}(\rho \sigma_i)$ for $i \in \{x, y, z\}$.

@@ -1,4 +1,4 @@
-# SeeDL 0.4.0 — Vision & Attention Intelligence
+# SeeDL 0.4.0: Vision & Attention Intelligence
 
 **Status:** Release candidate source prepared for review; not yet published to PyPI. Version metadata is 0.4.0. Publication, tagging, and deployment remain separate manual actions.
 

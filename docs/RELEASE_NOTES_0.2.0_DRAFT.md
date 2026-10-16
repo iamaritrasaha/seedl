@@ -1,4 +1,4 @@
-# SeeDL 0.2.0 Draft Release Notes — The Spatial & Quantum Revolution
+# SeeDL 0.2.0 Draft Release Notes: The Spatial & Quantum Revolution
 
 **Milestone Target:** `0.2.0`  
 **Current Core Version:** `0.1.0` (Unbumped per non-negotiable release rules until maintainer authorization)  
@@ -12,7 +12,7 @@ SeeDL 0.2.0 transforms the library from a classical neural network explainabilit
 
 ---
 
-## 🚀 Track A — Advanced Interactive 3D Neural Networks
+## 🚀 Track A: Advanced Interactive 3D Neural Networks
 
 ### 1. Direct 3D Viewport Neuron Selection
 - **Client-Side Event Bridge**: Embedded JavaScript post-script attaching `plotly_click` and click-to-clear listeners directly to the WebGL graph canvas.
@@ -32,7 +32,7 @@ SeeDL 0.2.0 transforms the library from a classical neural network explainabilit
 
 ---
 
-## ⚛️ Track B — The Quantum Visualization Subsystem
+## ⚛️ Track B: The Quantum Visualization Subsystem
 
 ### 1. Interactive 3D Bloch Sphere (`sd.bloch`)
 - **Mathematical Rigor**: Computes Bloch vectors via exact Pauli expectation traces:

@@ -1,0 +1,11 @@
+/* Native exported viewers: fit controls and canvases to the available width. */
+body{padding:16px}
+.container{padding:20px;box-shadow:none;border-radius:6px}
+.view-grid{grid-template-columns:minmax(0,1fr) 300px}
+.view-grid>*{min-width:0}
+.controls{gap:12px}
+.control-group{min-width:0;max-width:100%}
+select{max-width:100%}
+canvas{max-width:100%;height:auto}
+@media(max-width:900px){.view-grid{grid-template-columns:minmax(0,1fr)}}
+@media(max-width:600px){body{padding:8px}.container{padding:12px}.controls{padding:10px;gap:10px}h1{font-size:18px}.control-group{width:100%}.token-table{font-size:10px}.token-table td,.token-table th{min-width:0;padding:3px}.gallery-grid{grid-template-columns:repeat(auto-fill,minmax(64px,1fr))}}

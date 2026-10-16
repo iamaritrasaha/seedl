@@ -1,4 +1,4 @@
-# SeeDL 0.3.0 — Live Neural Intelligence
+# SeeDL 0.3.0: Live Neural Intelligence
 
 **Status:** release candidate source prepared for review; not yet published to PyPI. Version metadata is 0.3.0. Publication, tagging and deployment remain separate manual actions.
 

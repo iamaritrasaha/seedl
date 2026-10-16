@@ -1,6 +1,6 @@
 # SeeDL official website
 
-Static HTML/CSS/JavaScript for SeeDL **0.4.0 — Vision & Attention Intelligence**.
+Static HTML/CSS/JavaScript for SeeDL **0.4.0. Vision & Attention Intelligence**.
 No JavaScript build step, external CDN, analytics, browser Python, or remote inference.
 The Python library and package version are unchanged.
 
@@ -82,16 +82,24 @@ loss/activation/weight/gradient updates, circuit gate selection, Bell/phase
 values, sampled comparisons, failed requests, and browser errors. It writes
 desktop, mobile, and demo screenshots to `artifacts/website/`.
 
-## Deploy — only when authorized
+## Deploy. only when authorized
 
 1. Push the reviewed branch and merge through the normal review process.
 2. In repository **Settings → Pages**, choose **GitHub Actions** as the source.
 3. In **Actions → Official website (manual deployment)**, choose **Run workflow**
    on the reviewed branch/ref. Configure an environment reviewer for
    `github-pages` if a separate publication approval is desired.
-4. After a successful run, visit `https://iamaritrasaha/seedl/`.
+4. After a successful run, visit `https://iamaritrasaha.github.io/seedl/`.
 
 There are no push/release triggers, secrets, or automatic publication. The
 build job has read-only repository access. Only the deployment job receives
 `pages: write` and `id-token: write`. PyPI publishing is untouched. Relative
 paths support both a project site under `/seedl/` and a root-level local preview.
+
+## Viewer layout
+
+Canvas and token viewers fit the available width and their frames follow the
+content height. Multi-panel Plotly figures keep a readable width on small screens;
+scroll within the view or use its full-window link. Switching tabs resizes Plotly
+once the panel is visible. The website adds presentation styles during generation,
+before calculating demo hashes; captured values and library exports are preserved.

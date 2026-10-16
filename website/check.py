@@ -234,7 +234,21 @@ def main() -> None:
     rep = manifest["report"]
     assert rep["sections"] >= 5
     assert (ROOT / "demos/report.html").is_file()
-    assert (ROOT / "assets/report.svg").is_file()
+    report_svg_path = ROOT / "assets/report.svg"
+    drift_svg_path = ROOT / "assets/dataset-drift.svg"
+    assert report_svg_path.is_file() and drift_svg_path.is_file()
+    report_svg = report_svg_path.read_text(encoding="utf-8")
+    drift_svg = drift_svg_path.read_text(encoding="utf-8")
+    assert report_svg != drift_svg, "report.svg must not be identical to dataset-drift.svg"
+    assert (
+        "Execution Trace &amp; Tensor Flow" in report_svg
+        or "Execution Trace & Tensor Flow" in report_svg
+    )
+    assert "Transformer Attention Rollout" in report_svg
+    assert "Gradient Norms &amp; Health" in report_svg or "Gradient Norms & Health" in report_svg
+    assert "Open Quantum System Noise" in report_svg
+    assert "Dataset Distribution Drift" in report_svg
+    assert "MULTI-COMPONENT SCIENTIFIC DOSSIER" in report_svg
 
     # 15. NEW in 0.5.0: Training Run Comparison Provenance
     runs = manifest["runs_compare"]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import contextlib
 import hashlib
+import html
 import io
 import json
 import math
@@ -165,6 +166,65 @@ def export(view, name: str, *, network: bool = False) -> None:
         f"</head><body>{body}</body></html>"
     )
     (ROOT / "demos" / f"{name}.html").write_text(document)
+
+
+def build_report_preview_svg(report: object) -> str:
+    """Generate a deterministic SVG overview representing the multi-section scientific report."""
+    title = html.escape(str(getattr(report, "title", "Scientific Diagnostic Report")))
+    author = html.escape(str(getattr(report, "author", "SeeDL Scientific Verification Team")))
+    sections = list(getattr(report, "sections", []))
+
+    sec_meta = [
+        {"color": "#38bdf8", "tag": "EXECUTION GRAPH & PIPELINE", "badge": "DAG"},
+        {"color": "#a855f7", "tag": "TRANSFORMER ATTENTION", "badge": "ROLLOUT"},
+        {"color": "#fbbf24", "tag": "AUTOGRAD TELEMETRY", "badge": "GRADIENTS"},
+        {"color": "#34d399", "tag": "OPEN QUANTUM SYSTEMS", "badge": "KRAUS"},
+        {"color": "#f87171", "tag": "DISTRIBUTION DIVERGENCE", "badge": "DRIFT"},
+    ]
+
+    cards_svg: list[str] = []
+    y_start = 140
+    card_h = 56
+    gap = 12
+
+    for idx, sec in enumerate(sections[:5]):
+        y = y_start + idx * (card_h + gap)
+        sec_title = html.escape(str(getattr(sec, "title", f"Section {idx + 1}")))
+        meta = (
+            sec_meta[idx]
+            if idx < len(sec_meta)
+            else {"color": "#38bdf8", "tag": "REPORT SECTION", "badge": "VIEW"}
+        )
+        color = meta["color"]
+        tag = html.escape(str(meta["tag"]))
+        badge = html.escape(str(meta["badge"]))
+        cards_svg.append(f"""  <g transform="translate(40, {y})">
+    <rect width="700" height="{card_h}" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
+    <rect x="0" y="0" width="6" height="{card_h}" rx="3" fill="{color}"/>
+    <text x="24" y="23" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="{color}" letter-spacing="0.5">{tag}</text>
+    <text x="24" y="43" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#f8fafc">{idx + 1}. {sec_title}</text>
+    <rect x="580" y="15" width="96" height="26" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1"/>
+    <text x="628" y="32" font-family="monospace" font-size="11" font-weight="700" fill="{color}" text-anchor="middle">{badge}</text>
+  </g>""")
+
+    sections_rendered = "\n".join(cards_svg)
+
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 780 520" width="780" height="520">
+  <rect width="780" height="520" fill="#0f172a"/>
+  <rect x="20" y="20" width="740" height="480" rx="12" fill="#0b1120" stroke="#334155" stroke-width="1.5"/>
+
+  <!-- Dossier Header -->
+  <text x="40" y="55" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#38bdf8" font-weight="700" letter-spacing="1">SeeDL / MULTI-COMPONENT SCIENTIFIC DOSSIER</text>
+  <text x="40" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#f8fafc" font-weight="700">{title}</text>
+  <text x="40" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#94a3b8">{len(sections)} Report Sections · {author} · Self-Contained Offline Report</text>
+
+  <!-- Report Section Cards -->
+{sections_rendered}
+
+  <!-- Footer dossier metadata -->
+  <text x="40" y="475" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b">Structure: Standalone HTML with sidebar TOC navigation, embedded interactive figures, and telemetry dossiers.</text>
+</svg>
+"""
 
 
 def main() -> None:
@@ -666,7 +726,7 @@ def main() -> None:
         narrative="Population Stability Index and Jensen-Shannon Divergence against reference distribution.",
     )
     sci_report.save(ROOT / "demos/report.html")
-    (ROOT / "assets/report.svg").write_text(drift_view.to_figure("svg"))
+    (ROOT / "assets/report.svg").write_text(build_report_preview_svg(sci_report))
 
     manifest["report"] = {
         "title": sci_report.title,

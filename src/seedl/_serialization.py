@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from ._version import __version__
 from .exceptions import SeeDLError
 from .view import Visualization
 
@@ -76,7 +77,7 @@ def save_analysis(
     payload: dict[str, Any] = {
         "$schema": f"https://seedl.dev/schemas/analysis-v{SCHEMA_VERSION}.json",
         "schema_version": SCHEMA_VERSION,
-        "seedl_version": "0.4.0",
+        "seedl_version": __version__,
         "views": serialized_views,
     }
 

@@ -333,7 +333,9 @@ def main() -> None:
         slug = "attention-comparison" if (ha, hb) == (0, 1) else f"attention-comparison-{ha}-{hb}"
         # Reserve space for the difference scale outside the third heatmap.
         cmp_v.figure.update_layout(margin=dict(l=85, r=100, t=110, b=85))
-        cmp_v.figure.update_traces(colorbar=dict(x=1.04, thickness=14), selector=dict(showscale=True))
+        cmp_v.figure.update_traces(
+            colorbar=dict(x=1.04, thickness=14), selector=dict(showscale=True)
+        )
         # Plotly may omit the default showscale=True from the trace object.
         cmp_v.figure.data[-1].colorbar.update(x=1.04, thickness=14)
         cmp_v.figure.update_yaxes(automargin=True)

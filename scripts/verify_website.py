@@ -621,16 +621,19 @@ def main():
                     iframe = page.locator(f"#{panel_id} iframe")
                     inner = iframe.element_handle().content_frame()
                     inner.wait_for_selector(".container")
-                    page.wait_for_function("""id => {
+                    page.wait_for_function(
+                        """id => {
                         const f = document.querySelector(`#${id} iframe`);
                         return f.clientHeight >= f.contentDocument.body.scrollHeight;
-                    }""", arg=panel_id)
+                    }""",
+                        arg=panel_id,
+                    )
                     assert inner.evaluate("document.documentElement.scrollWidth <= innerWidth"), (
                         f"Native viewer overflow: {route}"
                     )
-                    assert iframe.evaluate("f => f.clientHeight < f.contentDocument.body.scrollHeight + 60"), (
-                        f"Excess blank space under native viewer: {route}"
-                    )
+                    assert iframe.evaluate(
+                        "f => f.clientHeight < f.contentDocument.body.scrollHeight + 60"
+                    ), f"Excess blank space under native viewer: {route}"
                 page.get_by_role("button", name="Toggle navigation").click()
                 assert page.locator(".navlinks").is_visible()
                 page.keyboard.press("Escape")

@@ -24,4 +24,13 @@ website/assets/bell.svg
 website/assets/cnn-features.svg
 website/assets/attention.svg
 website/assets/vit-attention.svg
+website/assets/trace.svg
+website/assets/flow.svg
+website/assets/rollout.svg
+website/assets/attribution.svg
+website/assets/gradient-health.svg
+website/assets/runs-compare.svg
+website/assets/quantum-noise.svg
+website/assets/dataset-drift.svg
+website/assets/report.svg
 graphify-out/

@@ -62,22 +62,23 @@ def main() -> None:
             assert target.is_file(), f"Missing asset: {path.name}: {link}"
             if parts.fragment:
                 assert target in pages and parts.fragment in pages[target].ids, (
-                    f"Missing anchor: {link}"
+                    f"Missing anchor in {path.name}: {link}"
                 )
             checked += 1
 
     manifest = json.loads((ROOT / "demos/manifest.json").read_text())
-    assert manifest["seedl"] == "0.4.0", f"Expected manifest version 0.4.0, got {manifest['seedl']}"
+    assert manifest["seedl"] == "0.5.0", f"Expected manifest version 0.5.0, got {manifest['seedl']}"
     demo_files = list((ROOT / "demos").glob("*.html"))
     assert len(manifest["sha256"]) == len(demo_files)
-    assert len(manifest["sha256"]) >= 18, (
-        f"Expected at least 18 demos, got {len(manifest['sha256'])}"
+    assert len(manifest["sha256"]) >= 30, (
+        f"Expected at least 30 demos, got {len(manifest['sha256'])}"
     )
 
     for path in paths:
         text = path.read_text()
-        assert 'class="version">0.4.0' in text, f"Outdated version badge in {path.name}"
-        # Current API links use 0.4.0; historical release notes links are preserved
+        assert 'class="version">0.5.0' in text, f"Outdated version badge in {path.name}"
+        # Current API links use 0.5.0; historical release notes links are preserved
+        assert "blob/v0.4.0/src/" not in text, f"Stale 0.4.0 API link in {path.name}"
         assert "blob/v0.3.0/src/" not in text, f"Stale 0.3.0 API link in {path.name}"
         assert "blob/v0.2.0/src/" not in text, f"Stale 0.2.0 API link in {path.name}"
 
@@ -125,7 +126,7 @@ def main() -> None:
     )
     assert math.isclose(manifest["bell"]["entanglement"]["entropy_q0"], 1, abs_tol=1e-12)
 
-    # 3. New 0.4.0 CNN Provenance
+    # 3. Preserved 0.4.0 CNN Provenance
     cnn = manifest["cnn"]
     assert cnn["seed"] == 42
     assert cnn["captured_layers"] == 5
@@ -133,11 +134,11 @@ def main() -> None:
     assert cnn["layers"][0]["shape"] == [1, 8, 24, 24]
     assert cnn["layers"][2]["name"] == "pool1"
     assert cnn["layers"][2]["shape"] == [1, 8, 12, 12]
-    assert cnn["layers"][2]["downsampled"] is False  # Native resolution, no budget downsampling
+    assert cnn["layers"][2]["downsampled"] is False
     assert (ROOT / "demos/cnn-features.html").is_file()
     assert (ROOT / "assets/cnn-features.svg").is_file()
 
-    # 4. New 0.4.0 Transformer Attention Provenance
+    # 4. Preserved 0.4.0 Transformer Attention Provenance
     attn = manifest["attention"]
     assert attn["seed"] == 42
     assert attn["num_heads"] == 4
@@ -147,7 +148,7 @@ def main() -> None:
     assert (ROOT / "demos/attention.html").is_file()
     assert (ROOT / "assets/attention.svg").is_file()
 
-    # 5. New 0.4.0 Attention Comparison Provenance
+    # 5. Preserved 0.4.0 Attention Comparison Provenance
     cmp_pair = manifest["attention_comparison"]["pairs"]["0-1"]
     assert cmp_pair["head_a"] == 0 and cmp_pair["head_b"] == 1
     assert cmp_pair["mae"] > 0
@@ -155,7 +156,7 @@ def main() -> None:
     assert 0 <= cmp_pair["cosine_similarity"] <= 1.0
     assert (ROOT / "demos/attention-comparison.html").is_file()
 
-    # 6. New 0.4.0 ViT Patch Attention Provenance
+    # 6. Preserved 0.4.0 ViT Patch Attention Provenance
     vit = manifest["vit"]
     assert vit["seed"] == 42
     assert vit["patch_grid"] == [4, 4]
@@ -164,6 +165,80 @@ def main() -> None:
     assert len(vit["grid"]) == 4 and len(vit["grid"][0]) == 4
     assert (ROOT / "demos/vit-attention.html").is_file()
     assert (ROOT / "assets/vit-attention.svg").is_file()
+
+    # 7. NEW in 0.5.0: Neural Execution Tracer DAG Provenance
+    trace = manifest["trace"]
+    assert trace["seed"] == 42
+    assert trace["total_nodes"] >= 5
+    assert trace["total_edges"] >= 6
+    assert trace["total_parameters"] > 0
+    assert (ROOT / "demos/trace.html").is_file()
+    assert (ROOT / "assets/trace.svg").is_file()
+
+    # 8. NEW in 0.5.0: Tensor Flow Explorer Provenance
+    flow = manifest["flow"]
+    assert flow["seed"] == 42
+    assert flow["total_nodes"] >= 5
+    assert (ROOT / "demos/flow.html").is_file()
+    assert (ROOT / "assets/flow.svg").is_file()
+
+    # 9. NEW in 0.5.0: Transformer Attention Rollout Provenance
+    rollout = manifest["rollout"]
+    assert rollout["seed"] == 42
+    assert rollout["num_layers"] == 3
+    assert rollout["seq_len"] == 7
+    assert len(rollout["rollout_matrix"]) == 7
+    assert (ROOT / "demos/rollout.html").is_file()
+    assert (ROOT / "assets/rollout.svg").is_file()
+
+    # 10. NEW in 0.5.0: Attribution Benchmark Provenance
+    attr = manifest["attribution"]
+    assert attr["seed"] == 42
+    assert len(attr["methods"]) == 3
+    sim = attr["similarity_matrix"]
+    assert "saliency" in sim and "integrated_gradients" in sim and "smoothgrad" in sim
+    assert (ROOT / "demos/attribution.html").is_file()
+    assert (ROOT / "assets/attribution.svg").is_file()
+
+    # 11. NEW in 0.5.0: Gradient Health Dashboard Provenance
+    grad = manifest["gradient_health"]
+    assert grad["seed"] == 42
+    assert grad["global_l2"] > 0
+    assert grad["total_nonfinite"] == 0
+    assert len(grad["parameters"]) >= 4
+    assert (ROOT / "demos/gradient-health.html").is_file()
+    assert (ROOT / "assets/gradient-health.svg").is_file()
+
+    # 12. NEW in 0.5.0: Quantum Noise Lab Provenance
+    qnoise = manifest["quantum_noise"]
+    assert len(qnoise["channels"]) == 3
+    depol = qnoise["channels"]["depolarizing"]
+    assert depol["final_purity"] < depol["initial_purity"]
+    assert depol["final_entropy"] > depol["initial_entropy"]
+    assert (ROOT / "demos/quantum-noise.html").is_file()
+    assert (ROOT / "demos/quantum-noise-amplitude.html").is_file()
+    assert (ROOT / "demos/quantum-noise-phase.html").is_file()
+    assert (ROOT / "assets/quantum-noise.svg").is_file()
+
+    # 13. NEW in 0.5.0: Dataset Drift Observatory Provenance
+    drift = manifest["dataset_drift"]
+    assert drift["seed"] == 42
+    assert drift["psi"] > 0
+    assert drift["jsd"] > 0
+    assert (ROOT / "demos/dataset-drift.html").is_file()
+    assert (ROOT / "assets/dataset-drift.svg").is_file()
+
+    # 14. NEW in 0.5.0: Scientific Diagnostic Report Provenance
+    rep = manifest["report"]
+    assert rep["sections"] >= 5
+    assert (ROOT / "demos/report.html").is_file()
+    assert (ROOT / "assets/report.svg").is_file()
+
+    # 15. NEW in 0.5.0: Training Run Comparison Provenance
+    runs = manifest["runs_compare"]
+    assert len(runs["metrics"]) >= 2
+    assert (ROOT / "demos/runs-compare.html").is_file()
+    assert (ROOT / "assets/runs-compare.svg").is_file()
 
     # Check all demo files against manifest sha256 and size/CDN bounds
     for name, digest in manifest["sha256"].items():
@@ -202,7 +277,7 @@ def main() -> None:
     for name in ("training", "evolution", "evolution-phase"):
         assert "seedl-playback" in (ROOT / f"demos/{name}.html").read_text()
 
-    assert sum(p.stat().st_size for p in paths) < 85_000, "Initial HTML has grown unexpectedly"
+    assert sum(p.stat().st_size for p in paths) < 95_000, "Initial HTML has grown unexpectedly"
 
     # Execute visible Python examples in temp directory
     count = 0
@@ -220,6 +295,15 @@ def main() -> None:
                             "view = sd.see",
                             "comparison = sd.compare",
                             "cmp_view = sd.attention",
+                            "sd.flow",
+                            "sd.attention_rollout",
+                            "sd.compare_attributions",
+                            "sd.gradient_health",
+                            "sd.quantum_noise",
+                            "sd.dataset_drift",
+                            "sd.report",
+                            "sd.compare_runs",
+                            "sd.save_analysis",
                         )
                     ):
                         continue
@@ -231,7 +315,8 @@ def main() -> None:
 
     print(
         f"PASS: {checked} local links/assets, {len(manifest['sha256'])} demo hashes, "
-        f"16 captured passes, Bell/Bloch/phase science, CNN/Attention/ViT science, {count} Python examples."
+        f"16 captured passes, Bell/Bloch/phase science, CNN/Attention/ViT science, "
+        f"Trace/Flow/Rollout/Attribution/Gradient/Noise/Drift/Report/Runs science, {count} Python examples."
     )
 
 

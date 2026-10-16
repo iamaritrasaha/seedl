@@ -1,83 +1,118 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Documentation · SeeDL 0.4.0</title><meta name="description" content="SeeDL 0.4.0. interactive visualization for deep learning and quantum computing. Explore real CNN feature maps, Transformer multi-head attention, ViT patch routing, 3D neural networks, and Qiskit gate evolution.">
+<title>Documentation · SeeDL 0.5.0</title><meta name="description" content="SeeDL 0.5.0 Neural Observatory documentation: interactive visualization for deep learning and quantum computing. Explore execution DAGs, tensor flow, attention rollout, attribution benchmarks, gradient health, and Kraus quantum noise.">
 <meta name="theme-color" content="#090e17"><link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="../assets/style.css"><script src="../assets/site.js" defer></script></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="header"><nav class="nav wrap" aria-label="Main navigation">
-<a class="brand" href="../index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.4.0</span></a>
+<a class="brand" href="../index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.5.0</span></a>
 <button class="menu-button" data-menu aria-label="Toggle navigation" aria-controls="main-links" aria-expanded="false">☰</button>
 <div class="navlinks" id="main-links"><a href="../index.html">Overview</a><a href="../playground.html">Playground</a><a href="../docs/index.html" aria-current="page">Documentation</a><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a></div>
 <button class="theme-button" data-theme-toggle aria-label="Use light theme">☀</button></nav></header>
-<main id="main" class="wrap doc-layout"><aside class="docnav" aria-label="Documentation sections"><strong>SeeDL 0.4.0</strong><a href="#getting-started">Getting Started</a><a href="#installation">Installation</a><a href="#quickstart">Quickstart</a><strong>Vision &amp; Attention</strong><a href="#cnn-features">CNN Feature Maps</a><a href="#transformer-attention">Transformer Attention</a><a href="#head-comparison">Head Comparison</a><a href="#vit-attention">ViT Patch Attention</a><strong>Neural Networks</strong><a href="#neural-networks">Neural Network Visualization</a><a href="#interactive-3d">Interactive 3D Networks</a><a href="#training-recording">Training Recording</a><a href="#snapshot-inspection">Snapshot Inspection</a><a href="#training-playback">Playback</a><a href="#training-comparison">Training Comparison</a><strong>Quantum Computing</strong><a href="#quantum-evolution">Quantum Evolution</a><a href="#quantum">Quantum Computing</a><a href="#bloch-spheres">Bloch Spheres</a><a href="#quantum-circuits">Quantum Circuits</a><a href="#statevectors">Statevectors</a><a href="#density-matrices">Density Matrices</a><a href="#entanglement">Entanglement</a><strong>Reference</strong><a href="#examples">Examples</a><a href="#api">API Reference</a></aside><article class="docs"><div class="eyebrow">Documentation / Version 0.4.0</div><h1>See what you're building.</h1><p>From your first visualization to CNN feature maps, Transformer multi-head attention, interactive 3D networks, and quantum states. These examples use the SeeDL 0.4.0 API.</p>
-<h2 id="getting-started">Getting Started</h2><p>SeeDL turns supported Python objects into inspectable visualizations. The core has no required third-party dependencies and includes an SVG renderer and self-contained offline HTML exporters. Plotly adds interactive 3D and comparison charts; PyTorch and Qiskit provide their respective integrations. Python 3.10 or newer is required.</p>
-<h2 id="installation">Installation</h2><div class="install-grid"><div class="install"><div class="install-top"><span>Core · no required dependencies</span><button class="copy" data-copy="pip install seedl==0.4.0" aria-label="Copy Core · no required dependencies installation command">Copy</button></div><code>pip install seedl==0.4.0</code></div><div class="install"><div class="install-top"><span>Vision &amp; 3D · PyTorch + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[torch,plotly]==0.4.0&quot;" aria-label="Copy Vision &amp; 3D · PyTorch + Plotly installation command">Copy</button></div><code>pip install &quot;seedl[torch,plotly]==0.4.0&quot;</code></div><div class="install"><div class="install-top"><span>Quantum · Qiskit + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[quantum,plotly]==0.4.0&quot;" aria-label="Copy Quantum · Qiskit + Plotly installation command">Copy</button></div><code>pip install &quot;seedl[quantum,plotly]==0.4.0&quot;</code></div><div class="install"><div class="install-top"><span>All integrations</span><button class="copy" data-copy="pip install &quot;seedl[all]==0.4.0&quot;" aria-label="Copy All integrations installation command">Copy</button></div><code>pip install &quot;seedl[all]==0.4.0&quot;</code></div></div>
+<main id="main" class="wrap doc-layout"><aside class="docnav" aria-label="Documentation sections"><strong>SeeDL 0.5.0</strong><a href="#getting-started">Getting Started</a><a href="#installation">Installation</a><a href="#quickstart">Quickstart</a><strong>Neural Observatory</strong><a href="#execution-tracing">Execution Tracing</a><a href="#tensor-flow">Tensor Flow Explorer</a><a href="#interactive-3d">Interactive 3D Networks</a><strong>Transformers</strong><a href="#transformer-attention">Transformer Attention</a><a href="#head-comparison">Head Comparison</a><a href="#vit-attention">ViT Patch Attention</a><a href="#attention-rollout">Attention Rollout</a><strong>Explainable AI</strong><a href="#attribution-benchmark">Attribution Benchmark</a><a href="#cnn-features">CNN Feature Maps</a><strong>Training &amp; Diagnostics</strong><a href="#gradient-health">Gradient Health</a><a href="#training-recording">Training Recording</a><a href="#training-playback">Playback</a><a href="#training-comparison">Step Comparison</a><a href="#runs-comparison">Run Comparison</a><strong>Quantum Intelligence</strong><a href="#quantum-noise">Quantum Noise Lab</a><a href="#quantum-evolution">Quantum Evolution</a><a href="#bloch-spheres">Bloch Spheres</a><a href="#quantum-circuits">Quantum Circuits</a><a href="#entanglement">Entanglement</a><strong>Data &amp; Reports</strong><a href="#dataset-drift">Dataset Drift</a><a href="#scientific-reports">Scientific Reports</a><a href="#analysis-integrity">Analysis Integrity</a><strong>Reference</strong><a href="#examples">Examples</a><a href="#api">API Reference</a></aside><article class="docs"><div class="eyebrow">Documentation / Version 0.5.0</div><h1>See what you're building.</h1><p>From your first visualization to neural execution tracer DAGs, tensor flow pipelines, Transformer attention rollout, attribution benchmarks, gradient telemetry, and open quantum systems. These examples use the published SeeDL 0.5.0 API.</p>
+<h2 id="getting-started">Getting Started</h2><p>SeeDL turns supported Python objects into inspectable scientific visualizations. The core has no required third-party dependencies and includes an SVG renderer and self-contained offline HTML exporters. Plotly adds interactive 3D and comparison charts; PyTorch and Qiskit provide their respective integrations. Python 3.10 or newer is required.</p>
+<h2 id="installation">Installation</h2><div class="install-grid"><div class="install"><div class="install-top"><span>Core · no required dependencies</span><button class="copy" data-copy="pip install seedl==0.5.0" aria-label="Copy Core · no required dependencies installation command">Copy</button></div><code>pip install seedl==0.5.0</code></div><div class="install"><div class="install-top"><span>Vision, Tracing &amp; 3D · PyTorch + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[torch,plotly]==0.5.0&quot;" aria-label="Copy Vision, Tracing &amp; 3D installation command">Copy</button></div><code>pip install &quot;seedl[torch,plotly]==0.5.0&quot;</code></div><div class="install"><div class="install-top"><span>Quantum · Qiskit + Plotly</span><button class="copy" data-copy="pip install &quot;seedl[quantum,plotly]==0.5.0&quot;" aria-label="Copy Quantum · Qiskit + Plotly installation command">Copy</button></div><code>pip install &quot;seedl[quantum,plotly]==0.5.0&quot;</code></div><div class="install"><div class="install-top"><span>All integrations</span><button class="copy" data-copy="pip install &quot;seedl[all]==0.5.0&quot;" aria-label="Copy All integrations installation command">Copy</button></div><code>pip install &quot;seedl[all]==0.5.0&quot;</code></div></div>
 <h2 id="quickstart">Quickstart</h2><p>Start with a numeric sequence. This example works with the core installation alone.</p><pre><code>import seedl as sd
 
 view = sd.see([1, 4, 2, 8], backend=&quot;svg&quot;)
 view.save(&quot;first.svg&quot;)
 view.save(&quot;first.html&quot;)</code></pre><p>In a notebook, put <code>view</code> last in a cell to display it. In a Python script, use <code>view.show()</code>. <code>view.figure</code> returns the backend figure (or SVG text), and <code>view.data</code> contains the inspected data.</p>
 
-<h2 id="cnn-features">CNN Feature Map Explorer</h2><p>Inspect intermediate convolutional activations across channels, layers, and spatial coordinates. SeeDL captures genuine forward activations from <code>torch.nn.Conv2d</code>, nested <code>Sequential</code> models, activation layers (<code>ReLU</code>, <code>GELU</code>, <code>SiLU</code>, <code>Tanh</code>), and pooling layers (<code>MaxPool2d</code>, <code>AvgPool2d</code>).</p><pre><code>import torch
+<h2 id="execution-tracing">Neural Execution Tracing</h2><p>Trace the forward pass execution topology of any PyTorch model. <code>sd.flow(model, input, mode="graph")</code> generates an interactive DAG depicting operation nodes, tensor shapes, execution order, parameter counts, and explicit tensor dependencies (including residual skip branches and in-place aliases).</p><pre><code>import torch
+from torch import nn
 import seedl as sd
 
-model = torch.nn.Sequential(
-    torch.nn.Conv2d(3, 8, 3, padding=1),
-    torch.nn.ReLU(),
-)
+model = nn.Sequential(nn.Linear(4, 6), nn.ReLU(), nn.Linear(6, 2))
+x = torch.randn(1, 4)
+trace_view = sd.flow(model, x, mode=&quot;graph&quot;)
+trace_view.save(&quot;trace.html&quot;)</code></pre><p><a href="../playground.html#trace">Explore execution tracer DAG in the playground →</a></p>
 
-sample = torch.randn(1, 3, 32, 32)
-
-view = sd.features(model, input=sample)
-view.save(&quot;cnn_features.html&quot;)</code></pre><p>The exported HTML includes layer and channel dropdowns, a channel gallery, hover coordinate inspection `(y, x)` with exact activation values, and three normalization modes: per-channel, layer-global, and zero-centered (symmetric for signed activations). When spatial dimensions are downsampled (e.g. pooling), SeeDL indicates downsampling in the HUD while preserving original tensor dimensions in metadata. <a href="../playground.html#cnn">Try the live CNN explorer →</a></p>
-
-<h2 id="transformer-attention">Transformer Attention Explorer</h2><p>Inspect empirical query-key routing probabilities, multi-head alignment, and token-level interaction. Captures per-head weights from <code>torch.nn.MultiheadAttention</code> or raw attention weight tensors.</p><pre><code>import torch
+<h2 id="tensor-flow">Tensor Flow Explorer</h2><p>Follow tensor shape transformations, numerical data types, memory footprints, and activation statistics across layer boundaries. <code>sd.flow(model, input, mode="table")</code> provides a searchable operation table and timeline view.</p><pre><code>import torch
+from torch import nn
 import seedl as sd
 
-mha = torch.nn.MultiheadAttention(
-    embed_dim=16,
-    num_heads=4,
-    batch_first=True,
-)
+model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2, 2))
+x = torch.randn(1, 3, 16, 16)
+flow_view = sd.flow(model, x, mode=&quot;table&quot;)
+flow_view.save(&quot;flow.html&quot;)</code></pre><p><a href="../playground.html#flow">Explore tensor flow pipeline in the playground →</a></p>
 
-tokens = [&quot;The&quot;, &quot;model&quot;, &quot;attends&quot;, &quot;to&quot;, &quot;tokens&quot;]
-x = torch.randn(1, len(tokens), 16)
-
-output, weights = mha(
-    x, x, x,
-    need_weights=True,
-    average_attn_weights=False,
-)
-
-view = sd.attention(weights, tokens=tokens)
-view.save(&quot;attention.html&quot;)</code></pre><p class="notice">Attention visualizations display observed routing weights P(K_j | Q_i), not causal explanations of model decisions or proofs of feature importance. Values are genuine and form a valid probability distribution where rows sum to ~1.0 with non-negative weights.</p><p><a href="../playground.html#attention">Explore Transformer attention →</a></p>
-
-<h2 id="head-comparison">Multi-Head Attention Comparison</h2><p>Compare routing shifts between any two heads side-by-side using SeeDL's built-in comparison engine. Evaluates the difference matrix, Mean Absolute Error (MAE), Frobenius norm of difference, and Cosine Similarity.</p><pre><code># Continue from attention weights above.
-cmp_view = sd.attention(weights, tokens=tokens, compare_heads=(0, 1), backend=&quot;plotly&quot;)
-cmp_view.save(&quot;attention_comparison.html&quot;)
-print(cmp_view.data[&quot;head_comparison&quot;][&quot;mae&quot;])
-print(cmp_view.data[&quot;head_comparison&quot;][&quot;cosine_similarity&quot;])</code></pre><p><a href="../playground.html#attention-cmp">Try the multi-head comparison →</a></p>
-
-<h2 id="vit-attention">Vision Transformer Patch Attention</h2><p>Bridge token attention back to spatial 2D coordinates. <code>sd.vit_attention()</code> reshapes 1D token attention vectors (such as [CLS] token routing) into authentic 2D spatial patch heatmaps over the original image patch grid.</p><pre><code>import torch
-import seedl as sd
-
-mha_vit = torch.nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
-q = torch.randn(1, 17, 16)
-_, vit_weights = mha_vit(q, q, q, need_weights=True, average_attn_weights=False)
-
-view = sd.vit_attention(vit_weights, patch_grid=(4, 4), from_token=0, has_cls=True)
-view.save(&quot;vit_patch.html&quot;)</code></pre><p><a href="../playground.html#vit">Explore ViT patch attention →</a></p>
-
-<h2 id="neural-networks">Neural Network Visualization</h2><p>Install <code>seedl[torch,plotly]</code> for this guide. For supported feed-forward models, SeeDL maps actual weight matrices to neuron connections. Unsupported structures use an architecture view; SeeDL does not invent connections.</p><pre><code>import torch
+<h2 id="interactive-3d">Interactive 3D Networks</h2><p>Map weight matrices to neuron connections in an interactive WebGL 3D space. Click neurons to trace incoming cyan and outgoing amber connections.</p><pre><code>import torch
 from torch import nn
 import seedl as sd
 
 model = nn.Sequential(nn.Linear(3, 5), nn.ReLU(), nn.Linear(5, 2))
 x = torch.tensor([[0.8, -0.4, 0.6]])
-view = sd.see(model, input=x, view=&quot;neurons&quot;, backend=&quot;plotly&quot;)
-view.save(&quot;neurons.html&quot;)</code></pre><p>Providing <code>input</code> runs one local forward pass in evaluation mode without gradients, using temporary inspection hooks. Only run models you trust. Omitting input still allows parameter inspection; missing activations remain unavailable.</p>
-<h2 id="interactive-3d">Interactive 3D Networks</h2><pre><code>view = sd.see(model, input=x, view=&quot;3d&quot;, theme=&quot;scientific&quot;)
-view.save(&quot;network.html&quot;)</code></pre><p>Open the exported HTML to orbit, pan, zoom, and click neurons. Selection highlights incoming cyan and outgoing amber connections. The neuron menu also supports selection. Reset view restores the camera; Overview clears selection.</p><p>Bound large graphs with <code>max_neurons</code> and <code>max_connections</code>. <code>min_weight</code> filters small weights. Values are sampled or omitted explicitly, rather than filled in. <a href="../playground.html#network">Try the live explorer</a>.</p>
-<h2 id="training-recording">SeeDL training recording</h2><p>Install <code>seedl[torch,plotly]==0.4.0</code>. This complete CPU example records 16 real training passes. Capture after <code>loss.backward()</code> and before <code>optimizer.step()</code>, while parameters still match the forward pass. SeeDL observes your code; it does not run extra training passes.</p><pre><code>import torch
+view = sd.see(model, input=x, view=&quot;3d&quot;, theme=&quot;scientific&quot;)
+view.save(&quot;network.html&quot;)</code></pre><p><a href="../playground.html#network">Try the 3D network explorer →</a></p>
+
+<h2 id="transformer-attention">Transformer Attention Explorer</h2><p>Inspect empirical query-key routing probabilities, multi-head alignment, and token-level interaction. Captures per-head weights from <code>torch.nn.MultiheadAttention</code> or raw attention weight tensors.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+mha = nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
+tokens = [&quot;The&quot;, &quot;model&quot;, &quot;attends&quot;, &quot;to&quot;, &quot;tokens&quot;]
+x = torch.randn(1, len(tokens), 16)
+output, weights = mha(x, x, x, need_weights=True, average_attn_weights=False)
+view = sd.attention(weights, tokens=tokens)
+view.save(&quot;attention.html&quot;)</code></pre><p class="notice">Attention visualizations display observed routing weights P(K_j | Q_i), not causal explanations of model decisions. Values form a valid probability distribution where rows sum to ~1.0 with non-negative weights.</p><p><a href="../playground.html#attention">Explore Transformer attention →</a></p>
+
+<h2 id="head-comparison">Multi-Head Attention Comparison</h2><p>Compare routing shifts between any two heads side-by-side using SeeDL's built-in comparison engine. Evaluates the difference matrix, Mean Absolute Error (MAE), Frobenius norm of difference, and Cosine Similarity.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+mha = nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
+tokens = [&quot;The&quot;, &quot;model&quot;, &quot;attends&quot;, &quot;to&quot;, &quot;tokens&quot;]
+x = torch.randn(1, len(tokens), 16)
+_, weights = mha(x, x, x, need_weights=True, average_attn_weights=False)
+cmp_view = sd.attention(weights, tokens=tokens, compare_heads=(0, 1), backend=&quot;plotly&quot;)
+cmp_view.save(&quot;attention_comparison.html&quot;)</code></pre><p><a href="../playground.html#attention-cmp">Try the multi-head comparison →</a></p>
+
+<h2 id="vit-attention">Vision Transformer Patch Attention</h2><p>Bridge token attention back to spatial 2D coordinates. <code>sd.vit_attention()</code> reshapes 1D token attention vectors (such as [CLS] token routing) into authentic 2D spatial patch heatmaps over the original image patch grid.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+mha_vit = nn.MultiheadAttention(embed_dim=16, num_heads=4, batch_first=True)
+q = torch.randn(1, 17, 16)
+_, vit_weights = mha_vit(q, q, q, need_weights=True, average_attn_weights=False)
+view = sd.vit_attention(vit_weights, patch_grid=(4, 4), from_token=0, has_cls=True)
+view.save(&quot;vit_patch.html&quot;)</code></pre><p><a href="../playground.html#vit">Explore ViT patch attention →</a></p>
+
+<h2 id="attention-rollout">Attention Rollout</h2><p>Compute cumulative attention propagation across multi-layer Transformers. Evaluates residual attention accumulation: A'_l = 0.5 × (A_l + I), with cumulative product R = A'_L @ A'_(L-1) @ ... @ A'_1.</p><pre><code>import torch
+import seedl as sd
+
+tokens = [&quot;[CLS]&quot;, &quot;Neural&quot;, &quot;Observatory&quot;, &quot;[SEP]&quot;]
+layers = [torch.softmax(torch.randn(1, 2, 4, 4), dim=-1) for _ in range(2)]
+rollout_view = sd.attention_rollout(layers, tokens=tokens, include_residual=True)
+rollout_view.save(&quot;rollout.html&quot;)</code></pre><p><a href="../playground.html#rollout">Explore attention rollout in the playground →</a></p>
+
+<h2 id="attribution-benchmark">Attribution Benchmark Lab</h2><p>Benchmark feature attribution algorithms side-by-side on the exact same model and input. Evaluates Saliency Maps, Integrated Gradients (using composite midpoint numerical integration), and SmoothGrad (Gaussian noise variance reduction). Quantifies inter-method concordance with Pearson correlation and Cosine similarity.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Linear(4, 8), nn.Tanh(), nn.Linear(8, 2))
+x = torch.randn(1, 4)
+attr_view = sd.compare_attributions(model, x, target=0, methods=(&quot;saliency&quot;, &quot;integrated_gradients&quot;, &quot;smoothgrad&quot;), steps=4, samples=4)
+attr_view.save(&quot;attribution.html&quot;)</code></pre><p><a href="../playground.html#attribution">Benchmark attributions in the playground →</a></p>
+
+<h2 id="cnn-features">CNN Feature Map Explorer</h2><p>Inspect intermediate convolutional activations across channels, layers, and spatial coordinates. SeeDL captures genuine forward activations from <code>torch.nn.Conv2d</code>, nested <code>Sequential</code> models, activation layers, and pooling layers.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU())
+sample = torch.randn(1, 3, 24, 24)
+view = sd.features(model, input=sample)
+view.save(&quot;cnn_features.html&quot;)</code></pre><p><a href="../playground.html#cnn">Try the live CNN explorer →</a></p>
+
+<h2 id="gradient-health">Gradient Health Diagnostics</h2><p>Inspect layer-level and parameter-level gradient telemetry. Evaluates L1/L2 gradient norms, gradient-to-weight magnitude ratios, exact zero-gradient fraction (dead neurons), and nonfinite (NaN/Inf) occurrences directly from existing autograd buffers.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2))
+loss = model(torch.randn(2, 4)).sum()
+loss.backward()
+grad_view = sd.gradient_health(model)
+grad_view.save(&quot;gradient_health.html&quot;)</code></pre><p><a href="../playground.html#gradient-health">Inspect gradient health in the playground →</a></p>
+
+<h2 id="training-recording">SeeDL Training Recording</h2><p>Record bounded, immutable training passes. Capture after <code>loss.backward()</code> and before <code>optimizer.step()</code>, while parameters and gradients still match the forward pass.</p><pre><code>import torch
 from torch import nn
 import seedl as sd
 
@@ -85,67 +120,94 @@ torch.manual_seed(41)
 model = nn.Sequential(nn.Linear(2, 4), nn.Tanh(), nn.Linear(4, 1))
 x = torch.tensor([[1.0, -2.0]])
 optimizer = torch.optim.SGD(model.parameters(), lr=0.08)
-with sd.watch(model, name=&quot;Tiny regression&quot;, max_snapshots=16,
-              max_bytes=512_000, max_values=12,
-              max_neurons=12, max_connections=16) as run:
-    for step in range(16):
+with sd.watch(model, name=&quot;Regression&quot;, max_snapshots=4) as run:
+    for step in range(4):
         optimizer.zero_grad(set_to_none=True)
         output = model(x)
         loss = (output - 0.5).square().mean()
         loss.backward()
-        run.capture(step=step, epoch=step // 4, loss=loss)
-        optimizer.step()  # Always AFTER capture.
+        run.capture(step=step, epoch=0, loss=loss)
+        optimizer.step()
+run.playback(backend=&quot;plotly&quot;).save(&quot;training.html&quot;)</code></pre>
 
-snapshot = run.snapshots[0]
-print(snapshot.data[&quot;loss&quot;], snapshot.data[&quot;parameters&quot;])
-run.playback(backend=&quot;plotly&quot;).save(&quot;training.html&quot;)</code></pre><h2 id="snapshot-inspection">Snapshot inspection</h2><p><code>run.snapshots</code> holds immutable captured records. <code>snapshot.data</code> exposes step, epoch, loss, parameter samples with original flat indices, captured output, activations, and a supported neuron graph. Existing gradients are recorded; absent or non-finite values remain unavailable. <code>max_snapshots</code>, <code>max_bytes</code>, <code>max_values</code>, <code>max_neurons</code>, and <code>max_connections</code> keep the recording bounded. Older snapshots can be evicted when limits are reached; inspect <code>run.recording_stats</code>.</p>
-<h2 id="training-playback">Playback</h2><p><code>run.playback(backend="plotly")</code> returns a visualization you can save to HTML. Play, pause, rewind, step forward/backward, change speed, select a recorded step or epoch, and inspect a neuron. The timeline shows recorded loss; no intermediate states are interpolated. Use <code>color_by="gradient"</code> to color neurons by available gradients.</p><p class="notice">“Live training playback” means playback of recorded training snapshots. Python training happens locally in the build or your script. The static website does not train in the browser or stream continuous training from a server.</p><p><a href="../playground.html#training">Try training playback →</a></p>
-<h2 id="training-comparison">Training comparison</h2><p>Continue from the training example. <code>sd.compare</code> aligns names, shapes, and original sample indices, then reports parameter differences, activation samples, gradient statistics, and captured output changes.</p><pre><code># Continue from the training example above.
-comparison = sd.compare(run.snapshots[0], run.snapshots[-1],
-                        names=(&quot;Step 0&quot;, &quot;Step 15&quot;), backend=&quot;plotly&quot;)
-comparison.save(&quot;comparison.html&quot;)
-print(comparison.data[&quot;parameters&quot;])
-print(comparison.data[&quot;outputs&quot;])</code></pre><p>Statistics describe captured samples rather than all parameters. In this demo, parameter previews retain 9 of 17 values; the neuron graph independently records all 12 connections. Both snapshots use the same input. In other recordings, changed inputs can also change outputs. Step 15 is captured before its optimizer update. <a href="../playground.html#comparison">Inspect the comparison →</a></p>
-<h2 id="quantum-evolution">Quantum gate evolution</h2><p>Install <code>seedl[quantum,plotly]==0.4.0</code>. Use a real Qiskit circuit with <code>sd.circuit(qc, simulate=True)</code>. The export includes a clickable circuit diagram, a gate timeline, and before/after state views.</p><pre><code>from qiskit import QuantumCircuit
+<h2 id="training-playback">Playback</h2><p><code>run.playback(backend="plotly")</code> returns an interactive timeline visualization. Play, pause, rewind, step forward/backward, change speed, select recorded steps, and inspect neurons.</p><p><a href="../playground.html#training">Try training playback →</a></p>
+
+<h2 id="training-comparison">Step Comparison</h2><p><code>sd.compare(snapshot_a, snapshot_b)</code> aligns parameter names, shapes, and sample indices, then reports differences, activation samples, gradient statistics, and output shifts.</p><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Linear(2, 4), nn.Tanh(), nn.Linear(4, 1))
+x = torch.tensor([[1.0, -2.0]])
+with sd.watch(model, name=&quot;Regression&quot;, max_snapshots=2) as run:
+    for s in range(2):
+        loss = (model(x) - 0.5).square().mean()
+        loss.backward()
+        run.capture(step=s, epoch=0, loss=loss)
+cmp = sd.compare(run.snapshots[0], run.snapshots[1], names=(&quot;Initial&quot;, &quot;Updated&quot;), backend=&quot;plotly&quot;)
+cmp.save(&quot;comparison.html&quot;)</code></pre><p><a href="../playground.html#comparison">Inspect the step comparison →</a></p>
+
+<h2 id="runs-comparison">Training Run Comparison</h2><p><code>sd.compare_runs(run_a, run_b)</code> compares entire training run histories and experiment trajectories across optimizers or hyperparameters with step alignment and convergence delta analysis.</p><pre><code>import seedl as sd
+
+run_a = {&quot;loss&quot;: [0.8, 0.5, 0.3], &quot;acc&quot;: [0.5, 0.7, 0.85]}
+run_b = {&quot;loss&quot;: [0.75, 0.4, 0.22], &quot;acc&quot;: [0.52, 0.78, 0.91]}
+runs_view = sd.compare_runs(run_a, run_b, name_a=&quot;SGD&quot;, name_b=&quot;AdamW&quot;)
+runs_view.save(&quot;runs.html&quot;)</code></pre><p><a href="../playground.html#runs-compare">Compare training runs in the playground →</a></p>
+
+<h2 id="quantum-noise">Quantum Noise Lab</h2><p>Simulate single-qubit open quantum system decoherence under Kraus noise channels. Track Bloch vector shrinkage, purity loss Tr(ρ²), and entropy growth under Depolarizing, Amplitude Damping, and Phase Damping channels.</p><pre><code>import seedl as sd
+
+view = sd.quantum_noise(channel=&quot;depolarizing&quot;, param=0.3, steps=6)
+view.save(&quot;noise.html&quot;)</code></pre><p><a href="../playground.html#quantum-noise">Explore quantum noise in the playground →</a></p>
+
+<h2 id="quantum-evolution">Quantum Evolution</h2><p>Follow gate-by-gate unitary state evolution using real Qiskit circuits with clickable gate diagrams and before/after statevector analysis.</p><pre><code>from qiskit import QuantumCircuit
 import seedl as sd
 
 qc = QuantumCircuit(2)
 qc.h(0)
 qc.cx(0, 1)
 view = sd.circuit(qc, simulate=True, backend=&quot;plotly&quot;)
-view.save(&quot;evolution.html&quot;)
-print(view.data[&quot;evolution&quot;][-1][&quot;probabilities&quot;])
-# Optional: rotate the Bell pair&#x27;s relative phase.
-qc.rz(1.5707963267948966, 1)
-sd.circuit(qc, simulate=True, backend=&quot;plotly&quot;).save(&quot;phase.html&quot;)</code></pre><p>Basis labels follow Qiskit's little-endian order, |q₁q₀⟩. Before CX the probabilities are [½, ½, 0, 0]; after CX they are [½, 0, 0, ½]. Reduced-qubit Bloch vectors describe local states, not the complete entangled state. The RZ variant gives phases −π/4 and +π/4 to the two occupied basis states. Phase has no meaning for a zero amplitude.</p><p>Simulation is bounded. Measurement, reset, conditional, and unsupported operations halt evolution; an unavailable post-halt state is not a simulated measurement outcome. These playground circuits contain only supported unitary gates. <a href="../playground.html#evolution">Explore the gates →</a></p>
-<h2 id="quantum">Quantum Computing</h2><p>Install <code>seedl[quantum,plotly]</code> for all examples below. State calculations are performed locally in Python. The public website serves precomputed outputs. Bloch plots describe one qubit; they cannot represent an entire entangled multi-qubit state.</p>
+view.save(&quot;evolution.html&quot;)</code></pre><p><a href="../playground.html#evolution">Explore quantum gates in the playground →</a></p>
+
 <h2 id="bloch-spheres">Bloch Spheres</h2><pre><code>import seedl as sd
 
 view = sd.bloch(&quot;+&quot;, backend=&quot;plotly&quot;)
-view.save(&quot;bloch.html&quot;)
-# Named states: &quot;0&quot;, &quot;1&quot;, &quot;+&quot;, &quot;-&quot;, &quot;+i&quot;, &quot;-i&quot;
-# Also accepts a single-qubit statevector or 2×2 density matrix.</code></pre><p>Coordinates obey x = Tr(ρX), y = Tr(ρY), z = Tr(ρZ). Pure states have unit length; mixed states lie inside the sphere. For α|0⟩ + β|1⟩, x = 2 Re(α*β), y = 2 Im(α*β), z = |α|² − |β|².</p><table><thead><tr><th>State</th><th>Vector (x, y, z)</th></tr></thead><tbody><tr><td>|0⟩ / |1⟩</td><td>(0, 0, +1) / (0, 0, −1)</td></tr><tr><td>|+⟩ / |−⟩</td><td>(+1, 0, 0) / (−1, 0, 0)</td></tr><tr><td>|+i⟩ / |−i⟩</td><td>(0, +1, 0) / (0, −1, 0)</td></tr></tbody></table>
+view.save(&quot;bloch.html&quot;)</code></pre><p>Coordinates obey x = Tr(ρX), y = Tr(ρY), z = Tr(ρZ). Pure states lie on the unit sphere; mixed states lie inside.</p>
+
 <h2 id="quantum-circuits">Quantum Circuits</h2><pre><code>from qiskit import QuantumCircuit
 import seedl as sd
 
 qc = QuantumCircuit(2)
 qc.h(0)
 qc.cx(0, 1)
-sd.see(qc, backend=&quot;plotly&quot;).save(&quot;bell.html&quot;)</code></pre><p>In Qiskit's |q₁q₀⟩ basis order, H on q₀ takes |00⟩ to (|00⟩ + |01⟩)/√2. CX with control q₀ and target q₁ produces (|00⟩ + |11⟩)/√2. Hover over circuit gates to inspect them. <code>sd.see(qc, simulate=True)</code> can also request supported bounded circuit evolution; the playground includes both circuit inspection and gate-by-gate evolution.</p>
-<h2 id="statevectors">Statevectors</h2><pre><code>import math
-import seedl as sd
+sd.see(qc, backend=&quot;plotly&quot;).save(&quot;circuit.html&quot;)</code></pre><p><a href="../playground.html#circuit">Explore the circuit in the playground →</a></p>
 
-bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
-sd.statevector(bell, backend=&quot;plotly&quot;).save(&quot;amplitudes.html&quot;)</code></pre><p>Inspect complex amplitudes, phases, and measurement probabilities in the computational basis. Input must be normalized and have power-of-two length.</p>
-<h2 id="density-matrices">Density Matrices</h2><pre><code>import seedl as sd
-
-rho = [[0.5, 0], [0, 0.5]]
-sd.density_matrix(rho, backend=&quot;plotly&quot;).save(&quot;mixed.html&quot;)</code></pre><p>A single-qubit density matrix is rendered as a Bloch sphere. This maximally mixed state has r = (0, 0, 0) and purity Tr(ρ²) = 1/2. Larger supported matrices use a matrix view. Inputs must be valid Hermitian, positive semidefinite, unit-trace density operators.</p>
 <h2 id="entanglement">Entanglement</h2><pre><code>import math
 import seedl as sd
 
 bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
-sd.entanglement(bell, backend=&quot;plotly&quot;).save(&quot;entanglement.html&quot;)</code></pre><p>For a pure two-qubit input, SeeDL takes a partial trace and computes reduced-state von Neumann entropy in bits. A Bell pair has entropy 1 bit per subsystem. Reduced-state entropy alone is not an entanglement measure for general mixed states.</p>
-<h2 id="examples">Examples</h2><p><a href="../playground.html">Open the interactive playground</a> for complete demo source. Explore the repository's <a href="https://github.com/iamaritrasaha/seedl/tree/main/examples">notebooks and Python examples</a>, the <a href="https://github.com/iamaritrasaha/seedl/blob/main/README.md">full README</a>, the <a href="https://github.com/iamaritrasaha/seedl/releases/tag/v0.4.0">0.4.0 release notes</a>, the historical <a href="https://github.com/iamaritrasaha/seedl/releases/tag/v0.3.0">0.3.0 release notes</a>, and the archived <a href="https://github.com/iamaritrasaha/seedl/blob/main/docs/RELEASE_NOTES_0.2.0.md">0.2.0 release notes</a>.</p>
-<h2 id="api">API Reference</h2><p>Visualization functions return a <code>Visualization</code>; <code>sd.watch</code> returns a training tracker. For complete signatures and implementation details, see the <a href="https://github.com/iamaritrasaha/seedl/blob/v0.4.0/src/seedl/api.py">0.4.0 API source</a> and <a href="https://github.com/iamaritrasaha/seedl/blob/v0.4.0/src/seedl/view.py">Visualization reference</a>.</p><table><thead><tr><th>Entry point</th><th>Purpose / key options</th></tr></thead><tbody><tr><td><code>sd.features(model, input=...)</code></td><td>CNN feature maps: layers, channels, spatial coordinates, normalization modes.</td></tr><tr><td><code>sd.attention(weights, tokens=...)</code></td><td>Transformer attention matrix, per-head routing, query distributions, causal masks.</td></tr><tr><td><code>sd.vit_attention(weights, patch_grid=...)</code></td><td>Reshape 1D token attention vectors to 2D spatial image patch grids.</td></tr><tr><td><code>sd.watch(model, **limits)</code></td><td>Observe training; capture after backward and before optimizer.step().</td></tr><tr><td><code>run.capture(step=..., epoch=..., loss=...)</code></td><td>Record the completed pass. Metadata is passed by keyword.</td></tr><tr><td><code>run.snapshots / run.recording_stats</code></td><td>Retained immutable records and bounded recording coverage.</td></tr><tr><td><code>run.playback(backend="plotly", color_by="activation")</code></td><td>Recorded training controls, neuron inspection, loss timeline.</td></tr><tr><td><code>sd.compare(snapshot_a, snapshot_b)</code></td><td>Compare aligned captured parameter/output samples, gradient statistics, or feature maps.</td></tr><tr><td><code>sd.circuit(qc, simulate=True)</code></td><td>Bounded gate evolution and before/after quantum states.</td></tr><tr><td><code>sd.see(obj, **options)</code></td><td>Automatic inspection. input, backend, view, theme, max_neurons, max_connections, select_neuron.</td></tr><tr><td><code>sd.bloch(state, **options)</code></td><td>Single-qubit state. view="3d", theme, backend.</td></tr><tr><td><code>sd.statevector(state, **options)</code></td><td>Amplitudes and probabilities. max_states, theme, backend.</td></tr><tr><td><code>sd.density_matrix(rho, **options)</code></td><td>Density operator inspection. theme, backend.</td></tr><tr><td><code>sd.entanglement(state, **options)</code></td><td>Two-qubit subsystem diagnostics. theme, backend.</td></tr><tr><td><code>view.save(filepath)</code></td><td>Export HTML, SVG, or PNG; raster exports may require additional backend tooling.</td></tr><tr><td><code>view.to_figure(backend=None)</code></td><td>Return the selected backend figure or SVG text.</td></tr><tr><td><code>view.explore(select_neuron=None)</code></td><td>Return an interactive figure with supported exploration controls.</td></tr><tr><td><code>view.data / view.metadata</code></td><td>Inspected data and visualization metadata.</td></tr></tbody></table><p class="notice">This site documents the published SeeDL 0.4.0 API. Generated assets are built from that package. Scientific calculations run in Python; exported browser interaction does not retrain or re-execute models.</p></article></main>
-<footer class="footer wrap"><span><a class="brand" href="../index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.4.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>
+sd.entanglement(bell, backend=&quot;plotly&quot;).save(&quot;entanglement.html&quot;)</code></pre><p>Computes reduced-state von Neumann entropy in bits. A Bell pair yields 1 bit per subsystem.</p>
+
+<h2 id="dataset-drift">Dataset Drift Observatory</h2><p>Measure statistical distribution shift between reference/baseline and production dataset samples. Evaluates Population Stability Index (PSI) and symmetric Jensen-Shannon Divergence (JSD).</p><pre><code>import numpy as np
+import seedl as sd
+
+ref = np.random.normal(0, 1, size=(50, 2))
+comp = np.random.normal(0.4, 1.1, size=(50, 2))
+drift_view = sd.dataset_drift(ref, comp)
+drift_view.save(&quot;drift.html&quot;)</code></pre><p><a href="../playground.html#dataset-drift">Explore dataset drift in the playground →</a></p>
+
+<h2 id="scientific-reports">Scientific Diagnostic Reports</h2><p>Compile disparate SeeDL views into a publication-grade, self-contained offline HTML dossier with zero CDN dependencies.</p><pre><code>import seedl as sd
+
+rep = sd.report(&quot;Scientific Audit&quot;, subtitle=&quot;Neural &amp; Quantum Telemetry&quot;, theme=&quot;dark&quot;)
+noise_v = sd.quantum_noise(channel=&quot;depolarizing&quot;, param=0.2, steps=4)
+rep.add_section(&quot;Quantum Noise&quot;, noise_v, narrative=&quot;Kraus depolarizing decoherence.&quot;)
+rep.save(&quot;report.html&quot;)</code></pre><p><a href="../playground.html#report">View scientific report in the playground →</a></p>
+
+<h2 id="analysis-integrity">Analysis Serialization &amp; Integrity</h2><p>Persist and reload SeeDL analysis artifacts securely. <code>sd.save_analysis()</code> writes a deterministic canonical JSON payload with SHA-256 integrity hash verification on load, without Python pickle.</p><pre><code>import seedl as sd
+
+view = sd.bloch(&quot;+&quot;, backend=&quot;plotly&quot;)
+sd.save_analysis(view, &quot;analysis.json&quot;)
+loaded = sd.load_analysis(&quot;analysis.json&quot;)</code></pre>
+
+<h2 id="examples">Examples</h2><p><a href="../playground.html">Open the interactive playground</a> for complete demo source. Explore the repository's <a href="https://github.com/iamaritrasaha/seedl/tree/main/examples">notebooks and Python examples</a>, the <a href="https://github.com/iamaritrasaha/seedl/blob/main/README.md">full README</a>, the <a href="https://github.com/iamaritrasaha/seedl/releases/tag/v0.5.0">0.5.0 release notes</a>, the historical <a href="https://github.com/iamaritrasaha/seedl/releases/tag/v0.4.0">0.4.0 release notes</a>, the <a href="https://github.com/iamaritrasaha/seedl/releases/tag/v0.3.0">0.3.0 release notes</a>, and the archived <a href="https://github.com/iamaritrasaha/seedl/blob/main/docs/RELEASE_NOTES_0.2.0.md">0.2.0 release notes</a>.</p>
+
+<h2 id="api">API Reference</h2><p>Visualization functions return a <code>Visualization</code>; <code>sd.watch</code> returns a training tracker. For complete signatures and implementation details, see the <a href="https://github.com/iamaritrasaha/seedl/blob/v0.5.0/src/seedl/api.py">0.5.0 API source</a> and <a href="https://github.com/iamaritrasaha/seedl/blob/v0.5.0/src/seedl/view.py">Visualization reference</a>.</p><table><thead><tr><th>Entry point</th><th>Purpose / key options</th></tr></thead><tbody><tr><td><code>sd.flow(model, input, mode="graph")</code></td><td>Neural execution tracer DAG: explicit tensor edges, in-place aliases, shapes.</td></tr><tr><td><code>sd.flow(model, input, mode="table")</code></td><td>Tensor flow pipeline: layer transitions, memory footprints, activation stats.</td></tr><tr><td><code>sd.attention(weights, tokens=...)</code></td><td>Transformer attention matrix, per-head routing, query distributions.</td></tr><tr><td><code>sd.attention_rollout(layers, tokens=...)</code></td><td>Cumulative attention rollout across Transformer layers with residual normalization.</td></tr><tr><td><code>sd.vit_attention(weights, patch_grid=...)</code></td><td>Reshape 1D token attention vectors to 2D spatial image patch grids.</td></tr><tr><td><code>sd.compare_attributions(model, input, ...)</code></td><td>Attribution benchmark: Saliency vs Integrated Gradients vs SmoothGrad.</td></tr><tr><td><code>sd.gradient_health(model)</code></td><td>Gradient diagnostics: L1/L2 norms, gradient-to-weight ratios, sparsity.</td></tr><tr><td><code>sd.watch(model, **limits)</code></td><td>Observe training; capture after backward and before optimizer.step().</td></tr><tr><td><code>run.capture(step=..., epoch=..., loss=...)</code></td><td>Record completed pass. Metadata is passed by keyword.</td></tr><tr><td><code>run.playback(backend="plotly")</code></td><td>Recorded training controls, neuron inspection, loss timeline.</td></tr><tr><td><code>sd.compare(snapshot_a, snapshot_b)</code></td><td>Compare aligned captured parameter/output samples and gradient stats.</td></tr><tr><td><code>sd.compare_runs(run_a, run_b)</code></td><td>Compare entire training histories across runs with step alignment.</td></tr><tr><td><code>sd.quantum_noise(channel=..., param=...)</code></td><td>Open quantum systems: Depolarizing, Amplitude Damping, Phase Damping Kraus noise.</td></tr><tr><td><code>sd.dataset_drift(reference, comparison)</code></td><td>Dataset distribution drift: Population Stability Index and Jensen-Shannon Divergence.</td></tr><tr><td><code>sd.report(title, ...)</code></td><td>Self-contained offline scientific report compiling multiple SeeDL views.</td></tr><tr><td><code>sd.save_analysis / sd.load_analysis</code></td><td>Deterministic canonical JSON serialization with SHA-256 integrity verification.</td></tr><tr><td><code>sd.see(obj, **options)</code></td><td>Automatic inspection. input, backend, view, theme, max_neurons, max_connections.</td></tr><tr><td><code>sd.bloch(state, **options)</code></td><td>Single-qubit state. view="3d", theme, backend.</td></tr><tr><td><code>sd.circuit(qc, simulate=True)</code></td><td>Bounded gate evolution and before/after quantum states.</td></tr><tr><td><code>view.save(filepath)</code></td><td>Export HTML, SVG, or PNG; raster exports may require additional backend tooling.</td></tr><tr><td><code>view.to_figure(backend=None)</code></td><td>Return the selected backend figure or SVG text.</td></tr><tr><td><code>view.data / view.metadata</code></td><td>Inspected data and visualization metadata.</td></tr></tbody></table><p class="notice">This site documents the published SeeDL 0.5.0 API. Generated assets are built from that package. Scientific calculations run in Python; exported browser interaction does not retrain or re-execute models.</p></article></main>
+<footer class="footer wrap"><span><a class="brand" href="../index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.5.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>

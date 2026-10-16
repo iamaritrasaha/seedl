@@ -393,6 +393,111 @@ def verify_vision_attention_demos(page):
     )
 
 
+def verify_neural_observatory_demos(page):
+    """Verify authentic SeeDL 0.5.0 Neural Observatory demonstrations and controls."""
+    # 1. Category Filter Pills
+    page.locator('[data-category-filter="transformers"]').click()
+    assert page.locator("#tab-attention").is_visible()
+    assert page.locator("#tab-network").get_attribute("data-hidden") == ""
+    page.locator('[data-category-filter="all"]').click()
+    assert page.locator("#tab-network").is_visible()
+
+    # 2. Instant Search Filter
+    page.locator("#demo-search").fill("quantum")
+    assert page.locator("#tab-quantum-noise").is_visible()
+    assert page.locator("#tab-cnn").get_attribute("data-hidden") == ""
+    page.locator("#demo-search").fill("")
+    assert page.locator("#tab-cnn").is_visible()
+
+    # 3. Neural Execution Tracer DAG
+    page.locator("#tab-trace").click()
+    trace_frame = page.locator("#trace iframe").element_handle().content_frame()
+    trace_frame.wait_for_selector(".container")
+    assert trace_frame.locator("#flow-container").is_visible()
+    trace_frame.locator(".tab-btn", has_text="Timeline").click()
+    assert trace_frame.locator("#timeline-container").is_visible()
+    trace_frame.locator(".tab-btn", has_text="Tensor Table").click()
+    assert trace_frame.locator("#table-body").is_visible()
+    trace_frame.locator(".tab-btn", has_text="Flow Graph").click()
+    assert trace_frame.locator("#flow-container").is_visible()
+    page.locator("#trace iframe").screenshot(path=str(ARTIFACTS / "execution-trace.png"))
+
+    # 4. Tensor Flow Explorer
+    page.locator("#tab-flow").click()
+    flow_frame = page.locator("#flow iframe").element_handle().content_frame()
+    flow_frame.wait_for_selector(".container")
+    assert flow_frame.locator("#flow-container").is_visible()
+    flow_frame.locator(".tab-btn", has_text="Tensor Table").click()
+    assert flow_frame.locator("#table-body").is_visible()
+    assert "conv1" in flow_frame.locator("#table-body").inner_text().lower()
+    page.locator("#flow iframe").screenshot(path=str(ARTIFACTS / "tensor-flow.png"))
+
+    # 5. Transformer Attention Rollout Lab
+    page.locator("#tab-rollout").click()
+    roll_frame = page.locator("#rollout iframe").element_handle().content_frame()
+    roll_frame.wait_for_selector("#table-container")
+    assert roll_frame.locator("#layer-select").is_visible()
+    roll_frame.locator("#layer-select").select_option("1")
+    roll_frame.wait_for_function("() => document.getElementById('layer-select').value === '1'")
+    page.locator("#rollout iframe").screenshot(path=str(ARTIFACTS / "attention-rollout.png"))
+
+    # 6. Attribution Benchmark Lab
+    page.locator("#tab-attribution").click()
+    attr_frame = page.locator("#attribution iframe").element_handle().content_frame()
+    attr_frame.wait_for_selector("#cards-container")
+    assert attr_frame.locator("#sim-table").is_visible()
+    assert "saliency" in attr_frame.locator("#sim-table").inner_text().lower()
+    assert "pearson" in attr_frame.locator(".container").inner_text().lower()
+    page.locator("#attribution iframe").screenshot(
+        path=str(ARTIFACTS / "attribution-benchmark.png")
+    )
+
+    # 7. Gradient Health Dashboard
+    page.locator("#tab-gradient-health").click()
+    grad_frame = page.locator("#gradient-health iframe").element_handle().content_frame()
+    grad_frame.wait_for_selector("#stat-l2")
+    assert len(grad_frame.locator("#stat-l2").inner_text().strip()) > 0
+    assert grad_frame.locator("#layers-body").is_visible()
+    page.locator("#gradient-health iframe").screenshot(path=str(ARTIFACTS / "gradient-health.png"))
+
+    # 8. Training Run Comparison
+    page.locator("#tab-runs-compare").click()
+    runs_frame = page.locator("#runs-compare iframe").element_handle().content_frame()
+    runs_frame.wait_for_selector("#metrics-body")
+    assert "loss" in runs_frame.locator("#metrics-body").inner_text().lower()
+    page.locator("#runs-compare iframe").screenshot(path=str(ARTIFACTS / "runs-compare.png"))
+
+    # 9. Quantum Noise Lab
+    page.locator("#tab-quantum-noise").click()
+    qnoise_frame = page.locator("#quantum-noise iframe").element_handle().content_frame()
+    qnoise_frame.wait_for_selector("#noise-slider")
+    assert qnoise_frame.locator("#init-purity").inner_text() == "1.000"
+    with qnoise_frame.expect_navigation(wait_until="load"):
+        page.locator("#noise-channel").select_option("quantum-noise-amplitude")
+    qnoise_frame = page.locator("#quantum-noise iframe").element_handle().content_frame()
+    qnoise_frame.wait_for_selector("#noise-slider")
+    page.locator("#quantum-noise iframe").screenshot(path=str(ARTIFACTS / "quantum-noise.png"))
+
+    # 10. Dataset Drift Observatory
+    page.locator("#tab-dataset-drift").click()
+    drift_frame = page.locator("#dataset-drift iframe").element_handle().content_frame()
+    drift_frame.wait_for_selector(".stat-card")
+    assert "stability index" in drift_frame.locator(".container").inner_text().lower()
+    page.locator("#dataset-drift iframe").screenshot(path=str(ARTIFACTS / "dataset-drift.png"))
+
+    # 11. Scientific Diagnostic Report
+    page.locator("#tab-report").click()
+    rep_frame = page.locator("#report iframe").element_handle().content_frame()
+    rep_frame.wait_for_selector(".layout")
+    assert "observatory" in rep_frame.locator(".report-header").inner_text().lower()
+    page.locator("#report iframe").screenshot(path=str(ARTIFACTS / "scientific-report.png"))
+
+    print(
+        "PASS: Neural Observatory 0.5.0 demos: execution tracer DAG, tensor flow, attention rollout, attribution benchmark, gradient health, runs compare, quantum noise, dataset drift, and scientific report.",
+        flush=True,
+    )
+
+
 def main():
     ARTIFACTS.mkdir(parents=True, exist_ok=True)
     server = ThreadingHTTPServer(
@@ -428,7 +533,9 @@ def main():
             )
             page.on("request", lambda request: requests.append(request.url))
             page.goto(base)
-            page.locator(".quantum-card img").last.scroll_into_view_if_needed()
+            for card_img in page.locator(".quantum-card img").all():
+                card_img.scroll_into_view_if_needed()
+            page.wait_for_load_state("networkidle")
             assert all(
                 page.locator("img").evaluate_all(
                     "(images) => images.map(i => i.complete && i.naturalWidth > 0)"
@@ -551,7 +658,7 @@ def main():
             page.keyboard.press("ArrowRight")
             assert page.locator("#tab-attention-cmp").get_attribute("aria-selected") == "true"
             page.keyboard.press("End")
-            assert page.locator("#tab-evolution").get_attribute("aria-selected") == "true"
+            assert page.locator("#tab-report").get_attribute("aria-selected") == "true"
             page.locator("#tab-bloch").click()
             bloch = page.locator("#bloch iframe").element_handle().content_frame()
             ready(bloch)
@@ -603,6 +710,7 @@ def main():
                 "PASS: physical neuron click, highlights, inspector, camera orbit/zoom/reset, six Bloch vectors, Bell rendering/hover."
             )
             verify_recorded_demos(page)
+            verify_neural_observatory_demos(page)
             page.set_viewport_size({"width": 390, "height": 844})
             for route in (
                 "index.html",

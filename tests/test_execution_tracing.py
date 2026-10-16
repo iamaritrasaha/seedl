@@ -338,3 +338,129 @@ def test_buffer_preservation_and_non_mutation():
     assert torch.equal(model.running_stat, orig_buffer)
     # Verify input tensor untouched
     assert torch.equal(x_input, orig_x)
+
+
+class LargeBufferMutatingModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        # Large buffer exceeding 8192 elements
+        self.register_buffer("large_buf", torch.zeros(16384))
+        # Small buffer
+        self.register_buffer("small_buf", torch.ones(4))
+        # None-valued buffer
+        self.register_buffer("none_buf", None)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # In-place buffer mutations during forward execution
+        self.large_buf.add_(10.0)
+        self.small_buf.fill_(42.0)
+        return self.fc(x) + self.small_buf
+
+
+class BufferMutatingExceptionModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.register_buffer("critical_buf", torch.full((10000,), 3.14159))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        self.critical_buf.zero_()
+        raise RuntimeError("Crash inside forward after buffer zeroing")
+
+
+class InplaceInputMutatingModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Malicious / aggressive in-place modification of input argument
+        x.add_(999.0)
+        x[0, 0] = -12345.0
+        return self.fc(x)
+
+
+class MixedModeContainer(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.layer_train = nn.Linear(4, 4)
+        self.layer_eval = nn.Linear(4, 4)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.layer_eval(self.layer_train(x))
+
+
+def test_large_buffer_mutation_restoration():
+    """Buffers > 8192 elements and None-valued buffers mutated during forward are fully restored."""
+    model = LargeBufferMutatingModel()
+    orig_large = model.large_buf.clone()
+    orig_small = model.small_buf.clone()
+
+    x = torch.randn(2, 4)
+    trace = sd.trace(model, x)
+    assert trace is not None
+
+    # Verify large buffer restored
+    assert torch.equal(model.large_buf, orig_large)
+    assert model.large_buf.numel() == 16384
+    # Verify small buffer restored
+    assert torch.equal(model.small_buf, orig_small)
+    # Verify None buffer remains None
+    assert model.none_buf is None
+
+
+def test_buffer_restoration_on_forward_exception():
+    """Registered buffers mutated prior to an exception are guaranteed restored in finally block."""
+    model = BufferMutatingExceptionModel()
+    orig_buf = model.critical_buf.clone()
+    x = torch.randn(2, 4)
+
+    with pytest.raises(RuntimeError, match="Crash inside forward"):
+        sd.trace(model, x)
+
+    # Verify buffer restored despite forward exception
+    assert torch.equal(model.critical_buf, orig_buf)
+    assert model.critical_buf[0].item() == pytest.approx(3.14159, abs=1e-4)
+
+
+def test_input_tensor_non_mutation():
+    """Caller input tensors are never mutated even if forward pass executes in-place operations."""
+    model = InplaceInputMutatingModel()
+    orig_x = torch.tensor([[1.0, 2.0, 3.0, 4.0], [5.0, 6.0, 7.0, 8.0]])
+    x_input = orig_x.clone()
+
+    trace = sd.trace(model, x_input)
+    assert trace is not None
+
+    # Caller's input tensor must remain exactly equal to orig_x
+    assert torch.equal(x_input, orig_x)
+    assert x_input[0, 0].item() == 1.0
+
+
+def test_mixed_training_modes_preservation():
+    """Mixed submodule training modes (train vs eval) are preserved individually."""
+    model = MixedModeContainer()
+    model.layer_train.train()
+    model.layer_eval.eval()
+
+    assert model.layer_train.training is True
+    assert model.layer_eval.training is False
+
+    x = torch.randn(2, 4)
+    _ = sd.trace(model, x)
+
+    # Verify both training flags returned to their exact original states
+    assert model.layer_train.training is True
+    assert model.layer_eval.training is False
+
+
+def test_repeated_tracing_stability():
+    """Tracing a model multiple times in succession preserves state across all runs."""
+    model = LargeBufferMutatingModel()
+    orig_large = model.large_buf.clone()
+    x = torch.randn(2, 4)
+
+    for _ in range(3):
+        t = sd.trace(model, x)
+        assert len(t.nodes) >= 1
+        assert torch.equal(model.large_buf, orig_large)

@@ -41,6 +41,19 @@ def _get_tensor_id(tensor: Any) -> int:
     return id(tensor)
 
 
+def _clone_input(obj: Any, torch: Any) -> Any:
+    """Recursively clone and detach tensors from nested structures so user input is never mutated."""
+    if isinstance(obj, torch.Tensor):
+        return obj.detach().clone()
+    if isinstance(obj, tuple):
+        return tuple(_clone_input(item, torch) for item in obj)
+    if isinstance(obj, list):
+        return [_clone_input(item, torch) for item in obj]
+    if isinstance(obj, dict):
+        return {k: _clone_input(v, torch) for k, v in obj.items()}
+    return obj
+
+
 def trace(
     model: Any,
     input: Any,
@@ -53,12 +66,16 @@ def trace(
     """Record an exact, verified neural execution trace of a model forward pass.
 
     State Preservation Guarantees:
-    - Model training modes (eval/train) are preserved and restored after execution.
+    - Model training modes (eval/train, including mixed submodule modes) are preserved and restored after execution.
     - Registered parameter gradients are untouched and restored.
-    - Module buffers are not modified.
+    - All registered module buffers (including non-persistent and None-valued buffers of arbitrary size) are snapshotted and restored to their original values and registrations.
     - All forward hooks are removed in a guaranteed finally block, even on exceptions.
-    - User input tensor is cloned/detached where appropriate; original input is untouched.
+    - User input tensor is cloned and detached; original user input is guaranteed unmutated.
     - Retained activations are detached from autograd graphs.
+
+    Memory Overhead & Sandboxing Notice:
+    - Buffer snapshotting creates detached clones of registered module buffers. For models with very large buffers, this temporarily uses memory proportional to buffer size, which is released upon trace completion.
+    - Sandboxing Limitation: Arbitrary custom Python code in forward methods cannot be completely sandboxed. While model buffers, parameters, gradients, modes, and input tensors are fully restored, unmanaged side effects (such as mutations of global Python variables, file I/O, or non-PyTorch external state) cannot be intercepted.
     """
     torch = _torch()
     if torch is None or not isinstance(model, torch.nn.Module):
@@ -69,12 +86,29 @@ def trace(
     if not isinstance(max_nodes, int) or max_nodes < 1:
         raise ValueError("max_nodes must be a positive integer.")
 
-    # Save original training mode states and gradients
-    states = [(m, bool(m.training)) for _, m in model.named_modules()]
+    # 1. Save original training mode for every submodule to preserve mixed modes
+    orig_training_modes = [(module, bool(module.training)) for module in model.modules()]
+
+    # 2. Save original parameter gradients
     saved_grads = {
         name: param.grad.clone() if param.grad is not None else None
         for name, param in model.named_parameters()
     }
+
+    # 3. Snapshot registered buffers across all modules (including None-valued and non-persistent sets)
+    saved_buffers = [
+        (
+            module,
+            dict(module._buffers),
+            set(module._non_persistent_buffers_set),
+            {
+                b_name: b_val.detach().clone() if b_val is not None else None
+                for b_name, b_val in module._buffers.items()
+            },
+        )
+        for _, module in model.named_modules()
+        if module._buffers
+    ]
 
     hooks: list[Any] = []
     observed_nodes: list[TraceNode] = []
@@ -87,11 +121,12 @@ def trace(
         Any
     ] = []  # Prevents intermediate tensor deallocation and allocator address reuse
 
-    # Extract initial network input tensor IDs
-    input_tensors = _extract_tensors(input, torch)
-    _retained_tensors.extend(input_tensors)
+    # Clone user inputs to ensure model forward mutations never affect caller's input tensors
+    forward_input = _clone_input(input, torch)
+    forward_input_tensors = _extract_tensors(forward_input, torch)
+    _retained_tensors.extend(forward_input_tensors)
     input_metadata = []
-    for idx, inp in enumerate(input_tensors):
+    for idx, inp in enumerate(forward_input_tensors):
         producer_by_obj_id[id(inp)] = "INPUT"
         try:
             if hasattr(inp, "data_ptr") and inp.data_ptr() != 0:
@@ -265,19 +300,22 @@ def trace(
     limitations: list[str] = [
         "Execution timing on GPU reflects asynchronous launch overhead unless CUDA synchronization was explicitly invoked.",
         "Module hooks observe module boundaries; in-place Python tensor operations outside submodules may require torch.fx.",
+        "Executing arbitrary custom Python forward methods cannot be completely sandboxed against external side effects (e.g. global variable mutations or disk I/O).",
     ]
     warnings: list[str] = []
+    trace_mode = "hooks"
+    fx_edges: list[TraceEdge] = []
 
     try:
         model.eval()
         with torch.no_grad():
             # Format inputs appropriately
-            if isinstance(input, tuple):
-                res = model(*input)
-            elif isinstance(input, dict):
-                res = model(**input)
+            if isinstance(forward_input, tuple):
+                res = model(*forward_input)
+            elif isinstance(forward_input, dict):
+                res = model(**forward_input)
             else:
-                res = model(input)
+                res = model(forward_input)
 
         out_tensors = _extract_tensors(res, torch)
         _retained_tensors.extend(out_tensors)
@@ -327,18 +365,96 @@ def trace(
                     )
                 )
 
-    finally:
-        # Clear retained tensors
-        _retained_tensors.clear()
-        # Guarantee hook removal
+        # Remove forward hooks before optional torch.fx trace so hooks do not fire during symbolic trace
         for h in hooks:
             try:
                 h.remove()
             except Exception:
                 pass
-        # Guarantee training state restoration
-        for m, training in states:
-            m.training = training
+        hooks.clear()
+
+        # Optional torch.fx analysis with multi-input and residual skip propagation
+        if use_fx is not False:
+            try:
+                import torch.fx as fx
+
+                fx_graph = fx.symbolic_trace(model)
+                trace_mode = "torch.fx+hooks"
+
+                fx_node_sources: dict[Any, set[str]] = {}
+                fx_mod_call_counts: dict[str, int] = {}
+
+                for node in fx_graph.graph.nodes:
+                    if node.op == "placeholder":
+                        fx_node_sources[node] = {"INPUT"}
+                    elif node.op == "call_module":
+                        target_name = str(node.target)
+                        call_idx = fx_mod_call_counts.get(target_name, 0)
+                        fx_mod_call_counts[target_name] = call_idx + 1
+                        mod_id = f"{target_name}#{call_idx}"
+
+                        for inp in node.all_input_nodes:
+                            for src in fx_node_sources.get(inp, set()):
+                                if src != mod_id:
+                                    fx_edges.append(
+                                        TraceEdge(
+                                            source=src,
+                                            target=mod_id,
+                                            edge_type="symbolic_fx",
+                                            description="Symbolic FX verified data dependency",
+                                            is_uncertain=False,
+                                        )
+                                    )
+                        fx_node_sources[node] = {mod_id}
+                    elif node.op in ("call_function", "call_method", "get_attr"):
+                        # Propagate sources through functions/methods/attributes (e.g. add, cat, view, slice)
+                        srcs: set[str] = set()
+                        for inp in node.all_input_nodes:
+                            srcs.update(fx_node_sources.get(inp, set()))
+                        fx_node_sources[node] = srcs
+                    elif node.op == "output":
+                        for inp in node.all_input_nodes:
+                            for src in fx_node_sources.get(inp, set()):
+                                fx_edges.append(
+                                    TraceEdge(
+                                        source=src,
+                                        target="OUTPUT",
+                                        edge_type="symbolic_fx",
+                                        description="Symbolic FX output dependency",
+                                        is_uncertain=False,
+                                    )
+                                )
+            except Exception as exc:
+                if use_fx is True:
+                    warnings.append(f"torch.fx symbolic trace failed: {exc}")
+                trace_mode = "hooks"
+
+    finally:
+        # Clear retained tensors to free memory and prevent autograd retention
+        _retained_tensors.clear()
+        # Guarantee hook removal (if any remain)
+        for h in hooks:
+            try:
+                h.remove()
+            except Exception:
+                pass
+        # Guarantee buffer restoration across all modules
+        with torch.no_grad():
+            for module, orig_buffers, non_persistent, saved_vals in saved_buffers:
+                module._non_persistent_buffers_set = non_persistent
+                module._buffers = orig_buffers
+                for b_name, b_saved in saved_vals.items():
+                    if b_saved is None:
+                        orig_buffers[b_name] = None
+                        continue
+                    current_buf = orig_buffers.get(b_name)
+                    if current_buf is None or current_buf.shape != b_saved.shape:
+                        orig_buffers[b_name] = b_saved.clone()
+                    else:
+                        current_buf.copy_(b_saved)
+        # Guarantee training state restoration (preserves mixed modes)
+        for m, orig_mode in orig_training_modes:
+            m.training = orig_mode
         # Guarantee parameter gradient restoration
         for name, param in model.named_parameters():
             saved = saved_grads.get(name)
@@ -348,64 +464,6 @@ def trace(
                 param.grad = None
 
     total_duration_ms = (time.perf_counter() - trace_start) * 1000.0
-
-    # Optional torch.fx analysis with multi-input and residual skip propagation
-    trace_mode = "hooks"
-    fx_edges: list[TraceEdge] = []
-    if use_fx is not False:
-        try:
-            import torch.fx as fx
-
-            fx_graph = fx.symbolic_trace(model)
-            trace_mode = "torch.fx+hooks"
-
-            fx_node_sources: dict[Any, set[str]] = {}
-            fx_mod_call_counts: dict[str, int] = {}
-
-            for node in fx_graph.graph.nodes:
-                if node.op == "placeholder":
-                    fx_node_sources[node] = {"INPUT"}
-                elif node.op == "call_module":
-                    target_name = str(node.target)
-                    call_idx = fx_mod_call_counts.get(target_name, 0)
-                    fx_mod_call_counts[target_name] = call_idx + 1
-                    mod_id = f"{target_name}#{call_idx}"
-
-                    for inp in node.all_input_nodes:
-                        for src in fx_node_sources.get(inp, set()):
-                            if src != mod_id:
-                                fx_edges.append(
-                                    TraceEdge(
-                                        source=src,
-                                        target=mod_id,
-                                        edge_type="symbolic_fx",
-                                        description="Symbolic FX verified data dependency",
-                                        is_uncertain=False,
-                                    )
-                                )
-                    fx_node_sources[node] = {mod_id}
-                elif node.op in ("call_function", "call_method", "get_attr"):
-                    # Propagate sources through functions/methods/attributes (e.g. add, cat, view, slice)
-                    srcs: set[str] = set()
-                    for inp in node.all_input_nodes:
-                        srcs.update(fx_node_sources.get(inp, set()))
-                    fx_node_sources[node] = srcs
-                elif node.op == "output":
-                    for inp in node.all_input_nodes:
-                        for src in fx_node_sources.get(inp, set()):
-                            fx_edges.append(
-                                TraceEdge(
-                                    source=src,
-                                    target="OUTPUT",
-                                    edge_type="symbolic_fx",
-                                    description="Symbolic FX output dependency",
-                                    is_uncertain=False,
-                                )
-                            )
-        except Exception as exc:
-            if use_fx is True:
-                warnings.append(f"torch.fx symbolic trace failed: {exc}")
-            trace_mode = "hooks"
 
     # Merge edges with deduplication and metadata enrichment
     final_edges: list[TraceEdge] = []

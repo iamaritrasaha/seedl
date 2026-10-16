@@ -137,3 +137,82 @@ def test_scientific_report_size_budget_enforcement():
 
     with pytest.raises(SeeDLError, match="exceeds maximum allowed size"):
         rep.to_html()
+
+
+def test_scientific_report_interactive_iframe_embedding():
+    """Interactive views are embedded inside sandboxed iframes with srcdoc for offline interactivity."""
+    v_interactive = Visualization(
+        kind="gradient_health",
+        title="Vanishing Gradient Audit",
+        summary="Spectral gradient analysis",
+        data={"layers": [{"name": "layer1", "norm": 0.0001, "status": "vanishing"}]},
+        metadata={"Status": "Vanishing"},
+        notes=["Layer 1 shows vanishing gradients"],
+        backend="svg",
+    )
+
+    rep = report("Deep Model Audit", views=[v_interactive])
+    html_out = rep.to_html()
+
+    assert "<iframe" in html_out
+    assert 'sandbox="allow-scripts"' in html_out
+    assert "srcdoc=" in html_out
+    assert "Vanishing Gradient Audit" in html_out
+
+
+def test_scientific_report_interactive_flag_fallback():
+    """Setting interactive=False forces views to render as static SVGs rather than iframes."""
+    v_interactive = Visualization(
+        kind="gradient_health",
+        title="Static Audit Mode",
+        summary="Analysis",
+        data={"layers": [{"name": "layer1", "norm": 1.0, "status": "healthy"}]},
+        backend="svg",
+    )
+
+    rep = report("Static Report", views=[v_interactive], interactive=False)
+    html_out = rep.to_html()
+
+    assert "<iframe" not in html_out
+    assert "<svg" in html_out
+
+
+def test_scientific_report_matplotlib_backend_fallback():
+    """Matplotlib figures fall back to high-resolution base64 PNGs."""
+    import matplotlib.pyplot as plt
+
+    fig, ax = plt.subplots()
+    ax.plot([0, 1], [0, 1])
+
+    v_mpl = Visualization(
+        kind="custom",
+        title="Matplotlib Loss",
+        summary="Loss curve",
+        data={},
+        backend="matplotlib",
+    )
+    v_mpl._cached_figure = fig
+
+    rep = report("Matplotlib Report", views=[v_mpl])
+    html_out = rep.to_html()
+
+    assert '<img src="data:image/png;base64,' in html_out
+    plt.close(fig)
+
+
+def test_scientific_report_interactive_xss_protection():
+    """Interactive views with hostile script payloads remain safely escaped without breaking out of iframes."""
+    v_hostile = Visualization(
+        kind="gradient_health",
+        title="<script>alert('hostile_title')</script>",
+        summary="<script>alert('hostile_summary')</script>",
+        data={"layers": [{"name": "bad", "norm": 1.0, "status": "ok"}]},
+        backend="svg",
+    )
+
+    rep = report("Safe Report", views=[v_hostile])
+    html_out = rep.to_html()
+
+    # Raw script tags from user fields must not exist outside or break attributes
+    assert "<script>alert('hostile_title')</script>" not in html_out
+    assert "<script>alert('hostile_summary')</script>" not in html_out

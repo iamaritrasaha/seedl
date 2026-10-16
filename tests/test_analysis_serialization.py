@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import tempfile
 from pathlib import Path
@@ -9,7 +10,7 @@ from pathlib import Path
 import pytest
 
 import seedl as sd
-from seedl._serialization import load_analysis, save_analysis
+from seedl._serialization import _canonical_json_bytes, load_analysis, save_analysis
 from seedl.exceptions import SeeDLError
 from seedl.view import Visualization
 
@@ -108,3 +109,151 @@ def test_serialization_oversized_file_rejection(monkeypatch):
 
         with pytest.raises(SeeDLError, match="exceeds maximum allowed artifact size"):
             load_analysis(large_file)
+
+
+def test_serialization_tampered_numerical_value_rejection():
+    """Modifying a numerical value in an artifact causes load_analysis to reject it."""
+    viz = _create_sample_viz("Original Viz")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "tampered_num.json"
+        save_analysis(viz, path)
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        # Tamper with numerical data
+        raw["views"][0]["data"]["outlier_fraction"] = 0.99
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        with pytest.raises(SeeDLError, match="Integrity verification failed"):
+            load_analysis(path)
+
+
+def test_serialization_tampered_title_rejection():
+    """Modifying a title in an artifact causes load_analysis to reject it."""
+    viz = _create_sample_viz("Original Viz")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "tampered_title.json"
+        save_analysis(viz, path)
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["views"][0]["title"] = "Forged Title"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        with pytest.raises(SeeDLError, match="Integrity verification failed"):
+            load_analysis(path)
+
+
+def test_serialization_incorrect_and_missing_hash_rejection():
+    """Rejects artifacts with incorrect, missing, or malformed integrity hashes."""
+    viz = _create_sample_viz("Hash Test")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "corrupt_hash.json"
+        save_analysis(viz, path)
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+
+        # Incorrect hash (wrong 64-char hex)
+        raw["integrity_hash"] = "0" * 64
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="Integrity verification failed"):
+            load_analysis(path)
+
+        # Missing hash
+        del raw["integrity_hash"]
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="Missing 'integrity_hash'"):
+            load_analysis(path)
+
+        # Malformed hash (wrong length / non-hex)
+        raw["integrity_hash"] = "not_a_valid_sha256"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="Malformed 'integrity_hash'"):
+            load_analysis(path)
+
+
+def test_serialization_unsupported_schema_version():
+    """load_analysis rejects artifacts declaring an unsupported schema version."""
+    viz = _create_sample_viz("Schema Test")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "future_schema.json"
+        save_analysis(viz, path)
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+        raw["schema_version"] = "2.0.0"
+        path.write_text(json.dumps(raw), encoding="utf-8")
+
+        with pytest.raises(SeeDLError, match="Unsupported schema version: '2.0.0'"):
+            load_analysis(path)
+
+
+def test_serialization_unicode_roundtrip():
+    """Unicode characters, mathematical symbols, and non-ASCII notes roundtrip accurately."""
+    viz = Visualization(
+        kind="dataset_health",
+        title="λ_1 = 0.42 ∇θ — 日本語 — 🚀",
+        summary="Spectral audit: ∑ α_i > 0.95",
+        data={"metric_α": 1.618, "greek": "λ, μ, σ, ω"},
+        metadata={"Project": "日本語テスト", "Symbol": "∂L/∂w"},
+        notes=["Note with emojis 🧠⚡ and math: ∫ f(x) dx"],
+        backend="svg",
+    )
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "unicode.seedl.json"
+        save_analysis(viz, path)
+
+        restored = load_analysis(path)
+        assert isinstance(restored, Visualization)
+        assert restored.title == "λ_1 = 0.42 ∇θ — 日本語 — 🚀"
+        assert restored.summary == "Spectral audit: ∑ α_i > 0.95"
+        assert restored.data["greek"] == "λ, μ, σ, ω"
+        assert restored.metadata["Project"] == "日本語テスト"
+        assert restored.notes[0] == "Note with emojis 🧠⚡ and math: ∫ f(x) dx"
+
+
+def test_serialization_view_field_validation():
+    """load_analysis enforces strict field typing on reconstructed views."""
+
+    def _sign(payload: dict) -> None:
+        payload["integrity_hash"] = hashlib.sha256(_canonical_json_bytes(payload)).hexdigest()
+
+    viz = _create_sample_viz("Field Type Test")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = Path(tmp_dir) / "field_test.json"
+        save_analysis(viz, path)
+
+        raw = json.loads(path.read_text(encoding="utf-8"))
+
+        # Empty views list
+        raw["views"] = []
+        _sign(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="views' must be a non-empty list"):
+            load_analysis(path)
+
+        # Non-dict view item
+        raw["views"] = ["not_a_dict"]
+        _sign(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="must be an object"):
+            load_analysis(path)
+
+        # Missing kind
+        raw["views"] = [{"title": "Missing Kind"}]
+        _sign(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="'kind' must be a non-empty string"):
+            load_analysis(path)
+
+        # Non-dict data
+        raw["views"] = [{"kind": "test", "data": "not_a_dict"}]
+        _sign(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="'data' must be an object"):
+            load_analysis(path)
+
+        # Non-list notes
+        raw["views"] = [{"kind": "test", "notes": "not_a_list"}]
+        _sign(raw)
+        path.write_text(json.dumps(raw), encoding="utf-8")
+        with pytest.raises(SeeDLError, match="'notes' must be a list of strings"):
+            load_analysis(path)

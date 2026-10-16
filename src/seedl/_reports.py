@@ -1,4 +1,16 @@
-"""The Scientific Report Builder: Combine multiple SeeDL views into offline, publication-grade interactive reports."""
+"""The Scientific Report Builder: Combine multiple SeeDL views into offline, publication-grade interactive reports.
+
+Interactive vs. Static View Rendering Architecture:
+- Interactive Views: Views that support rich browser interaction (such as Neural Execution Traces,
+  Transformer Attention Rollout, Attribution Comparisons, Gradient Health Audits, Quantum Noise Models,
+  Dataset Drift, Run Comparisons, and Plotly spatial figures) are embedded as self-contained, offline
+  interactive documents inside sandboxed <iframe> elements using the HTML5 `srcdoc` attribute and
+  `sandbox="allow-scripts"`. This guarantees complete script isolation, prevents global CSS/JS namespace
+  collisions across multiple figure cards, and maintains 100% offline functionality with zero external CDN calls.
+- Static Views: Views that do not require interactive JavaScript (such as Matplotlib figures or
+  standard static SVG charts) are rendered directly as inline SVGs or base64 PNG images.
+- Controlled via the `interactive` parameter (default: True).
+"""
 
 from __future__ import annotations
 
@@ -13,6 +25,37 @@ from .exceptions import SeeDLError
 from .view import Visualization
 
 __version__ = "0.4.0"
+
+INTERACTIVE_VIEW_KINDS = {
+    "execution_trace",
+    "attention_rollout",
+    "attribution_comparison",
+    "gradient_health",
+    "quantum_noise",
+    "dataset_drift",
+    "run_comparison",
+    "feature_maps",
+    "feature_comparison",
+    "training_playback",
+}
+
+
+def _is_interactive_view(v: Visualization) -> bool:
+    """Determine whether a view supports rich offline browser interactivity."""
+    if v.backend == "matplotlib":
+        return False
+    if v.backend == "plotly":
+        return True
+    if v.kind in INTERACTIVE_VIEW_KINDS:
+        return True
+    if (
+        v.kind in {"attention", "attention_comparison"}
+        and v.data.get("presentation") == "attention"
+    ):
+        return True
+    if v.kind == "quantum_circuit" and v.data.get("simulate"):
+        return True
+    return False
 
 
 @dataclass
@@ -38,6 +81,7 @@ class ScientificReport:
         author: str = "",
         affiliation: str = "",
         theme: str = "dark",  # "dark" or "light"
+        interactive: bool = True,
         max_size_mb: float = 25.0,
     ) -> None:
         self.title = title
@@ -46,6 +90,7 @@ class ScientificReport:
         self.author = author
         self.affiliation = affiliation
         self.theme = theme
+        self.interactive = interactive
         self.max_size_mb = max_size_mb
         self.timestamp = time.strftime("%Y-%m-%d %H:%M:%S UTC", time.gmtime())
         self.sections: list[ReportSection] = []
@@ -107,10 +152,18 @@ class ScientificReport:
                 v_title = html.escape(v.title)
                 v_summary = html.escape(v.summary)
 
-                # Render view figure: SVG or PNG
+                # Render view figure: Interactive iframe, SVG, or PNG
                 chart_markup = ""
                 try:
-                    if v.backend == "matplotlib":
+                    if self.interactive and _is_interactive_view(v):
+                        standalone_html = v.to_html()
+                        escaped_srcdoc = html.escape(standalone_html, quote=True)
+                        chart_markup = (
+                            f'<iframe srcdoc="{escaped_srcdoc}" sandbox="allow-scripts" '
+                            f'style="border:none; width:100%; height:620px; border-radius:8px;" '
+                            f'loading="lazy"></iframe>'
+                        )
+                    elif v.backend == "matplotlib":
                         fig = v.figure
                         buf = BytesIO()
                         fig.savefig(buf, format="png", bbox_inches="tight")
@@ -136,15 +189,30 @@ class ScientificReport:
                         from ._gradient_health import svg_gradient_health
 
                         chart_markup = svg_gradient_health(v)
+                    elif v.kind == "dataset_drift":
+                        from ._dataset_health import svg_dataset_drift
+
+                        chart_markup = svg_dataset_drift(v)
+                    elif v.kind == "run_comparison":
+                        from ._training_compare import svg_run_comparison
+
+                        chart_markup = svg_run_comparison(v)
                     else:
                         from .renderers import render
 
                         svg_content = render(v, "svg")
                         chart_markup = svg_content if isinstance(svg_content, str) else str(v)
-                except Exception as exc:
-                    chart_markup = (
-                        f'<div class="error-box">Render notice: {html.escape(str(exc))}</div>'
-                    )
+                except Exception:
+                    # Graceful fallback to static SVG if interactive embedding fails
+                    try:
+                        from .renderers import render
+
+                        svg_content = render(v, "svg")
+                        chart_markup = svg_content if isinstance(svg_content, str) else str(v)
+                    except Exception as exc:
+                        chart_markup = (
+                            f'<div class="error-box">Render notice: {html.escape(str(exc))}</div>'
+                        )
 
                 notes_html = ""
                 if v.notes:
@@ -324,9 +392,16 @@ class ScientificReport:
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 6px;
-      padding: 12px;
+      padding: 8px;
       overflow-x: auto;
       margin-bottom: 12px;
+    }}
+    .chart-wrapper iframe {{
+      display: block;
+      width: 100%;
+      height: 620px;
+      border: none;
+      border-radius: 6px;
     }}
     .figure-caption {{
       font-size: 13px;
@@ -447,6 +522,7 @@ def report(
     author: str = "",
     affiliation: str = "",
     theme: str = "dark",
+    interactive: bool = True,
     max_size_mb: float = 25.0,
 ) -> ScientificReport:
     """Create a publication-grade scientific report combining multiple SeeDL visualizations.
@@ -459,6 +535,7 @@ def report(
         author: Report author name or team.
         affiliation: Institutional or project affiliation.
         theme: UI theme ('dark' or 'light').
+        interactive: Whether to embed interactive cards via sandboxed iframes (default True).
         max_size_mb: Memory budget in megabytes before warning/error.
     """
     return ScientificReport(
@@ -469,5 +546,6 @@ def report(
         author=author,
         affiliation=affiliation,
         theme=theme,
+        interactive=interactive,
         max_size_mb=max_size_mb,
     )

@@ -1,18 +1,59 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Vision &amp; Attention Playground · SeeDL 0.4.0</title><meta name="description" content="SeeDL 0.4.0. interactive visualization for deep learning and quantum computing. Explore real CNN feature maps, Transformer multi-head attention, ViT patch routing, 3D neural networks, and Qiskit gate evolution.">
+<title>Neural Observatory Playground · SeeDL 0.5.0</title><meta name="description" content="SeeDL 0.5.0 Neural Observatory interactive research laboratory. Explore neural execution DAGs, tensor flow pipelines, attention rollout, attribution benchmarks, gradient health, quantum noise decoherence, and scientific reports.">
 <meta name="theme-color" content="#090e17"><link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./assets/style.css"><script src="./assets/site.js" defer></script><script src="./assets/playground.js" defer></script></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="header"><nav class="nav wrap" aria-label="Main navigation">
-<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.4.0</span></a>
+<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.5.0</span></a>
 <button class="menu-button" data-menu aria-label="Toggle navigation" aria-controls="main-links" aria-expanded="false">☰</button>
 <div class="navlinks" id="main-links"><a href="./index.html">Overview</a><a href="./playground.html" aria-current="page">Playground</a><a href="./docs/index.html">Documentation</a><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a></div>
 <button class="theme-button" data-theme-toggle aria-label="Use light theme">☀</button></nav></header>
-<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> EXAMPLES / SEEDL 0.4.0</div><h1>Explore the examples.</h1><p>Pick a view below. Each example contains data captured in Python, ready to explore in your browser.</p></div><section class="playground" aria-label="Interactive demonstrations"><div class="tabs" role="tablist" aria-label="Choose a demonstration"><button class="tab" id="tab-cnn" role="tab" aria-selected="true" aria-controls="cnn" tabindex="0" data-tab="cnn">01 &nbsp; CNN Feature Maps</button><button class="tab" id="tab-attention" role="tab" aria-selected="false" aria-controls="attention" tabindex="-1" data-tab="attention">02 &nbsp; Transformer Attention</button><button class="tab" id="tab-attention-cmp" role="tab" aria-selected="false" aria-controls="attention-cmp" tabindex="-1" data-tab="attention-cmp">03 &nbsp; Head Comparison</button><button class="tab" id="tab-vit" role="tab" aria-selected="false" aria-controls="vit" tabindex="-1" data-tab="vit">04 &nbsp; ViT Patch Attention</button><button class="tab" id="tab-network" role="tab" aria-selected="false" aria-controls="network" tabindex="-1" data-tab="network">05 &nbsp; Neural Network</button><button class="tab" id="tab-training" role="tab" aria-selected="false" aria-controls="training" tabindex="-1" data-tab="training">06 &nbsp; Training Playback</button><button class="tab" id="tab-comparison" role="tab" aria-selected="false" aria-controls="comparison" tabindex="-1" data-tab="comparison">07 &nbsp; Training Comparison</button><button class="tab" id="tab-bloch" role="tab" aria-selected="false" aria-controls="bloch" tabindex="-1" data-tab="bloch">08 &nbsp; Bloch Sphere</button><button class="tab" id="tab-circuit" role="tab" aria-selected="false" aria-controls="circuit" tabindex="-1" data-tab="circuit">09 &nbsp; Quantum Circuit</button><button class="tab" id="tab-evolution" role="tab" aria-selected="false" aria-controls="evolution" tabindex="-1" data-tab="evolution">10 &nbsp; Quantum Evolution</button></div>
+<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> NEURAL OBSERVATORY / SEEDL 0.5.0</div><h1>Interactive Research Laboratory.</h1><p>Select a scientific instrument below. Every visualization contains authentic tensor data captured from local Python execution.</p></div>
+<section class="playground" aria-label="Interactive demonstrations">
+
+<div class="playground-controls">
+<div class="category-pills" role="group" aria-label="Filter demonstrations by domain">
+<button class="category-pill" data-category-filter="all" aria-pressed="true">All (19)</button>
+<button class="category-pill" data-category-filter="neural" aria-pressed="false">Neural Networks</button>
+<button class="category-pill" data-category-filter="transformers" aria-pressed="false">Transformers</button>
+<button class="category-pill" data-category-filter="explainability" aria-pressed="false">Explainability</button>
+<button class="category-pill" data-category-filter="training" aria-pressed="false">Training</button>
+<button class="category-pill" data-category-filter="quantum" aria-pressed="false">Quantum</button>
+<button class="category-pill" data-category-filter="data" aria-pressed="false">Data Intelligence</button>
+<button class="category-pill" data-category-filter="reports" aria-pressed="false">Scientific Reports</button>
+</div>
+<div class="search-wrapper">
+<span class="search-icon" aria-hidden="true">⌕</span>
+<input id="demo-search" type="search" class="search-input" placeholder="Search demonstrations..." aria-label="Search demonstrations by keyword">
+</div>
+</div>
+
+<div class="tabs" role="tablist" aria-label="Choose a demonstration">
+<button class="tab" id="tab-cnn" role="tab" aria-selected="true" aria-controls="cnn" tabindex="0" data-tab="cnn" data-category="explainability">01 &nbsp; CNN Feature Maps</button>
+<button class="tab" id="tab-attention" role="tab" aria-selected="false" aria-controls="attention" tabindex="-1" data-tab="attention" data-category="transformers">02 &nbsp; Transformer Attention</button>
+<button class="tab" id="tab-attention-cmp" role="tab" aria-selected="false" aria-controls="attention-cmp" tabindex="-1" data-tab="attention-cmp" data-category="transformers">03 &nbsp; Head Comparison</button>
+<button class="tab" id="tab-vit" role="tab" aria-selected="false" aria-controls="vit" tabindex="-1" data-tab="vit" data-category="transformers">04 &nbsp; ViT Patch Attention</button>
+<button class="tab" id="tab-network" role="tab" aria-selected="false" aria-controls="network" tabindex="-1" data-tab="network" data-category="neural">05 &nbsp; 3D Neural Network</button>
+<button class="tab" id="tab-training" role="tab" aria-selected="false" aria-controls="training" tabindex="-1" data-tab="training" data-category="training">06 &nbsp; Training Playback</button>
+<button class="tab" id="tab-comparison" role="tab" aria-selected="false" aria-controls="comparison" tabindex="-1" data-tab="comparison" data-category="training">07 &nbsp; Step Comparison</button>
+<button class="tab" id="tab-bloch" role="tab" aria-selected="false" aria-controls="bloch" tabindex="-1" data-tab="bloch" data-category="quantum">08 &nbsp; Bloch Sphere</button>
+<button class="tab" id="tab-circuit" role="tab" aria-selected="false" aria-controls="circuit" tabindex="-1" data-tab="circuit" data-category="quantum">09 &nbsp; Quantum Circuit</button>
+<button class="tab" id="tab-evolution" role="tab" aria-selected="false" aria-controls="evolution" tabindex="-1" data-tab="evolution" data-category="quantum">10 &nbsp; Quantum Evolution</button>
+<button class="tab" id="tab-trace" role="tab" aria-selected="false" aria-controls="trace" tabindex="-1" data-tab="trace" data-category="neural">11 &nbsp; Execution Tracer DAG</button>
+<button class="tab" id="tab-flow" role="tab" aria-selected="false" aria-controls="flow" tabindex="-1" data-tab="flow" data-category="neural">12 &nbsp; Tensor Flow Explorer</button>
+<button class="tab" id="tab-rollout" role="tab" aria-selected="false" aria-controls="rollout" tabindex="-1" data-tab="rollout" data-category="transformers">13 &nbsp; Attention Rollout</button>
+<button class="tab" id="tab-attribution" role="tab" aria-selected="false" aria-controls="attribution" tabindex="-1" data-tab="attribution" data-category="explainability">14 &nbsp; Attribution Benchmark</button>
+<button class="tab" id="tab-gradient-health" role="tab" aria-selected="false" aria-controls="gradient-health" tabindex="-1" data-tab="gradient-health" data-category="training">15 &nbsp; Gradient Health</button>
+<button class="tab" id="tab-runs-compare" role="tab" aria-selected="false" aria-controls="runs-compare" tabindex="-1" data-tab="runs-compare" data-category="training">16 &nbsp; Training Run Comparison</button>
+<button class="tab" id="tab-quantum-noise" role="tab" aria-selected="false" aria-controls="quantum-noise" tabindex="-1" data-tab="quantum-noise" data-category="quantum">17 &nbsp; Quantum Noise Lab</button>
+<button class="tab" id="tab-dataset-drift" role="tab" aria-selected="false" aria-controls="dataset-drift" tabindex="-1" data-tab="dataset-drift" data-category="data">18 &nbsp; Dataset Drift</button>
+<button class="tab" id="tab-report" role="tab" aria-selected="false" aria-controls="report" tabindex="-1" data-tab="report" data-category="reports">19 &nbsp; Scientific Report</button>
+</div>
 
 <div id="cnn" class="recorded-demo" role="tabpanel" aria-labelledby="tab-cnn">
+<span class="badge-category">Explainability · Feature Maps</span>
 <h2>CNN Feature Map Explorer</h2><p>Choose a layer and channel, then hover over the heatmap to read an activation. Compare normalization modes to see how the color scale changes. Values come from a seeded, untrained CNN.</p>
-<div class="demo-stage"><iframe title="CNN Feature Map Explorer" data-demo="cnn-features" loading="lazy"></iframe><div class="demo-caption">Captured by SeeDL 0.4.0 · Real forward activations from PyTorch Conv2d, ReLU, and MaxPool2d · Hover to inspect spatial (y, x) coordinates</div></div>
+<div class="demo-stage"><iframe title="CNN Feature Map Explorer" data-demo="cnn-features" loading="lazy"></iframe><div class="demo-caption">Captured by SeeDL 0.5.0 · Real forward activations from PyTorch Conv2d, ReLU, and MaxPool2d · Hover to inspect spatial (y, x) coordinates</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
 import seedl as sd
@@ -30,8 +71,9 @@ view = sd.features(model, input=sample)
 view.save(&quot;cnn_features.html&quot;)</code></pre></div></details></div>
 
 <div id="attention" class="recorded-demo" role="tabpanel" aria-labelledby="tab-attention" hidden>
+<span class="badge-category">Transformers · Self-Attention</span>
 <h2>Transformer Attention Explorer</h2><p>Select a head and query token to inspect attention across seven tokens. This untrained example uses random input vectors. Attention weights describe routing; they do not explain why a model makes a decision.</p>
-<div class="demo-stage"><iframe title="Transformer Attention Explorer" data-demo="attention" loading="lazy"></iframe><div class="demo-caption">Captured by SeeDL 0.4.0 · Real multi-head attention weights from PyTorch nn.MultiheadAttention · Hover over cells to inspect query-key weights</div></div>
+<div class="demo-stage"><iframe title="Transformer Attention Explorer" data-demo="attention" loading="lazy"></iframe><div class="demo-caption">Captured by SeeDL 0.5.0 · Real multi-head attention weights from PyTorch nn.MultiheadAttention · Hover over cells to inspect query-key weights</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
 import seedl as sd
@@ -45,9 +87,10 @@ view = sd.attention(weights, tokens=tokens)
 view.save(&quot;attention.html&quot;)</code></pre></div></details></div>
 
 <div id="attention-cmp" class="recorded-demo" role="tabpanel" aria-labelledby="tab-attention-cmp" hidden>
+<span class="badge-category">Transformers · Head Divergence</span>
 <h2>Multi-Head Attention Comparison</h2><p>Directly compare attention routing patterns between different heads. Inspect side-by-side heatmaps and an elementwise difference matrix (Head B − Head A) with RdBu_r diverging colorscale. Quantitative divergence is measured with Frobenius norm, Mean Absolute Error (MAE), and Cosine Similarity.</p>
 <div class="evolution-presets"><label for="attention-pair">Attention Heads</label> <select id="attention-pair"><option value="attention-comparison">Head 0 vs Head 1 (Default)</option><option value="attention-comparison-0-2">Head 0 vs Head 2</option><option value="attention-comparison-1-2">Head 1 vs Head 2</option><option value="attention-comparison-2-3">Head 2 vs Head 3</option></select></div>
-<div class="demo-stage"><iframe title="Multi-Head Attention Comparison" data-demo="attention-comparison" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.4.0 · Side-by-side heatmaps with difference matrix, MAE, Frobenius norm, and cosine similarity</div></div>
+<div class="demo-stage"><iframe title="Multi-Head Attention Comparison" data-demo="attention-comparison" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.5.0 · Side-by-side heatmaps with difference matrix, MAE, Frobenius norm, and cosine similarity</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code># Continue from attention weights above:
 cmp_view = sd.attention(weights, tokens=tokens, compare_heads=(0, 1), backend=&quot;plotly&quot;)
 cmp_view.save(&quot;attention_comparison.html&quot;)
@@ -55,8 +98,9 @@ print(cmp_view.data[&quot;head_comparison&quot;][&quot;mae&quot;])
 print(cmp_view.data[&quot;head_comparison&quot;][&quot;cosine_similarity&quot;])</code></pre></div></details></div>
 
 <div id="vit" class="recorded-demo" role="tabpanel" aria-labelledby="tab-vit" hidden>
+<span class="badge-category">Transformers · Spatial Vision</span>
 <h2>Vision Transformer Patch Attention</h2><p>Demonstrate how 1D token attention vectors map onto 2D spatial image patch positions. Captures attention from token 0 ([CLS]) across a 4×4 image patch grid. Each spatial cell represents an image patch in the 2D grid. Observational attention reveals spatial routing weights, not causal importance.</p>
-<div class="demo-stage"><iframe title="Vision Transformer Patch Attention" data-demo="vit-attention" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.4.0 · Authentic 4×4 spatial patch grid from [CLS] token attention · Hover to inspect patch coordinates</div></div>
+<div class="demo-stage"><iframe title="Vision Transformer Patch Attention" data-demo="vit-attention" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.5.0 · Authentic 4×4 spatial patch grid from [CLS] token attention · Hover to inspect patch coordinates</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
 import seedl as sd
@@ -68,6 +112,61 @@ _, vit_weights = mha_vit(q, q, q, need_weights=True, average_attn_weights=False)
 
 view = sd.vit_attention(vit_weights, patch_grid=(4, 4), from_token=0, has_cls=True)
 view.save(&quot;vit_patch.html&quot;)</code></pre></div></details></div>
+
+<div id="rollout" class="recorded-demo" role="tabpanel" aria-labelledby="tab-rollout" hidden>
+<span class="badge-category">Transformers · Attention Propagation</span>
+<h2>Transformer Attention Rollout Lab</h2><p>Track cumulative information routing through multi-layer Transformer architectures. Evaluates residual attention propagation using Abnar &amp; Zuidema's formulation: A'_l = 0.5 × (A_l + I), with cumulative product R = A'_L @ A'_(L-1) @ ... @ A'_1. Inspect intermediate layer representations and token-to-token cumulative interaction matrices.</p>
+<div class="demo-stage"><iframe title="Transformer Attention Rollout Lab" data-demo="rollout" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.5.0 · Cumulative attention rollout matrix across 3 Transformer layers with row-stochastic residual normalization</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+import seedl as sd
+
+tokens = [&quot;[CLS]&quot;, &quot;The&quot;, &quot;neural&quot;, &quot;observatory&quot;, &quot;attends&quot;, &quot;to&quot;, &quot;[SEP]&quot;]
+# 3 layers of self-attention weights (batch_size=1, heads=4, seq_len=7, seq_len=7)
+layers = [torch.softmax(torch.randn(1, 4, 7, 7), dim=-1) for _ in range(3)]
+
+view = sd.attention_rollout(layers, tokens=tokens, include_residual=True, head_reduction=&quot;mean&quot;)
+view.save(&quot;rollout.html&quot;)
+print(view.data[&quot;rollout_matrix&quot;])</code></pre></div></details></div>
+
+<div id="trace" class="recorded-demo" role="tabpanel" aria-labelledby="tab-trace" hidden>
+<span class="badge-category">Neural Networks · Execution Graph</span>
+<h2>Neural Execution Tracer DAG</h2><p>Interactive directed acyclic graph (DAG) capturing the precise execution topology and tensor provenance of a PyTorch forward pass. Highlights explicit tensor data dependencies, in-place operations, residual skip branches, and parameter counts. Inspect individual operation nodes, tensor shapes, memory addresses, and execution order.</p>
+<div class="demo-stage"><iframe title="Neural Execution Tracer DAG" data-demo="trace" loading="lazy"></iframe><div class="demo-caption">Captured by SeeDL 0.5.0 via torch.fx + module inspection hooks · Explicit tensor edges and residual skip connections · Click nodes to inspect tensor metadata</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+class ResidualMLP(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(4, 6)
+        self.relu1 = nn.ReLU()
+        self.res_fc = nn.Linear(6, 6)
+        self.relu2 = nn.ReLU()
+        self.fc_out = nn.Linear(6, 2)
+
+    def forward(self, x):
+        h1 = self.relu1(self.fc1(x))
+        h2 = self.relu2(h1 + self.res_fc(h1))
+        return self.fc_out(h2)
+
+model = ResidualMLP().eval()
+x = torch.tensor([[0.5, -1.2, 0.8, 0.3]])
+view = sd.flow(model, x, mode=&quot;graph&quot;)
+view.save(&quot;trace.html&quot;)</code></pre></div></details></div>
+
+<div id="flow" class="recorded-demo" role="tabpanel" aria-labelledby="tab-flow" hidden>
+<span class="badge-category">Neural Networks · Tensor Flow Pipeline</span>
+<h2>Tensor Flow Explorer</h2><p>Follow tensor shape transformations, numerical data types, memory footprints, and activation distributions across layer boundaries. Observe spatial downsampling from [1, 3, 24, 24] through Conv2d, ReLU, MaxPool2d, and Conv2d layers. Features searchable operations, timeline view, and detailed tabular summaries.</p>
+<div class="demo-stage"><iframe title="Tensor Flow Explorer" data-demo="flow" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.5.0 · Comprehensive tensor pipeline tracking input/output shapes, data types, activation statistics, and layer durations</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+model = nn.Sequential(nn.Conv2d(3, 8, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2, 2))
+sample_input = torch.randn(1, 3, 24, 24)
+view = sd.flow(model, sample_input, mode=&quot;table&quot;)
+view.save(&quot;flow.html&quot;)</code></pre></div></details></div>
 
 <div id="network" role="tabpanel" aria-labelledby="tab-network" hidden><div class="demo-layout"><div class="demo-stage"><iframe title="Interactive 3D PyTorch neural network" data-demo="network" loading="lazy"></iframe><div class="demo-caption">Drag to orbit · Scroll or pinch to zoom · Click a neuron to inspect</div></div><aside class="inspector"><h3>Inside the network</h3><p>A seeded PyTorch MLP.<br>3 → 5 → 3 → 2 neurons.<br>ReLU hidden activations.</p><label for="neuron">Inspect a neuron</label><select id="neuron"><option value="">Overview</option><option value="0:0">Input · neuron 0</option><option value="0:1">Input · neuron 1</option><option value="0:2">Input · neuron 2</option><option value="1:0">Hidden 1 · neuron 0</option><option value="1:1">Hidden 1 · neuron 1</option><option value="1:2">Hidden 1 · neuron 2</option><option value="1:3">Hidden 1 · neuron 3</option><option value="1:4">Hidden 1 · neuron 4</option><option value="2:0">Hidden 2 · neuron 0</option><option value="2:1">Hidden 2 · neuron 1</option><option value="2:2">Hidden 2 · neuron 2</option><option value="3:0">Output · neuron 0</option><option value="3:1">Output · neuron 1</option></select><span class="legend-key">Incoming connections</span><span class="legend-key out">Outgoing connections</span><button class="button" id="reset-network">Reset interaction ↺</button><h3>Captured input</h3><code>[0.8, −0.4, 0.6]</code><p class="mini">Weights and activations come from one real forward pass. This untrained network illustrates structure, not predictions.</p></aside></div><details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
@@ -82,9 +181,46 @@ x = torch.tensor([[0.8, -0.4, 0.6]])
 view = sd.see(model, input=x, view=&quot;3d&quot;, theme=&quot;scientific&quot;)
 view.save(&quot;network.html&quot;)</code></pre></div></details></div>
 
+<div id="attribution" class="recorded-demo" role="tabpanel" aria-labelledby="tab-attribution" hidden>
+<span class="badge-category">Explainability · Feature Attribution</span>
+<h2>Attribution Benchmark Lab</h2><p>Side-by-side quantitative comparison of feature attribution methods on identical model inputs. Evaluates Saliency Maps, Integrated Gradients (composite midpoint integration), and SmoothGrad (Gaussian noise variance reduction). Quantifies inter-method agreement via Pearson correlation and Cosine similarity metrics.</p>
+<div class="demo-stage"><iframe title="Attribution Benchmark Lab" data-demo="attribution" loading="lazy"></iframe><div class="demo-caption">Computed by SeeDL 0.5.0 · Saliency vs Integrated Gradients vs SmoothGrad with Pearson &amp; Cosine similarity alignment</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+import seedl as sd
+
+model = torch.nn.Sequential(
+    torch.nn.Linear(6, 12), torch.nn.Tanh(), torch.nn.Linear(12, 2)
+).eval()
+x = torch.tensor([[0.7, -0.5, 1.2, -0.3, 0.4, -0.9]])
+
+view = sd.compare_attributions(
+    model, x, target=0,
+    methods=(&quot;saliency&quot;, &quot;integrated_gradients&quot;, &quot;smoothgrad&quot;),
+    steps=20, samples=25, seed=42
+)
+view.save(&quot;attribution.html&quot;)
+print(view.data[&quot;similarity_matrix&quot;])</code></pre></div></details></div>
+
+<div id="gradient-health" class="recorded-demo" role="tabpanel" aria-labelledby="tab-gradient-health" hidden>
+<span class="badge-category">Training · Gradient Diagnostics</span>
+<h2>Gradient Health Dashboard</h2><p>Diagnostic telemetry for training stability. Inspect parameter-level and layer-level L1 and L2 gradient norms, gradient-to-weight magnitude ratios, exact zero-gradient fractions, and nonfinite (NaN/Inf) occurrences. Zero-gradient fractions provide observational diagnostics rather than definitive diagnoses of dead neurons, as zero gradients can occur from sparse inputs, unused parameters, activation saturation, or disconnected computational paths. Helps identify vanishing gradients, exploding gradients, and numerical bottlenecks early.</p>
+<div class="demo-stage"><iframe title="Gradient Health Dashboard" data-demo="gradient-health" loading="lazy"></iframe><div class="demo-caption">Inspected by SeeDL 0.5.0 directly from live autograd buffers · Global L2 norm, gradient-to-weight ratios, sparsity, and nonfinite checks</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+import seedl as sd
+
+model = torch.nn.Sequential(torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2))
+loss = model(torch.randn(2, 4)).sum()
+loss.backward()
+
+view = sd.gradient_health(model)
+view.save(&quot;gradient_health.html&quot;)
+print(&quot;Global L2:&quot;, view.data[&quot;global_l2&quot;])
+print(&quot;Zero fraction:&quot;, view.data[&quot;global_zero_fraction&quot;])</code></pre></div></details></div>
+
 <div id="training" class="recorded-demo" role="tabpanel" aria-labelledby="tab-training" hidden>
+<span class="badge-category">Training · Playback</span>
 <h2>Training Playback</h2><p>Sixteen real forward/backward passes through a 2 → 4 → 1 PyTorch network. Play, pause, rewind, choose a step, or inspect a neuron. The loss chart, weights, activations, and existing gradients come from each captured pass. Live playback means recorded snapshots, not continuous training streamed from a server.</p>
-<div class="demo-stage"><iframe title="Training Playback" data-demo="training" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.4.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<div class="demo-stage"><iframe title="Training Playback" data-demo="training" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.5.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
 from torch import nn
 import seedl as sd
@@ -108,6 +244,64 @@ snapshot = run.snapshots[0]
 print(snapshot.data[&quot;loss&quot;], snapshot.data[&quot;parameters&quot;])
 run.playback(backend=&quot;plotly&quot;).save(&quot;training.html&quot;)</code></pre></div></details></div>
 
+<div id="comparison" class="recorded-demo" role="tabpanel" aria-labelledby="tab-comparison" hidden>
+<span class="badge-category">Training · Snapshot Comparison</span>
+<h2>Step Comparison</h2><p>Step 0 versus step 15 from the same recording and fixed input. Inspect parameter changes at original flat indices, captured activation distributions, sampled gradient statistics, and output differences. These comparisons describe retained samples, not every parameter. The final snapshot precedes the last optimizer update.</p><p class="notice">The comparison is rendered directly by sd.compare(run.snapshots[0], run.snapshots[-1]). No separate comparison engine runs in this website. <a class="textlink" href="./playground.html#training">Recordings and complete training source →</a></p>
+<div class="demo-stage"><iframe title="Training Comparison" data-demo="comparison" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.5.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code># Continue from the training example above.
+comparison = sd.compare(run.snapshots[0], run.snapshots[-1],
+                        names=(&quot;Step 0&quot;, &quot;Step 15&quot;), backend=&quot;plotly&quot;)
+comparison.save(&quot;comparison.html&quot;)
+print(comparison.data[&quot;parameters&quot;])
+print(comparison.data[&quot;outputs&quot;])</code></pre></div></details></div>
+
+<div id="runs-compare" class="recorded-demo" role="tabpanel" aria-labelledby="tab-runs-compare" hidden>
+<span class="badge-category">Training · Multi-Run Comparison</span>
+<h2>Training Run Comparison</h2><p>Compare entire training run histories and experiment trajectories across multiple hyperparameters or optimizers. Aligns training steps across runs, evaluates loss convergence differences, calculates final metric deltas, and flags missing metrics.</p>
+<div class="demo-stage"><iframe title="Training Run Comparison" data-demo="runs-compare" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.5.0 via sd.compare_runs · Compares loss and accuracy trajectories between Baseline SGD and AdamW on a small synthetic CPU demonstration (relative performance varies by task)</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import torch
+from torch import nn
+import seedl as sd
+
+# Small deterministic synthetic demonstration (32 samples, 4 features)
+# Relative performance varies with architecture, hyperparameters, and dataset.
+torch.manual_seed(42)
+X = torch.randn(32, 4)
+y = ((X[:, 0] * 1.5 - X[:, 1] * 0.8 + X[:, 2] * 0.5) > 0.0).long()
+
+def make_model():
+    torch.manual_seed(100)
+    return nn.Sequential(nn.Linear(4, 8), nn.ReLU(), nn.Linear(8, 2))
+
+model_sgd, model_adamw = make_model(), make_model()
+model_adamw.load_state_dict(model_sgd.state_dict())
+criterion = nn.CrossEntropyLoss()
+
+opt_sgd = torch.optim.SGD(model_sgd.parameters(), lr=0.1)
+opt_adamw = torch.optim.AdamW(model_adamw.parameters(), lr=0.05, weight_decay=1e-4)
+
+run_sgd, run_adamw = {&quot;loss&quot;: [], &quot;accuracy&quot;: []}, {&quot;loss&quot;: [], &quot;accuracy&quot;: []}
+for _ in range(4):
+    opt_sgd.zero_grad()
+    l_sgd = criterion(model_sgd(X), y)
+    l_sgd.backward()
+    opt_sgd.step()
+    with torch.no_grad():
+        run_sgd[&quot;loss&quot;].append(round(float(l_sgd.item()), 4))
+        run_sgd[&quot;accuracy&quot;].append(round(float((model_sgd(X).argmax(-1) == y).float().mean().item()), 4))
+
+    opt_adamw.zero_grad()
+    l_adamw = criterion(model_adamw(X), y)
+    l_adamw.backward()
+    opt_adamw.step()
+    with torch.no_grad():
+        run_adamw[&quot;loss&quot;].append(round(float(l_adamw.item()), 4))
+        run_adamw[&quot;accuracy&quot;].append(round(float((model_adamw(X).argmax(-1) == y).float().mean().item()), 4))
+
+view = sd.compare_runs(run_sgd, run_adamw, name_a=&quot;Baseline SGD&quot;, name_b=&quot;AdamW Optimizer&quot;)
+view.save(&quot;runs_compare.html&quot;)
+print(view.data[&quot;metrics&quot;])</code></pre></div></details></div>
+
 <div id="bloch" role="tabpanel" aria-labelledby="tab-bloch" hidden><div class="demo-layout"><div class="demo-stage"><iframe title="Interactive single-qubit Bloch sphere" data-demo="bloch-plus" loading="lazy"></iframe><div class="demo-caption">Drag to rotate · Six independently computed SeeDL state exports</div></div><aside class="inspector"><h3>Choose a quantum state</h3><div class="states" role="group" aria-label="Predefined states"><button class="state" data-state="zero" aria-pressed="false">|0⟩</button><button class="state" data-state="one" aria-pressed="false">|1⟩</button><button class="state" data-state="plus" aria-pressed="true">|+⟩</button><button class="state" data-state="minus" aria-pressed="false">|−⟩</button><button class="state" data-state="plus-i" aria-pressed="false">|+i⟩</button><button class="state" data-state="minus-i" aria-pressed="false">|−i⟩</button></div><h3>Bloch vector (x, y, z)</h3><code id="bloch-vector" aria-live="polite">(1, 0, 0)</code><h3>Measurement in Z basis</h3><p id="bloch-prob">P(0) = 50% · P(1) = 50%</p><p class="mini">x = Tr(ρX), y = Tr(ρY), z = Tr(ρZ). Each of these pure states lies on the unit sphere.</p><a class="textlink" href="./docs/index.html#bloch-spheres">Read the Bloch guide →</a></aside></div><details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
 view = sd.bloch(&quot;+&quot;, backend=&quot;plotly&quot;)
 view.save(&quot;bloch.html&quot;)
@@ -122,8 +316,9 @@ qc.cx(0, 1)
 sd.see(qc, backend=&quot;plotly&quot;).save(&quot;bell.html&quot;)</code></pre></div></details></div>
 
 <div id="evolution" class="recorded-demo" role="tabpanel" aria-labelledby="tab-evolution" hidden>
+<span class="badge-category">Quantum · State Evolution</span>
 <h2>Quantum Evolution</h2><p>Select a gate in the diagram or timeline. Compare states before and after H and CX, including reduced-qubit Bloch vectors, basis probabilities, and amplitude phases. All states are checked against Qiskit. At the Bell state each local Bloch vector is zero; the joint state is still pure.</p><div class="evolution-presets"><label for="evolution-circuit">Circuit</label> <select id="evolution-circuit"><option value="evolution">Bell pair · H → CX</option><option value="evolution-phase">Bell pair + phase · H → CX → RZ(π/2)</option></select></div><p class="mini">Qiskit basis order: |q₁q₀⟩. Phases of zero-amplitude basis states are undefined. These demos contain only unitary gates. Measurement, reset, conditional, or unsupported operations halt SeeDL evolution; post-halt states are unavailable.</p>
-<div class="demo-stage"><iframe title="Quantum Evolution" data-demo="evolution" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.4.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
+<div class="demo-stage"><iframe title="Quantum Evolution" data-demo="evolution" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.5.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
 <details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>from qiskit import QuantumCircuit
 import seedl as sd
 
@@ -137,15 +332,49 @@ print(view.data[&quot;evolution&quot;][-1][&quot;probabilities&quot;])
 qc.rz(1.5707963267948966, 1)
 sd.circuit(qc, simulate=True, backend=&quot;plotly&quot;).save(&quot;phase.html&quot;)</code></pre></div></details></div>
 
-<div id="comparison" class="recorded-demo" role="tabpanel" aria-labelledby="tab-comparison" hidden>
-<h2>Training Comparison</h2><p>Step 0 versus step 15 from the same recording and fixed input. Inspect parameter changes at original flat indices, captured activation distributions, sampled gradient statistics, and output differences. These comparisons describe retained samples, not every parameter. The final snapshot precedes the last optimizer update.</p><p class="notice">The comparison is rendered directly by sd.compare(run.snapshots[0], run.snapshots[-1]). No separate comparison engine runs in this website. <a class="textlink" href="./playground.html#training">Recordings and complete training source →</a></p>
-<div class="demo-stage"><iframe title="Training Comparison" data-demo="comparison" loading="lazy"></iframe><div class="demo-caption">Recorded by SeeDL 0.4.0 · All interaction stays in your browser · On narrow screens, scroll plots sideways</div></div>
-<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code># Continue from the training example above.
-comparison = sd.compare(run.snapshots[0], run.snapshots[-1],
-                        names=(&quot;Step 0&quot;, &quot;Step 15&quot;), backend=&quot;plotly&quot;)
-comparison.save(&quot;comparison.html&quot;)
-print(comparison.data[&quot;parameters&quot;])
-print(comparison.data[&quot;outputs&quot;])</code></pre></div></details></div>
+<div id="quantum-noise" class="recorded-demo" role="tabpanel" aria-labelledby="tab-quantum-noise" hidden>
+<span class="badge-category">Quantum · Open Quantum Systems</span>
+<h2>Quantum Noise Lab</h2><p>Observe open quantum system decoherence under Kraus noise channels. Track Bloch vector shrinkage, purity loss Tr(ρ²), von Neumann entropy increase, and quantum coherence decay under Depolarizing, Amplitude Damping (energy dissipation), and Phase Damping (pure dephasing) noise processes.</p>
+<div class="evolution-presets"><label for="noise-channel">Noise Channel</label> <select id="noise-channel"><option value="quantum-noise">Depolarizing Channel (Isotropic Shrinkage)</option><option value="quantum-noise-amplitude">Amplitude Damping (Decay to |0⟩)</option><option value="quantum-noise-phase">Phase Damping (Dephasing / Off-diagonal Decay)</option></select></div>
+<div class="demo-stage"><iframe title="Quantum Noise Lab" data-demo="quantum-noise" loading="lazy"></iframe><div class="demo-caption">Simulated by SeeDL 0.5.0 Kraus noise operators · Drag the slider inside the viewer to follow purity and entropy trajectories</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+# Depolarizing, amplitude damping, or phase damping:
+view = sd.quantum_noise(channel=&quot;depolarizing&quot;, param=0.4, steps=10)
+view.save(&quot;quantum_noise.html&quot;)
+print(&quot;Final purity:&quot;, view.data[&quot;trajectory&quot;][-1][&quot;purity&quot;])
+print(&quot;Final entropy:&quot;, view.data[&quot;trajectory&quot;][-1][&quot;entropy&quot;])</code></pre></div></details></div>
+
+<div id="dataset-drift" class="recorded-demo" role="tabpanel" aria-labelledby="tab-dataset-drift" hidden>
+<span class="badge-category">Data Intelligence · Distribution Shift</span>
+<h2>Dataset Drift Observatory</h2><p>Empirical distribution drift analysis between reference/baseline and production dataset samples. Calculates Population Stability Index (PSI) and symmetric Jensen-Shannon Divergence (JSD) across binned empirical distributions to detect feature drift and trigger retraining alerts.</p>
+<div class="demo-stage"><iframe title="Dataset Drift Observatory" data-demo="dataset-drift" loading="lazy"></iframe><div class="demo-caption">Computed by SeeDL 0.5.0 · Population Stability Index (PSI) and Jensen-Shannon Divergence (JSD) comparison</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import numpy as np
+import seedl as sd
+
+ref = np.random.normal(0.0, 1.0, size=(1000, 4))
+comp = np.random.normal(0.3, 1.2, size=(1000, 4))
+
+view = sd.dataset_drift(ref, comp)
+view.save(&quot;dataset_drift.html&quot;)
+print(&quot;PSI:&quot;, view.data[&quot;psi&quot;])
+print(&quot;JSD:&quot;, view.data[&quot;jsd&quot;])</code></pre></div></details></div>
+
+<div id="report" class="recorded-demo" role="tabpanel" aria-labelledby="tab-report" hidden>
+<span class="badge-category">Scientific Reports · Multi-Component Audit</span>
+<h2>Scientific Diagnostic Report</h2><p>Publication-ready scientific report combining multiple SeeDL views into a single self-contained, offline HTML dossier. Combines execution flow, attention rollout, gradient health diagnostics, quantum noise decoherence, and dataset shift analysis with researcher narratives.</p>
+<div class="demo-stage"><iframe title="Scientific Diagnostic Report" data-demo="report" loading="lazy"></iframe><div class="demo-caption">Generated by SeeDL 0.5.0 via sd.report · Self-contained multi-section scientific report with zero CDN calls</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+rep = sd.report(
+    title=&quot;Neural Observatory Diagnostic Report&quot;,
+    subtitle=&quot;End-to-End Scientific Architecture Assessment&quot;,
+    author=&quot;SeeDL Scientific Verification Team&quot;,
+    theme=&quot;dark&quot;
+)
+noise_v = sd.quantum_noise(channel=&quot;depolarizing&quot;, param=0.2, steps=4)
+rep.add_section(&quot;Quantum Noise&quot;, noise_v, narrative=&quot;Kraus depolarizing decoherence.&quot;)
+rep.save(&quot;scientific_report.html&quot;)</code></pre></div></details></div>
 
 <p class="notice">Reproducible, precomputed scientific demonstrations. Python and PyTorch do not run in this browser. Visualizations keep a dark palette in both site themes. <a class="textlink" href="./demos/manifest.json">Inspect build provenance ↗</a></p><noscript><p>JavaScript is required for interactive demos. Read the <a href="./docs/index.html">documentation</a> or return to the <a href="./index.html">static previews</a>.</p></noscript></section></main>
-<footer class="footer wrap"><span><a class="brand" href="./index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.4.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>
+<footer class="footer wrap"><span><a class="brand" href="./index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.5.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>

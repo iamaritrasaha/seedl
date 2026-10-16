@@ -26,8 +26,8 @@ jobs:
         run: |
           uv venv
           uv pip install 'torch==2.14.1' --index-url https://download.pytorch.org/whl/cpu
-          uv pip install 'seedl==0.4.0' 'plotly==7.1.0' 'qiskit==2.5.2'
-          .venv/bin/python -c "import seedl; assert seedl.__version__ == '0.4.0', seedl.__version__; print('Website build using installed seedl:', seedl.__file__, seedl.__version__)"
+          uv pip install 'seedl==0.5.0' 'plotly==7.1.0' 'qiskit==2.5.2'
+          .venv/bin/python -c "import seedl; assert seedl.__version__ == '0.5.0', seedl.__version__; print('Website build using installed seedl:', seedl.__file__, seedl.__version__)"
       - name: Generate authentic demonstrations
         run: .venv/bin/python website/generate.py
       - name: Check static links, provenance, and documented examples

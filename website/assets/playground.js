@@ -1,13 +1,43 @@
 const tabs = [...document.querySelectorAll('[data-tab]')];
 const frames = [...document.querySelectorAll('iframe[data-demo]')];
 const neuron = document.querySelector('#neuron');
+const categoryPills = [...document.querySelectorAll('[data-category-filter]')];
+const searchInput = document.querySelector('#demo-search');
+
+let currentCategory = 'all';
+let searchQuery = '';
 
 function loadFrame(frame) {
   if (frame && !frame.getAttribute('src')) frame.src = `./demos/${frame.dataset.demo}.html`;
 }
 
+function filterTabs() {
+  const query = searchQuery.trim().toLowerCase();
+  let firstVisible = null;
+  tabs.forEach(tab => {
+    const matchesCat = currentCategory === 'all' || tab.dataset.category === currentCategory;
+    const matchesSearch = !query || tab.textContent.toLowerCase().includes(query) || (tab.dataset.category || '').toLowerCase().includes(query);
+    const visible = matchesCat && matchesSearch;
+    tab.toggleAttribute('data-hidden', !visible);
+    if (visible && !firstVisible) firstVisible = tab;
+  });
+  return firstVisible;
+}
+
 function activate(name, updateHash = true) {
-  if (!tabs.some(tab => tab.dataset.tab === name)) name = tabs[0]?.dataset.tab || 'cnn';
+  let targetTab = tabs.find(tab => tab.dataset.tab === name);
+  if (!targetTab) {
+    targetTab = tabs[0];
+    name = targetTab?.dataset.tab || 'cnn';
+  }
+
+  // If the target tab is hidden by current category/search, reset category to 'all' or its category
+  if (targetTab && targetTab.hasAttribute('data-hidden')) {
+    currentCategory = 'all';
+    categoryPills.forEach(p => p.setAttribute('aria-pressed', String(p.dataset.categoryFilter === 'all')));
+    filterTabs();
+  }
+
   tabs.forEach(tab => {
     const active = tab.dataset.tab === name;
     if (!active) {
@@ -19,6 +49,7 @@ function activate(name, updateHash = true) {
     const panel = document.getElementById(tab.dataset.tab);
     if (panel) panel.hidden = !active;
   });
+
   const frame = document.querySelector(`#${name} iframe`);
   loadFrame(frame);
   requestAnimationFrame(() => {
@@ -30,18 +61,43 @@ function activate(name, updateHash = true) {
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
 
+categoryPills.forEach(pill => {
+  pill.addEventListener('click', () => {
+    currentCategory = pill.dataset.categoryFilter;
+    categoryPills.forEach(p => p.setAttribute('aria-pressed', String(p === pill)));
+    const firstVisible = filterTabs();
+    const activeTab = tabs.find(t => t.getAttribute('aria-selected') === 'true');
+    if (activeTab?.hasAttribute('data-hidden') && firstVisible) {
+      activate(firstVisible.dataset.tab);
+    }
+  });
+});
+
+if (searchInput) {
+  searchInput.addEventListener('input', e => {
+    searchQuery = e.target.value;
+    const firstVisible = filterTabs();
+    const activeTab = tabs.find(t => t.getAttribute('aria-selected') === 'true');
+    if (activeTab?.hasAttribute('data-hidden') && firstVisible) {
+      activate(firstVisible.dataset.tab);
+    }
+  });
+}
+
 tabs.forEach((tab, index) => {
   tab.addEventListener('click', () => activate(tab.dataset.tab));
   tab.addEventListener('keydown', event => {
+    const visibleTabs = tabs.filter(t => !t.hasAttribute('data-hidden'));
+    const curIdx = visibleTabs.indexOf(tab);
     let next;
-    if (event.key === 'ArrowRight') next = (index + 1) % tabs.length;
-    if (event.key === 'ArrowLeft') next = (index + tabs.length - 1) % tabs.length;
+    if (event.key === 'ArrowRight') next = (curIdx + 1) % visibleTabs.length;
+    if (event.key === 'ArrowLeft') next = (curIdx + visibleTabs.length - 1) % visibleTabs.length;
     if (event.key === 'Home') next = 0;
-    if (event.key === 'End') next = tabs.length - 1;
-    if (next !== undefined) {
+    if (event.key === 'End') next = visibleTabs.length - 1;
+    if (next !== undefined && visibleTabs[next]) {
       event.preventDefault();
-      tabs[next].focus();
-      activate(tabs[next].dataset.tab);
+      visibleTabs[next].focus();
+      activate(visibleTabs[next].dataset.tab);
     }
   });
 });
@@ -56,7 +112,10 @@ frames.forEach(frame => frame.addEventListener('load', () => {
     doc.querySelector('svg') ||
     doc.querySelector('.token-table') ||
     doc.querySelector('.container') ||
-    doc.querySelector('.features-container')
+    doc.querySelector('.features-container') ||
+    doc.querySelector('.stats-row') ||
+    doc.querySelector('.report-wrapper') ||
+    doc.querySelector('.report-container')
   );
   if (!isLoaded) {
     if (!frame.parentElement.querySelector('.fail-note')) {
@@ -68,10 +127,12 @@ frames.forEach(frame => frame.addEventListener('load', () => {
   }
   if (isLoaded) {
     frame.parentElement.querySelector('.fail-note')?.remove();
-    const native = Boolean(doc.querySelector('.container'));
+    const native = Boolean(
+      doc.querySelector('.container') ||
+      doc.querySelector('.report-wrapper') ||
+      doc.querySelector('.report-container')
+    );
     const playback = Boolean(doc.querySelector('.seedl-playback'));
-    // Multi-panel Plotly figures need a readable minimum width. Native canvas
-    // viewers reflow instead. The stage contains any horizontal scrolling.
     frame.toggleAttribute('data-wide', !native);
     frame.resizeDemo = () => {
       if (frame.closest('[hidden]')) return;
@@ -142,6 +203,17 @@ const attentionPairSelect = document.querySelector('#attention-pair');
 if (attentionPairSelect) {
   attentionPairSelect.addEventListener('change', event => {
     const frame = document.querySelector('#attention-cmp iframe');
+    if (frame) {
+      frame.dataset.demo = event.target.value;
+      frame.src = `./demos/${frame.dataset.demo}.html`;
+    }
+  });
+}
+
+const noiseChannelSelect = document.querySelector('#noise-channel');
+if (noiseChannelSelect) {
+  noiseChannelSelect.addEventListener('change', event => {
+    const frame = document.querySelector('#quantum-noise iframe');
     if (frame) {
       frame.dataset.demo = event.target.value;
       frame.src = `./demos/${frame.dataset.demo}.html`;

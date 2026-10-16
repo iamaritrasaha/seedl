@@ -56,6 +56,45 @@ def render(view: Visualization, backend: str) -> Any:
 
         resolve_backend("plotly")
         return render_spatial(view)
+    if view.kind == "execution_trace":
+        from ._trace_renderers import matplotlib_trace, plotly_trace, svg_trace
+
+        resolve_backend(backend)
+        if backend == "plotly":
+            return plotly_trace(view)
+        if backend == "matplotlib":
+            return matplotlib_trace(view)
+        return svg_trace(view)
+    if view.kind == "attention_rollout":
+        from ._transformer_observatory import svg_attention_rollout
+
+        resolve_backend(backend)
+        return svg_attention_rollout(view)
+    if view.kind == "attribution_comparison":
+        from ._explain_compare import svg_attribution_comparison
+
+        resolve_backend(backend)
+        return svg_attribution_comparison(view)
+    if view.kind == "gradient_health":
+        from ._gradient_health import svg_gradient_health
+
+        resolve_backend(backend)
+        return svg_gradient_health(view)
+    if view.kind == "quantum_noise":
+        from ._quantum_lab import svg_quantum_noise
+
+        resolve_backend(backend)
+        return svg_quantum_noise(view)
+    if view.kind == "dataset_drift":
+        from ._dataset_health import svg_dataset_drift
+
+        resolve_backend(backend)
+        return svg_dataset_drift(view)
+    if view.kind == "run_comparison":
+        from ._training_compare import svg_run_comparison
+
+        resolve_backend(backend)
+        return svg_run_comparison(view)
     if view.kind == "feature_maps":
         from ._features import matplotlib_features, plotly_features, svg_features
 

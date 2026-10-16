@@ -677,8 +677,63 @@ def main() -> None:
     # =========================================================================
     # 18. Training Run Trajectory Comparison (NEW in SeeDL 0.5.0)
     # =========================================================================
-    run_sgd = {"loss": [0.82, 0.64, 0.45, 0.31], "accuracy": [0.45, 0.68, 0.79, 0.86]}
-    run_adamw = {"loss": [0.80, 0.49, 0.32, 0.21], "accuracy": [0.49, 0.77, 0.89, 0.93]}
+    # Authentic deterministic CPU training comparing SGD and AdamW on a small
+    # synthetic demonstration dataset. Identical weights, loss, and batch order.
+    # Note: relative optimizer performance depends on architecture and problem;
+    # neither optimizer is universally superior.
+    torch.manual_seed(42)
+    X_train = torch.randn(32, 4)
+    y_train = ((X_train[:, 0] * 1.5 - X_train[:, 1] * 0.8 + X_train[:, 2] * 0.5) > 0.0).long()
+
+    def make_run_model():
+        torch.manual_seed(100)
+        return torch.nn.Sequential(
+            torch.nn.Linear(4, 8),
+            torch.nn.ReLU(),
+            torch.nn.Linear(8, 2),
+        )
+
+    model_sgd = make_run_model()
+    model_adamw = make_run_model()
+    model_adamw.load_state_dict(model_sgd.state_dict())
+
+    criterion_run = torch.nn.CrossEntropyLoss()
+    opt_sgd = torch.optim.SGD(model_sgd.parameters(), lr=0.1)
+    opt_adamw = torch.optim.AdamW(model_adamw.parameters(), lr=0.05, weight_decay=1e-4)
+
+    run_sgd: dict[str, list[float]] = {"loss": [], "accuracy": []}
+    run_adamw: dict[str, list[float]] = {"loss": [], "accuracy": []}
+
+    num_training_steps = 4
+    for _ in range(num_training_steps):
+        # Step SGD
+        opt_sgd.zero_grad()
+        out_sgd = model_sgd(X_train)
+        loss_sgd = criterion_run(out_sgd, y_train)
+        loss_sgd.backward()
+        opt_sgd.step()
+        with torch.no_grad():
+            preds_sgd = model_sgd(X_train).argmax(dim=-1)
+            acc_sgd = float((preds_sgd == y_train).float().mean().item())
+            l_val_sgd = float(loss_sgd.item())
+            assert math.isfinite(l_val_sgd) and math.isfinite(acc_sgd)
+            run_sgd["loss"].append(round(l_val_sgd, 4))
+            run_sgd["accuracy"].append(round(acc_sgd, 4))
+
+        # Step AdamW
+        opt_adamw.zero_grad()
+        out_adamw = model_adamw(X_train)
+        loss_adamw = criterion_run(out_adamw, y_train)
+        loss_adamw.backward()
+        opt_adamw.step()
+        with torch.no_grad():
+            preds_adamw = model_adamw(X_train).argmax(dim=-1)
+            acc_adamw = float((preds_adamw == y_train).float().mean().item())
+            l_val_adamw = float(loss_adamw.item())
+            assert math.isfinite(l_val_adamw) and math.isfinite(acc_adamw)
+            run_adamw["loss"].append(round(l_val_adamw, 4))
+            run_adamw["accuracy"].append(round(acc_adamw, 4))
+
     runs_view = sd.compare_runs(
         run_sgd,
         run_adamw,
@@ -693,6 +748,19 @@ def main() -> None:
         "name_a": runs_view.data["name_a"],
         "name_b": runs_view.data["name_b"],
         "metrics": runs_view.data["metrics"],
+        "provenance": {
+            "dataset": "Synthetic binary classification (32 samples, 4 features)",
+            "dataset_seed": 42,
+            "model_seed": 100,
+            "architecture": "Sequential(Linear(4, 8), ReLU(), Linear(8, 2))",
+            "loss_fn": "CrossEntropyLoss",
+            "steps": num_training_steps,
+            "optimizer_a": {"name": "SGD", "lr": 0.1},
+            "optimizer_b": {"name": "AdamW", "lr": 0.05, "weight_decay": 1e-4},
+            "measurement_timing": "Step loss recorded during backward; accuracy evaluated post-step on synthetic batch",
+            "verified_finite": True,
+            "demonstration_type": "Small synthetic demonstration; relative performance depends on problem and hyperparameters",
+        },
     }
 
     # =========================================================================

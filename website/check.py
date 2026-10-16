@@ -13,6 +13,8 @@ from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
+import torch
+
 ROOT = Path(__file__).resolve().parent
 
 
@@ -239,6 +241,59 @@ def main() -> None:
     assert len(runs["metrics"]) >= 2
     assert (ROOT / "demos/runs-compare.html").is_file()
     assert (ROOT / "assets/runs-compare.svg").is_file()
+    prov = runs.get("provenance", {})
+    assert prov.get("verified_finite") is True
+    assert prov.get("dataset_seed") == 42
+    assert prov.get("model_seed") == 100
+    assert prov.get("steps") == 4
+
+    # Verify that metrics originate from actual deterministic training routine
+    torch.manual_seed(42)
+    X_chk = torch.randn(32, 4)
+    y_chk = ((X_chk[:, 0] * 1.5 - X_chk[:, 1] * 0.8 + X_chk[:, 2] * 0.5) > 0.0).long()
+
+    def make_chk_model():
+        torch.manual_seed(100)
+        return torch.nn.Sequential(torch.nn.Linear(4, 8), torch.nn.ReLU(), torch.nn.Linear(8, 2))
+
+    m_sgd, m_adamw = make_chk_model(), make_chk_model()
+    m_adamw.load_state_dict(m_sgd.state_dict())
+    crit_chk = torch.nn.CrossEntropyLoss()
+    o_sgd = torch.optim.SGD(m_sgd.parameters(), lr=0.1)
+    o_adamw = torch.optim.AdamW(m_adamw.parameters(), lr=0.05, weight_decay=1e-4)
+
+    expected_sgd: dict[str, list[float]] = {"loss": [], "accuracy": []}
+    expected_adamw: dict[str, list[float]] = {"loss": [], "accuracy": []}
+    for _ in range(4):
+        o_sgd.zero_grad()
+        l_s = crit_chk(m_sgd(X_chk), y_chk)
+        l_s.backward()
+        o_sgd.step()
+        with torch.no_grad():
+            expected_sgd["loss"].append(round(float(l_s.item()), 4))
+            expected_sgd["accuracy"].append(
+                round(float((m_sgd(X_chk).argmax(-1) == y_chk).float().mean().item()), 4)
+            )
+
+        o_adamw.zero_grad()
+        l_a = crit_chk(m_adamw(X_chk), y_chk)
+        l_a.backward()
+        o_adamw.step()
+        with torch.no_grad():
+            expected_adamw["loss"].append(round(float(l_a.item()), 4))
+            expected_adamw["accuracy"].append(
+                round(float((m_adamw(X_chk).argmax(-1) == y_chk).float().mean().item()), 4)
+            )
+
+    metric_map = {m["metric"]: m for m in runs["metrics"]}
+    assert "loss" in metric_map and "accuracy" in metric_map
+    assert metric_map["loss"]["history_a"] == expected_sgd["loss"]
+    assert metric_map["loss"]["history_b"] == expected_adamw["loss"]
+    assert metric_map["accuracy"]["history_a"] == expected_sgd["accuracy"]
+    assert metric_map["accuracy"]["history_b"] == expected_adamw["accuracy"]
+    for m in runs["metrics"]:
+        for val in m["history_a"] + m["history_b"]:
+            assert math.isfinite(val)
 
     # Check all demo files against manifest sha256 and size/CDN bounds
     for name, digest in manifest["sha256"].items():

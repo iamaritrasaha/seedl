@@ -21,10 +21,9 @@ from dataclasses import dataclass, field
 from io import BytesIO
 from pathlib import Path
 
+from ._version import __version__
 from .exceptions import SeeDLError
 from .view import Visualization
-
-__version__ = "0.4.0"
 
 INTERACTIVE_VIEW_KINDS = {
     "execution_trace",

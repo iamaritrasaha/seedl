@@ -67,35 +67,80 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **SeeDL 0.3.0 (current stable release)**: Unifies classical deep learning and quantum information visualization in a single lightweight library.
-> Install the full interactive 3D and quantum suite:
-> `pip install "seedl[quantum,plotly]"` or `pip install "seedl[all]"`
+> **SeeDL 0.5.0 — The Neural Observatory**: Advanced open-source scientific visualization, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
+>
+> Install SeeDL:
+> `pip install seedl==0.5.0` or `pip install "seedl[all]==0.5.0"`
 
 ---
 
-## SeeDL 0.4.0: Vision & Attention Intelligence (Release Preparation)
+## 🌌 SeeDL 0.5.0: The Neural Observatory
 
-SeeDL 0.4.0 introduces **Vision & Attention Intelligence** for interactive CNN feature-map exploration, Multi-Head Transformer attention, and Vision Transformer patch routing.
+SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite for non-destructive execution graph tracing, multi-layer Transformer rollout, attribution benchmarking, gradient health diagnostics, quantum noise simulation, dataset intelligence, and publication-ready scientific reports.
 
-### Key Capabilities in 0.4.0:
-- **Interactive CNN Feature Map Explorer (`sd.features`)**:
-  - Genuine intermediate activations captured under `eval()` mode with zero autograd retention.
-  - Multi-channel gallery browsing, channel diagnostics (Min, Max, Mean, Sparsity, Signed ranges).
-  - Spatial coordinate inspection with live hover tooltips.
-  - Per-channel, layer-global, and zero-centered symmetric normalization modes.
-  - Aligned spatial feature map comparisons (`sd.compare`).
-- **Transformer Attention Explorer (`sd.attention`)**:
-  - Genuine multi-head attention matrix heatmaps ($Q_i \to K_j$).
-  - Individual head selection, averaged heads view, and head comparison ($Head_A \text{ vs } Head_B$).
-  - Query token selection with dynamic key attention distribution bar charts.
-  - Mathematically validated Shannon entropy, causal mask detection, and cross-attention support ($seq_q \neq seq_k$).
-  - Transparent handling of `nn.MultiheadAttention`, explicit 3D tensor disambiguation, and user-supplied attention masks.
-- **Vision Transformer (ViT) Patch Attention (`sd.vit_attention`)**:
-  - Reshapes token attention vectors (e.g. `[CLS]`) into authentic 2D spatial patch attention heatmaps.
-- **Offline Self-Contained HTML Exports**:
-  - Export responsive offline HTML files with full client-side interactivity, zero external CDN dependencies, and minimal payload size.
+### Key Capabilities in 0.5.0:
 
-See the [Vision & Attention Intelligence Documentation](docs/vision-attention-intelligence.md) and runnable examples in `examples/cnn_feature_explorer.py` and `examples/transformer_attention_explorer.py`.
+- **Neural Execution Tracing (`sd.trace`)**:
+  - Non-destructive execution graph recording with runtime hook interception and optional `torch.fx` symbolic analysis.
+  - Distinguishes verified explicit tensor pointers, storage views, and symbolic dependencies.
+  - Guaranteed restoration of registered module buffers (including large buffers > 8192 elements), mixed training modes, and parameter gradients.
+- **Tensor Flow Visualization (`sd.flow`)**:
+  - Interactive DAG explorer with layer-by-layer parameter, shape, duration, and activation telemetry.
+- **Transformer Attention Rollout (`sd.attention_rollout`, `sd.attention_layers`)**:
+  - Abnar & Zuidema (2020) residual attention rollout tracking token information flow through multi-layer architectures.
+  - Layer-by-layer attention matrix heatmaps and head-level dispersion diagnostics.
+- **Advanced Explainability (`sd.compare_attributions`)**:
+  - Side-by-side attribution comparison between Saliency Maps, Integrated Gradients (completeness axiom verified), and SmoothGrad.
+  - Pairwise Pearson correlation, Cosine similarity, and multi-method consensus.
+- **Gradient Health Diagnostics (`sd.gradient_health`)**:
+  - Layer-by-layer norm diagnostics, gradient-to-weight ratios, vanishing/high gradient alerts, tied-weight transparency, and dead ReLU sparsity detection.
+- **Training Run Comparison (`sd.compare_runs`)**:
+  - Two-run training comparison with step alignment, final deltas, pointwise absolute differences, and missing metric alerts.
+- **Quantum Noise Simulation (`sd.quantum_noise`)**:
+  - Single-qubit open quantum system decoherence analysis via Kraus operators (depolarizing, amplitude damping, phase damping).
+  - Single-qubit Bloch sphere trajectories, purity, coherence, and von Neumann entropy.
+  - Bipartite two-qubit entanglement analysis (`sd.entanglement`) and Peres-Horodecki negativity computation (`compute_two_qubit_negativity`) are provided as separate analysis capabilities.
+- **Dataset Intelligence (`sd.dataset_health`, `sd.dataset_drift`)**:
+  - Summary health profiles, numerical condition estimation, Population Stability Index (PSI), and Jensen-Shannon Divergence (JSD).
+- **Scientific Report Builder (`sd.report`)**:
+  - Publication-grade offline reports embedding isolated, interactive visualization cards via sandboxed iframes with zero external CDN dependencies.
+- **Safe Analysis Serialization (`sd.save_analysis`, `sd.load_analysis`)**:
+  - Pure JSON artifact serialization protected by SHA-256 canonical integrity hashes and strict schema validation.
+
+### Neural Observatory Quick Examples:
+
+```python
+import torch
+import torch.nn as nn
+import seedl as sd
+
+# 1. Trace and visualize execution topology
+model = nn.Sequential(nn.Linear(10, 32), nn.ReLU(), nn.Linear(32, 2))
+x = torch.randn(4, 10)
+trace = sd.trace(model, x)
+flow_view = sd.flow(trace)
+flow_view.save("trace.html")
+
+# 2. Audit gradient health before optimizer step
+loss = model(x).sum()
+loss.backward()
+health_view = sd.gradient_health(model)
+print(health_view.summary)
+
+# 3. Simulate single-qubit noisy quantum channel decoherence
+noise_view = sd.quantum_noise(channel="amplitude_damping", param=0.25, steps=10)
+noise_view.save("quantum_noise.html")
+
+# 4. Compile offline scientific report
+report = sd.report(
+    title="Neural Observatory Diagnostic Report",
+    views=[flow_view, health_view, noise_view],
+    author="Scientific Research Team",
+)
+report.save("diagnostic_report.html")
+```
+
+See the [Official Release Notes](docs/RELEASE_NOTES_0.5.0.md) and runnable examples in `examples/`.
 
 ---
 

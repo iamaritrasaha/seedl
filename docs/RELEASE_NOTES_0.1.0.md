@@ -1,6 +1,6 @@
 # SeeDL 0.1.0 Release Notes
 
-**Initial Public MVP Release** — 10 October 2026
+**Initial Public MVP Release**: 10 October 2026
 
 SeeDL (`seedl`) is a deep-learning-aware visualization and observability library for Python. It provides automated, diagnostic inspection for tensors, neural network models, activations, gradients, training curves, predictions, and embeddings.
 

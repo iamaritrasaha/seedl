@@ -331,6 +331,14 @@ def main() -> None:
     for ha, hb in cmp_pairs:
         cmp_v = sd.attention(attn_weights, tokens=tokens, compare_heads=(ha, hb), backend="plotly")
         slug = "attention-comparison" if (ha, hb) == (0, 1) else f"attention-comparison-{ha}-{hb}"
+        # Reserve space for the difference scale outside the third heatmap.
+        cmp_v.figure.update_layout(margin=dict(l=85, r=100, t=110, b=85))
+        cmp_v.figure.update_traces(
+            colorbar=dict(x=1.04, thickness=14), selector=dict(showscale=True)
+        )
+        # Plotly may omit the default showscale=True from the trace object.
+        cmp_v.figure.data[-1].colorbar.update(x=1.04, thickness=14)
+        cmp_v.figure.update_yaxes(automargin=True)
         export(cmp_v, slug)
         h_cmp = cmp_v.data["head_comparison"]
         manifest["attention_comparison"]["pairs"][f"{ha}-{hb}"] = {
@@ -362,6 +370,16 @@ def main() -> None:
         "stats": vit_view.data["layers"][0]["channels"][0]["stats"],
         "grid": vit_view.data["layers"][0]["channels"][0]["grid"],
     }
+
+    # Presentation fixes belong to the website, not the installed library.
+    for path in (ROOT / "demos").glob("*.html"):
+        document = path.read_text().replace("\u2014", ": ")
+        if path.stem in {"cnn-features", "attention", "vit-attention"}:
+            document = document.replace(
+                "</head>",
+                '<link rel="stylesheet" href="../assets/viewer.css"></head>',
+            )
+        path.write_text(document)
 
     # Hash all generated HTML demos
     manifest["sha256"] = {

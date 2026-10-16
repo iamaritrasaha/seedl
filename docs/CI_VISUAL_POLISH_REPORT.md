@@ -1,4 +1,4 @@
-# CI repair and visualization polish — 10 October 2026
+# CI repair and visualization polish: 10 October 2026
 
 ## CI findings and fixes
 

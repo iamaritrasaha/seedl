@@ -21,6 +21,12 @@ function activate(name, updateHash = true) {
   });
   const frame = document.querySelector(`#${name} iframe`);
   loadFrame(frame);
+  requestAnimationFrame(() => {
+    frame?.resizeDemo?.();
+    frame?.contentDocument?.querySelectorAll(".plotly-graph-div").forEach(plot => {
+      if (plot._fullLayout) frame.contentWindow.Plotly?.Plots.resize(plot);
+    });
+  });
   if (updateHash) history.replaceState(null, '', `#${name}`);
 }
 
@@ -59,6 +65,40 @@ frames.forEach(frame => frame.addEventListener('load', () => {
       message.textContent = 'The demo could not load. Reload this page or use the Python source below.';
       frame.after(message);
     }
+  }
+  if (isLoaded) {
+    frame.parentElement.querySelector('.fail-note')?.remove();
+    const native = Boolean(doc.querySelector('.container'));
+    const playback = Boolean(doc.querySelector('.seedl-playback'));
+    // Multi-panel Plotly figures need a readable minimum width. Native canvas
+    // viewers reflow instead. The stage contains any horizontal scrolling.
+    frame.toggleAttribute('data-wide', !native);
+    frame.resizeDemo = () => {
+      if (frame.closest('[hidden]')) return;
+      if (native || playback) {
+        const body = doc.body;
+        const contentBottom = Math.max(...[...body.children]
+          .filter(el => !['SCRIPT', 'STYLE'].includes(el.tagName))
+          .map(el => el.getBoundingClientRect().bottom + frame.contentWindow.scrollY), 0);
+        frame.style.height = `${Math.ceil(contentBottom + parseFloat(getComputedStyle(body).paddingBottom) + 20)}px`;
+      } else {
+        frame.style.height = frame.dataset.demo.startsWith('attention-comparison') ? '700px' : '650px';
+      }
+    };
+    frame.demoObserver?.disconnect();
+    frame.demoObserver = new ResizeObserver(() => frame.resizeDemo());
+    frame.demoObserver.observe(doc.body);
+    frame.resizeDemo();
+    let open = frame.parentElement.querySelector('.demo-open');
+    if (!open?.classList.contains('demo-open')) {
+      open = document.createElement('a');
+      open.className = 'demo-open';
+      open.target = '_blank';
+      open.rel = 'noopener';
+      open.textContent = 'Open this view in a full window ↗';
+      frame.after(open);
+    }
+    open.href = frame.src;
   }
   if (frame === networkFrame && frame.contentWindow && frame.contentWindow.__seedl_select_neuron) {
     const win = frame.contentWindow;

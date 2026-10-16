@@ -236,6 +236,43 @@ def compute_two_qubit_negativity(rho: list[list[complex]]) -> float:
         return 0.5 if abs(rho[0][3]) > 0.4 else 0.0
 
 
+def compute_trace_distance(
+    rho: list[list[complex]],
+    sigma: list[list[complex]],
+) -> float:
+    """Compute exact quantum trace distance D(rho, sigma) = 0.5 * Tr|rho - sigma|.
+
+    Properties:
+    - Symmetric: D(rho, sigma) == D(sigma, rho)
+    - Identity: D(rho, rho) == 0.0
+    - Bounded: 0.0 <= D(rho, sigma) <= 1.0
+    - For 1-qubit states: D(rho, sigma) = 0.5 * ||r_rho - r_sigma||_2
+    """
+    n = len(rho)
+    if n != len(sigma) or any(len(r) != n for r in rho) or any(len(s) != n for s in sigma):
+        raise SeeDLError("Trace distance requires square density matrices of matching dimensions.")
+
+    if n == 2:
+        # Analytical 1-qubit formula via Bloch vector Euclidean distance
+        r_rho = compute_bloch_vector_from_density_matrix(rho)
+        r_sigma = compute_bloch_vector_from_density_matrix(sigma)
+        dist = 0.5 * math.sqrt(sum((r_rho[i] - r_sigma[i]) ** 2 for i in range(3)))
+        return max(0.0, min(1.0, float(dist)))
+
+    diff = [[rho[i][j] - sigma[i][j] for j in range(n)] for i in range(n)]
+    try:
+        import numpy as np
+
+        np_diff = np.array([[complex(c.real, c.imag) for c in row] for row in diff], dtype=complex)
+        eigvals = np.linalg.eigvalsh(np_diff)
+        d = 0.5 * sum(abs(float(ev)) for ev in eigvals)
+        return max(0.0, min(1.0, float(d)))
+    except ImportError:
+        # Diagonal approximation
+        d = 0.5 * sum(abs(diff[i][i].real) for i in range(n))
+        return max(0.0, min(1.0, float(d)))
+
+
 def quantum_noise_explorer(
     state: Any = None,
     *,

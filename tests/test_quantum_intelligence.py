@@ -146,3 +146,37 @@ def test_sd_quantum_noise_api_and_export():
 
     svg_markup = svg_quantum_noise(viz)
     assert "<svg" in svg_markup
+
+
+def test_trace_distance_properties():
+    """Verify trace distance D(rho, sigma) properties: symmetry, identity, orthogonality, bounds."""
+    from seedl._quantum_lab import compute_trace_distance
+
+    rho_0 = density_matrix_from_statevector([1.0 + 0j, 0.0 + 0j])  # |0>
+    rho_1 = density_matrix_from_statevector([0.0 + 0j, 1.0 + 0j])  # |1>
+    inv = 1.0 / math.sqrt(2.0)
+    rho_plus = density_matrix_from_statevector([complex(inv, 0), complex(inv, 0)])  # |+>
+
+    # Identity
+    assert math.isclose(compute_trace_distance(rho_0, rho_0), 0.0, abs_tol=1e-7)
+
+    # Orthogonal states have trace distance 1.0
+    assert math.isclose(compute_trace_distance(rho_0, rho_1), 1.0, abs_tol=1e-7)
+
+    # Symmetry
+    d_0_plus = compute_trace_distance(rho_0, rho_plus)
+    d_plus_0 = compute_trace_distance(rho_plus, rho_0)
+    assert math.isclose(d_0_plus, d_plus_0, abs_tol=1e-7)
+    # Between |0> (rz=1) and |+> (rx=1), Euclidean distance in Bloch sphere is sqrt(2), so D = sqrt(2)/2 ≈ 0.7071
+    assert math.isclose(d_0_plus, 1.0 / math.sqrt(2.0), abs_tol=1e-6)
+
+    # Bounds
+    assert 0.0 <= d_0_plus <= 1.0
+
+
+def test_maximally_mixed_state_negativity():
+    """Maximally mixed 2-qubit state has exactly zero entanglement negativity."""
+    # rho = I_4 / 4
+    rho_mixed_4 = [[0.25 + 0j if i == j else 0j for j in range(4)] for i in range(4)]
+    neg = compute_two_qubit_negativity(rho_mixed_4)
+    assert math.isclose(neg, 0.0, abs_tol=1e-7)

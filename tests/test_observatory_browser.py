@@ -196,3 +196,140 @@ def test_browser_report_theme_toggle_and_navigation():
 
             assert not console_errors, f"JavaScript errors occurred: {console_errors}"
             browser.close()
+
+
+@pytest.mark.skipif(not _PLAYWRIGHT_AVAILABLE, reason="Playwright not installed")
+def test_browser_attention_rollout_interaction():
+    """Verify attention rollout dropdown navigation and matrix rendering in headless Chromium."""
+    from seedl._transformer_observatory import attention_rollout_html
+
+    a1 = [[0.8, 0.2], [0.1, 0.9]]
+    a2 = [[0.7, 0.3], [0.4, 0.6]]
+    viz = sd.attention_rollout([a1, a2], tokens=["tokA", "tokB"])
+    html_markup = attention_rollout_html(viz)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file_path = Path(tmp_dir) / "rollout.html"
+        file_path.write_text(html_markup, encoding="utf-8")
+        file_url = f"file://{file_path.resolve()}"
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            console_errors = []
+            page.on(
+                "console",
+                lambda msg: console_errors.append(msg.text) if msg.type == "error" else None,
+            )
+
+            page.goto(file_url)
+
+            # Check header
+            assert page.is_visible("header")
+            assert "Attention Rollout" in page.text_content("header")
+
+            # Check layer select dropdown
+            select = page.query_selector("#layer-select")
+            assert select is not None
+            options = page.query_selector_all("#layer-select option")
+            assert len(options) >= 2  # Layer options + Final
+
+            # Check table container renders
+            table_cells = page.query_selector_all("table.matrix-table td")
+            assert len(table_cells) > 0
+
+            # Switch to layer 0
+            page.select_option("#layer-select", "0")
+            table_cells_l0 = page.query_selector_all("table.matrix-table td")
+            assert len(table_cells_l0) > 0
+
+            assert not console_errors, f"JavaScript errors occurred: {console_errors}"
+            browser.close()
+
+
+@pytest.mark.skipif(not _PLAYWRIGHT_AVAILABLE, reason="Playwright not installed")
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not installed")
+def test_browser_gradient_health_dashboard():
+    """Verify gradient health dashboard metric cards and tables in headless Chromium."""
+    from seedl._gradient_health import gradient_health_html
+
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU(), nn.Linear(4, 2))
+    x = torch.randn(2, 4)
+    loss = model(x).sum()
+    loss.backward()
+
+    viz = sd.gradient_health(model)
+    html_markup = gradient_health_html(viz)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file_path = Path(tmp_dir) / "grad_health.html"
+        file_path.write_text(html_markup, encoding="utf-8")
+        file_url = f"file://{file_path.resolve()}"
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            console_errors = []
+            page.on(
+                "console",
+                lambda msg: console_errors.append(msg.text) if msg.type == "error" else None,
+            )
+
+            page.goto(file_url)
+
+            # Verify stat cards
+            assert page.is_visible(".stats-grid")
+            assert page.is_visible("#stat-l2")
+            l2_text = page.text_content("#stat-l2")
+            assert "e" in l2_text or "." in l2_text
+
+            # Verify layer table rows
+            layer_rows = page.query_selector_all("#layers-body tr")
+            assert len(layer_rows) >= 2
+
+            # Verify parameter table rows
+            param_rows = page.query_selector_all("#params-body tr")
+            assert len(param_rows) >= 2
+
+            assert not console_errors, f"JavaScript errors occurred: {console_errors}"
+            browser.close()
+
+
+@pytest.mark.skipif(not _PLAYWRIGHT_AVAILABLE, reason="Playwright not installed")
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not installed")
+def test_browser_mobile_responsiveness_and_keyboard_nav():
+    """Verify layout responsiveness on mobile viewport and tab keyboard accessibility."""
+    model = nn.Sequential(nn.Linear(2, 3), nn.Linear(3, 1))
+    trace = sd.trace(model, input=torch.randn(1, 2))
+    html_markup = trace_html(sd.flow(trace))
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        file_path = Path(tmp_dir) / "mobile_trace.html"
+        file_path.write_text(html_markup, encoding="utf-8")
+        file_url = f"file://{file_path.resolve()}"
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            # Set mobile viewport
+            page.set_viewport_size({"width": 375, "height": 667})
+
+            console_errors = []
+            page.on(
+                "console",
+                lambda msg: console_errors.append(msg.text) if msg.type == "error" else None,
+            )
+
+            page.goto(file_url)
+
+            # Check that container fits within viewport without overflow
+            container = page.query_selector(".container")
+            assert container is not None
+
+            # Test tab navigation via keyboard
+            page.focus("#search-box")
+            page.keyboard.type("0")
+            page.keyboard.press("Escape")
+
+            assert not console_errors, f"JavaScript errors occurred: {console_errors}"
+            browser.close()

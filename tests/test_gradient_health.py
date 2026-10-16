@@ -121,3 +121,56 @@ def test_gradient_health_vanishing_and_nonfinite_observations():
     data_nan = inspect_gradient_health(model)
     assert data_nan["total_nonfinite"] > 0
     assert any("nonfinite" in obs.lower() for obs in data_nan["observations"])
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+def test_gradient_health_frozen_parameters_and_zero_weight_norm():
+    """Verify frozen parameters and zero parameter norms handle division by zero safely."""
+    model = SimpleModel()
+    # Freeze fc2
+    model.fc2.weight.requires_grad = False
+    # Set fc1 weight data to zero
+    with torch.no_grad():
+        model.fc1.weight.zero_()
+        model.fc1.weight.grad = torch.randn_like(model.fc1.weight)
+
+    data = inspect_gradient_health(model)
+    rec_fc1 = next(r for r in data["parameters"] if r["name"] == "fc1.weight")
+    rec_fc2 = next(r for r in data["parameters"] if r["name"] == "fc2.weight")
+
+    # fc1 weight norm is 0.0, so grad_to_weight_ratio must safely be None without dividing by zero
+    assert rec_fc1["weight_norm"] == 0.0
+    assert rec_fc1["grad_to_weight_ratio"] is None
+
+    # fc2 is frozen: requires_grad=False, grad is None, should not be in missing_grad_parameters
+    assert rec_fc2["requires_grad"] is False
+    assert rec_fc2["has_grad"] is False
+    assert "fc2.weight" not in data["missing_grad_parameters"]
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+def test_gradient_health_sparse_and_bfloat16_gradients():
+    """Verify sparse COO gradients and bfloat16 mixed-precision gradients are inspected accurately."""
+    # Test bfloat16
+    model_bf16 = SimpleModel().to(torch.bfloat16)
+    x = torch.randn(2, 3, dtype=torch.bfloat16)
+    loss = model_bf16(x).sum()
+    loss.backward()
+
+    data_bf16 = inspect_gradient_health(model_bf16)
+    assert data_bf16["global_l2"] > 0.0
+    for r in data_bf16["parameters"]:
+        assert r["has_grad"] is True
+        assert r["l1_norm"] is not None
+
+    # Test sparse gradient on Embedding
+    emb = nn.Embedding(5, 4, sparse=True)
+    idx = torch.tensor([0, 2])
+    loss_sparse = emb(idx).sum()
+    loss_sparse.backward()
+
+    data_sparse = inspect_gradient_health(emb)
+    rec_emb = data_sparse["parameters"][0]
+    assert rec_emb["has_grad"] is True
+    assert rec_emb["l1_norm"] is not None
+    assert rec_emb["l2_norm"] is not None

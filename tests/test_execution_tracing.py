@@ -203,3 +203,138 @@ def test_see_with_execution_trace_and_flow_view():
     t = sd.trace(model, x)
     v2 = sd.see(t)
     assert v2.kind == "execution_trace"
+
+
+class ViewSliceModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.conv = nn.Conv2d(1, 4, kernel_size=2)
+        self.fc = nn.Linear(16, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h = self.conv(x)
+        # Flatten via view creates a storage alias (shares data_ptr, distinct object)
+        flat = h.view(h.size(0), -1)
+        return self.fc(flat)
+
+
+def test_storage_alias_detection():
+    """Verify that tensor views/slices sharing underlying storage are classified as storage_alias."""
+    model = ViewSliceModel()
+    x = torch.randn(1, 1, 3, 3)
+    trace = sd.trace(model, x, use_fx=False)  # Test hooks path directly
+
+    # Find edge from conv to fc
+    alias_edges = [e for e in trace.edges if e.edge_type == "storage_alias"]
+    assert len(alias_edges) >= 1
+    assert alias_edges[0].source.startswith("conv")
+    assert alias_edges[0].target.startswith("fc")
+    assert alias_edges[0].is_uncertain is False
+
+
+class SkipConnectionModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(4, 4)
+        self.fc2 = nn.Linear(4, 4)
+        self.fc3 = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        h1 = self.fc1(x)
+        h2 = self.fc2(h1)
+        # Residual skip addition
+        merged = h2 + h1
+        out = self.fc3(merged)
+        return out
+
+
+def test_residual_skip_connection_fx_topology():
+    """Verify torch.fx correctly traces the multi-input skip connection into fc3."""
+    model = SkipConnectionModel()
+    x = torch.randn(2, 4)
+    trace = sd.trace(model, x, use_fx=True)
+
+    assert trace.trace_mode == "torch.fx+hooks"
+    # fc3 should have incoming dependencies from BOTH fc2 and fc1 (the skip)
+    fc3_incoming = [e.source for e in trace.edges if e.target.startswith("fc3")]
+    assert any("fc1" in s for s in fc3_incoming)
+    assert any("fc2" in s for s in fc3_incoming)
+
+
+class DynamicControlFlowModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc_pos = nn.Linear(4, 2)
+        self.fc_neg = nn.Linear(4, 2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        # Data-dependent Python conditional breaks torch.fx symbolic trace
+        if bool(x.sum().item() > 0):
+            return self.fc_pos(x)
+        else:
+            return self.fc_neg(x)
+
+
+def test_dynamic_control_flow_fallback_to_hooks():
+    """Verify that models with dynamic control flow fallback cleanly to hooks mode."""
+    model = DynamicControlFlowModel()
+    x = torch.randn(2, 4)
+    trace = sd.trace(model, x, use_fx=True)
+
+    # Should fallback to hooks mode without throwing
+    assert trace.trace_mode == "hooks"
+    assert len(trace.nodes) >= 1
+
+
+class DictOutputModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc_feat = nn.Linear(4, 8)
+        self.fc_cls = nn.Linear(8, 2)
+
+    def forward(self, x: torch.Tensor) -> dict[str, torch.Tensor]:
+        feat = self.fc_feat(x)
+        logits = self.fc_cls(feat)
+        return {"features": feat, "logits": logits}
+
+
+def test_dict_outputs_and_inputs():
+    """Verify recursive tensor extraction handles dictionary outputs and inputs."""
+    model = DictOutputModel()
+    x = torch.randn(3, 4)
+    trace = sd.trace(model, x)
+
+    assert len(trace.output_metadata) == 2
+    out_shapes = [m["shape"] for m in trace.output_metadata]
+    assert [3, 8] in out_shapes
+    assert [3, 2] in out_shapes
+
+
+class BufferAndInplaceModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(4, 4)
+        self.register_buffer("running_stat", torch.tensor([1.0, 2.0, 3.0, 4.0]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        x = self.fc(x)
+        # Inplace operation outside submodules
+        x = x.clone()
+        x.add_(1.0)
+        return x * self.running_stat
+
+
+def test_buffer_preservation_and_non_mutation():
+    """Verify model buffers and original user input are preserved without mutation."""
+    model = BufferAndInplaceModel()
+    orig_buffer = model.running_stat.clone()
+    orig_x = torch.randn(2, 4)
+    x_input = orig_x.clone()
+
+    trace = sd.trace(model, x_input)
+    assert trace is not None
+
+    # Verify buffer untouched
+    assert torch.equal(model.running_stat, orig_buffer)
+    # Verify input tensor untouched
+    assert torch.equal(x_input, orig_x)

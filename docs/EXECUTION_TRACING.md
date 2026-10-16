@@ -63,10 +63,12 @@ sequenceDiagram
     Tracer-->>User: ExecutionTrace object
 ```
 
-### Data Dependency Detection
-1. **Symbolic Resolution (`torch.fx`)**: For traceable models, exact data dependencies (including non-module in-place operations) are captured symbolically.
-2. **Dynamic Tensor Matching (`data_ptr`)**: When dynamic Python control flow prevents symbolic tracing, SeeDL matches output tensor storage pointers (`tensor.data_ptr()`) to downstream module inputs to build verified data dependency edges.
-3. **Zero Fabrication**: If dependencies between modules cannot be established empirically, SeeDL reports them as sequential invocations without inventing speculative connections.
+### Data Dependency Detection & Edge Taxonomy
+1. **Direct Object Identity (`explicit_tensor`)**: Exact Python object match between upstream output and downstream input (`id(t_in) == id(t_out)`). Verified causal data flow.
+2. **Shared Storage Aliasing (`storage_alias`)**: Downstream tensor shares underlying memory buffer (`data_ptr(t_in) == data_ptr(t_out)`) with a different object identity (e.g. `x.view()`, `x.squeeze()`, `x.transpose()`, or slices).
+3. **Symbolic Resolution (`symbolic_fx`)**: For symbolically traceable models via `torch.fx`, exact DAG input-to-output topologies (including skip connections, multi-input merges, and branching) are derived directly from the symbolic graph.
+4. **Inferred Sequential (`inferred_sequential`)**: When explicit tensor matching or FX cannot establish causal data flow, consecutive module execution order is recorded with explicit uncertainty (`is_uncertain=True`), never presenting unverified speculative connections as established facts.
+5. **Allocator Address Safety**: Intermediate tensors are kept referenced in an internal retention pool throughout the forward execution, preventing PyTorch's caching allocator from recycling memory addresses (`data_ptr()`) across unrelated operations.
 
 ---
 
@@ -82,8 +84,9 @@ When rendered in a browser or notebook (`sd.flow()`), SeeDL produces an offline 
 
 ---
 
-## 5. State Preservation Guarantees
+## 5. State Preservation Guarantees & Sandboxing Scope
 
 - **No Parameter Alteration**: Existing weights, biases, and buffer tensors are never updated.
 - **Gradient Preservation**: Any existing `param.grad` tensors from prior backward passes are backed up and restored.
 - **Hook Cleanup**: Hooks are registered with temporary tokens and removed inside a strict `try...finally` block, ensuring no persistent hooks remain even if the forward pass raises an exception.
+- **Custom-Forward Side Effect Scope**: SeeDL strictly sandboxes and restores PyTorch model state (training/eval modes, parameter gradients, registered buffers, input clones, and hooks). However, arbitrary external side effects implemented inside a user model's Python `forward()` method (such as modifying global variables, network calls, writing to disk, or mutating external mutable structures) cannot be sandboxed by pure-Python runtime inspection. Users should adhere to standard PyTorch forward idempotence conventions.

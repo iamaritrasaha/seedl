@@ -131,3 +131,80 @@ def test_sd_attention_rollout_torch_tensor_input():
     assert viz.kind == "attention_rollout"
     assert "rollout_matrix" in viz.data
     assert len(viz.data["rollout_matrix"]) == 4
+
+
+@pytest.mark.skipif(not _NUMPY_AVAILABLE, reason="NumPy not available")
+def test_pure_python_numpy_numerical_equivalence(monkeypatch):
+    """Verify exact numerical equivalence between NumPy implementation and pure Python fallback."""
+    from seedl._transformer_observatory import compute_attention_rollout
+
+    rng = np.random.RandomState(123)
+    # 3 layers, 2 heads, 4 tokens
+    raw = rng.uniform(0.1, 1.0, size=(3, 2, 4, 4))
+    layers = (raw / raw.sum(axis=-1, keepdims=True)).tolist()
+
+    # 1. Compute via NumPy
+    res_np, inter_np = compute_attention_rollout(
+        layers, include_residual=True, head_reduction="mean"
+    )
+
+    # 2. Compute via pure Python by mocking _numpy to return None
+    import seedl._transformer_observatory as to_mod
+
+    monkeypatch.setattr(to_mod, "_numpy", lambda: None)
+    res_py, inter_py = to_mod.compute_attention_rollout(
+        layers, include_residual=True, head_reduction="mean"
+    )
+
+    for i in range(4):
+        for j in range(4):
+            assert abs(res_np[i][j] - res_py[i][j]) < 1e-10, (
+                f"Mismatch at ({i}, {j}): np={res_np[i][j]}, py={res_py[i][j]}"
+            )
+
+    assert len(inter_np) == len(inter_py)
+
+
+@pytest.mark.skipif(not _NUMPY_AVAILABLE, reason="NumPy not available")
+def test_attention_rollout_3x3_analytical_verification():
+    """Verify analytical rollout on 3x3 matrices with known closed-form product."""
+    # A1 and A2 are 3x3 row-stochastic matrices
+    a1 = np.array([[0.6, 0.2, 0.2], [0.1, 0.8, 0.1], [0.3, 0.3, 0.4]])
+    a2 = np.array([[0.5, 0.3, 0.2], [0.2, 0.6, 0.2], [0.1, 0.1, 0.8]])
+
+    viz = attention_rollout([a1, a2], include_residual=False)
+    actual_r = np.array(viz.data["rollout_matrix"])
+    expected_r = a2 @ a1
+    expected_r = expected_r / expected_r.sum(axis=-1, keepdims=True)
+
+    assert np.allclose(actual_r, expected_r, atol=1e-6)
+    assert np.allclose(actual_r.sum(axis=-1), np.ones(3), atol=1e-6)
+
+
+@pytest.mark.skipif(not _NUMPY_AVAILABLE, reason="NumPy not available")
+def test_causal_mask_preservation():
+    """Autoregressive causal lower-triangular attention strictly preserves causal mask under rollout."""
+    # 2 layers of lower triangular attention (causal mask: no token attends to future tokens)
+    a1 = np.array([[1.0, 0.0, 0.0], [0.4, 0.6, 0.0], [0.2, 0.3, 0.5]])
+    a2 = np.array([[1.0, 0.0, 0.0], [0.5, 0.5, 0.0], [0.1, 0.2, 0.7]])
+
+    viz = attention_rollout([a1, a2], tokens=["w0", "w1", "w2"], include_residual=True)
+    r = np.array(viz.data["rollout_matrix"])
+
+    # Strict causality: upper triangular entries (j > i) must be exactly 0
+    assert r[0, 1] == 0.0
+    assert r[0, 2] == 0.0
+    assert r[1, 2] == 0.0
+    # Diagonal and lower triangle must be positive
+    assert r[0, 0] > 0.0
+    assert r[1, 0] > 0.0
+    assert r[2, 0] > 0.0
+
+
+def test_tokens_without_cls():
+    """Rollout functions seamlessly when no [CLS] token is present."""
+    a = [[0.7, 0.3], [0.4, 0.6]]
+    viz = sd.attention_rollout([a], tokens=["query_0", "query_1"])
+    assert viz is not None
+    assert viz.data["tokens"] == ["query_0", "query_1"]
+    assert len(viz.data["rollout_matrix"]) == 2

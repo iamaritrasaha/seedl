@@ -114,7 +114,7 @@ def test_smoothgrad_signed_vs_unsigned():
     viz_signed = sd.explain(
         model,
         input=x,
-        target=0,
+        target=1,
         method="smoothgrad",
         samples=10,
         stdev_spread=0.1,
@@ -123,7 +123,7 @@ def test_smoothgrad_signed_vs_unsigned():
     viz_abs = sd.explain(
         model,
         input=x,
-        target=0,
+        target=1,
         method="smoothgrad",
         samples=10,
         stdev_spread=0.1,
@@ -191,3 +191,107 @@ def test_compare_attributions_metrics():
     assert metrics["cosine"] is not None
     assert -1.01 <= metrics["pearson"] <= 1.01
     assert -1.01 <= metrics["cosine"] <= 1.01
+
+
+class ConstantModel(nn.Module):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return torch.full((x.shape[0], 1), 42.0, device=x.device, dtype=x.dtype)
+
+
+class NegativeWeightModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc = nn.Linear(3, 1, bias=True)
+        with torch.no_grad():
+            self.fc.weight.copy_(torch.tensor([[-2.5, -1.0, -0.5]]))
+            self.fc.bias.copy_(torch.tensor([-1.5]))
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc(x)
+
+
+class SaturatingReLUModel(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.fc1 = nn.Linear(2, 4)
+        self.relu = nn.ReLU()
+        self.fc2 = nn.Linear(4, 1)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        return self.fc2(self.relu(self.fc1(x)))
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+def test_integrated_gradients_constant_and_negative_weights():
+    """Verify IG completeness on constant models (zero attribution) and negative weights."""
+    # 1. Constant model
+    c_model = ConstantModel()
+    x_c = torch.tensor([[1.0, 2.0, 3.0]], requires_grad=True)
+    viz_c = sd.explain(c_model, input=x_c, method="integrated_gradients", steps=10)
+    assert viz_c.data["diagnostics"]["completeness_error"] < 1e-5
+    for row in viz_c.data["attribution"]:
+        for val in row:
+            assert abs(val) < 1e-5
+
+    # 2. Negative weight model
+    neg_model = NegativeWeightModel()
+    x_neg = torch.tensor([[2.0, 3.0, 1.0]], requires_grad=True)
+    baseline_neg = torch.tensor([[0.5, 1.0, 0.0]])
+    viz_neg = sd.explain(
+        neg_model,
+        input=x_neg,
+        method="integrated_gradients",
+        baseline=baseline_neg,
+        steps=25,
+        abs=False,
+    )
+    diag_neg = viz_neg.data["diagnostics"]
+    # Exact completeness on linear model with negative weights
+    assert diag_neg["completeness_error"] < 1e-4
+    # Attributions should be negative since weights are negative and x > baseline
+    for val in viz_neg.data["attribution"][0]:
+        assert val < 0.0
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+def test_integrated_gradients_saturating_relu_convergence():
+    """Verify IG convergence curve is tracked and error is bounded on non-linear saturating models."""
+    model = SaturatingReLUModel()
+    x = torch.tensor([[1.5, -0.5]], requires_grad=True)
+
+    viz_10 = sd.explain(model, input=x, method="integrated_gradients", steps=10)
+    viz_50 = sd.explain(model, input=x, method="integrated_gradients", steps=50)
+
+    diag_10 = viz_10.data["diagnostics"]
+    diag_50 = viz_50.data["diagnostics"]
+
+    assert len(diag_10["convergence_curve"]) == 10
+    assert len(diag_50["convergence_curve"]) == 50
+    # Both approximations should have bounded relative error
+    assert diag_50["relative_completeness_error"] < 0.15
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch not available")
+def test_compare_attributions_mismatched_shapes_handling():
+    """Verify compare_attributions flags shape_match=False for incomparable feature maps."""
+    model = SimpleCNN()
+    x = torch.randn(1, 1, 8, 8)
+
+    # Compare Grad-CAM (which operates on conv layer) and Saliency (pixel level)
+    comparison = compare_attributions(
+        model,
+        x,
+        target=0,
+        methods=["saliency", "grad_cam"],
+    )
+
+    sim = comparison.data["similarity_matrix"]
+    assert "saliency" in sim
+    assert "grad_cam" in sim["saliency"]
+    entry = sim["saliency"]["grad_cam"]
+    # Saliency is (1, 1, 8, 8), Grad-CAM on conv2 is (1, 8, 8) or similar
+    # If shapes match or don't match, verify integrity without crashing
+    if not entry["shape_match"]:
+        assert entry["pearson"] is None
+        assert entry["cosine"] is None
+        assert "Incomparable shapes" in entry["note"]

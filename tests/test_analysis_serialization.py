@@ -93,3 +93,18 @@ def test_sd_public_api_save_and_load_analysis():
         loaded = sd.load_analysis(path)
         assert isinstance(loaded, Visualization)
         assert loaded.title == "Root API Test"
+
+
+def test_serialization_oversized_file_rejection(monkeypatch):
+    """load_analysis rejects files exceeding MAX_ARTIFACT_SIZE_BYTES before reading."""
+    import seedl._serialization as ser
+
+    # Temporarily set max size to 50 bytes for testing
+    monkeypatch.setattr(ser, "MAX_ARTIFACT_SIZE_BYTES", 50)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        large_file = Path(tmp_dir) / "large.json"
+        large_file.write_text("x" * 200, encoding="utf-8")
+
+        with pytest.raises(SeeDLError, match="exceeds maximum allowed artifact size"):
+            load_analysis(large_file)

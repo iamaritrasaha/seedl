@@ -184,7 +184,13 @@ def _compute_saliency(
     score_val = float(score.item())
 
     # Compute gradient w.r.t input
-    grads = torch.autograd.grad(score, cloned_input, create_graph=False, retain_graph=False)[0]
+    if not score.requires_grad or score.grad_fn is None:
+        grads = torch.zeros_like(cloned_input)
+    else:
+        g = torch.autograd.grad(
+            score, cloned_input, create_graph=False, retain_graph=False, allow_unused=True
+        )[0]
+        grads = g if g is not None else torch.zeros_like(cloned_input)
     attribution = grads.abs() if (abs_mode is True or abs_mode is None) else grads
 
     return attribution, target, score_val
@@ -244,9 +250,13 @@ def _compute_integrated_gradients(
         interpolated = (baseline_t + alpha * delta).detach().clone().requires_grad_(True)
         step_out = model(interpolated).reshape(-1)
         step_score = step_out[target]
-        step_grad = torch.autograd.grad(
-            step_score, interpolated, create_graph=False, retain_graph=False
-        )[0]
+        if not step_score.requires_grad or step_score.grad_fn is None:
+            step_grad = torch.zeros_like(interpolated)
+        else:
+            g = torch.autograd.grad(
+                step_score, interpolated, create_graph=False, retain_graph=False, allow_unused=True
+            )[0]
+            step_grad = g if g is not None else torch.zeros_like(interpolated)
         accum_grads += step_grad
         cur_approx = (delta * (accum_grads / float(step))).sum().item()
         convergence_curve.append(float(cur_approx))
@@ -332,9 +342,13 @@ def _compute_smoothgrad(
         noisy_input = (cloned_input + noise).detach().clone().requires_grad_(True)
         step_out = model(noisy_input).reshape(-1)
         step_score = step_out[target]
-        step_grad = torch.autograd.grad(
-            step_score, noisy_input, create_graph=False, retain_graph=False
-        )[0]
+        if not step_score.requires_grad or step_score.grad_fn is None:
+            step_grad = torch.zeros_like(noisy_input)
+        else:
+            g = torch.autograd.grad(
+                step_score, noisy_input, create_graph=False, retain_graph=False, allow_unused=True
+            )[0]
+            step_grad = g if g is not None else torch.zeros_like(noisy_input)
 
         if abs_mode is True or abs_mode is None:
             accum_grads += step_grad.abs()

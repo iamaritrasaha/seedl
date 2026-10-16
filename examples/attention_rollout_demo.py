@@ -3,12 +3,22 @@
 from __future__ import annotations
 
 import torch
+
 import seedl as sd
 
 
 def main():
     print("Simulating 6-layer Transformer Attention...")
-    tokens = ["[CLS]", "Deep", "Neural", "Observatory", "Visualizes", "Information", "Flow", "[SEP]"]
+    tokens = [
+        "[CLS]",
+        "Deep",
+        "Neural",
+        "Observatory",
+        "Visualizes",
+        "Information",
+        "Flow",
+        "[SEP]",
+    ]
     num_layers = 6
     num_heads = 4
     seq_len = len(tokens)

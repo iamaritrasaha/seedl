@@ -44,10 +44,11 @@ class TraceEdge:
 
     source: str
     target: str
-    edge_type: str  # "explicit_tensor", "symbolic_fx", "inferred_sequential", "residual_skip"
+    edge_type: str  # "explicit_tensor", "storage_alias", "symbolic_fx", "inferred_sequential", "unknown_dependency"
     tensor_shape: list[int] | None = None
     tensor_dtype: str | None = None
     description: str = ""
+    is_uncertain: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

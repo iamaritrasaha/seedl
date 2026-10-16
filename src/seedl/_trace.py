@@ -78,17 +78,26 @@ def trace(
 
     hooks: list[Any] = []
     observed_nodes: list[TraceNode] = []
-    producer_map: dict[int, str] = {}  # tensor_id -> node_id
+    producer_by_obj_id: dict[int, str] = {}  # id(tensor) -> node_id
+    producer_by_data_ptr: dict[int, str] = {}  # tensor.data_ptr() -> node_id
     raw_edges: list[TraceEdge] = []
     module_call_counts: dict[str, int] = {}
     pre_times: dict[str, float] = {}
+    _retained_tensors: list[
+        Any
+    ] = []  # Prevents intermediate tensor deallocation and allocator address reuse
 
     # Extract initial network input tensor IDs
     input_tensors = _extract_tensors(input, torch)
+    _retained_tensors.extend(input_tensors)
     input_metadata = []
     for idx, inp in enumerate(input_tensors):
-        t_id = _get_tensor_id(inp)
-        producer_map[t_id] = "INPUT"
+        producer_by_obj_id[id(inp)] = "INPUT"
+        try:
+            if hasattr(inp, "data_ptr") and inp.data_ptr() != 0:
+                producer_by_data_ptr[inp.data_ptr()] = "INPUT"
+        except Exception:
+            pass
         input_metadata.append(
             {
                 "index": idx,
@@ -144,6 +153,10 @@ def trace(
         if not devices and out_tensors:
             devices = [str(t.device) for t in out_tensors]
 
+        # Retain intermediate tensors until end of forward pass to prevent allocator address reuse
+        _retained_tensors.extend(in_tensors)
+        _retained_tensors.extend(out_tensors)
+
         total_elems = sum(t.numel() for t in out_tensors)
 
         # Parameter counts for this module (direct parameters)
@@ -166,9 +179,16 @@ def trace(
 
         # Trace data dependencies from input tensors
         for inp_t in in_tensors:
-            t_id = _get_tensor_id(inp_t)
-            if t_id in producer_map:
-                source_id = producer_map[t_id]
+            obj_id = id(inp_t)
+            dptr = None
+            try:
+                if hasattr(inp_t, "data_ptr") and inp_t.data_ptr() != 0:
+                    dptr = inp_t.data_ptr()
+            except Exception:
+                pass
+
+            if obj_id in producer_by_obj_id:
+                source_id = producer_by_obj_id[obj_id]
                 if source_id != node_id:
                     raw_edges.append(
                         TraceEdge(
@@ -177,14 +197,33 @@ def trace(
                             edge_type="explicit_tensor",
                             tensor_shape=list(inp_t.shape),
                             tensor_dtype=str(inp_t.dtype).replace("torch.", ""),
-                            description="Direct tensor data dependency",
+                            description="Direct verified tensor object dependency",
+                            is_uncertain=False,
+                        )
+                    )
+            elif dptr is not None and dptr in producer_by_data_ptr:
+                source_id = producer_by_data_ptr[dptr]
+                if source_id != node_id:
+                    raw_edges.append(
+                        TraceEdge(
+                            source=source_id,
+                            target=node_id,
+                            edge_type="storage_alias",
+                            tensor_shape=list(inp_t.shape),
+                            tensor_dtype=str(inp_t.dtype).replace("torch.", ""),
+                            description="Shared storage alias / view of upstream tensor",
+                            is_uncertain=False,
                         )
                     )
 
         # Record output tensors for downstream consumers
         for out_t in out_tensors:
-            out_id = _get_tensor_id(out_t)
-            producer_map[out_id] = node_id
+            producer_by_obj_id[id(out_t)] = node_id
+            try:
+                if hasattr(out_t, "data_ptr") and out_t.data_ptr() != 0:
+                    producer_by_data_ptr[out_t.data_ptr()] = node_id
+            except Exception:
+                pass
 
         parent_name = mod_name.rsplit(".", 1)[0] if "." in mod_name else ""
 
@@ -241,6 +280,7 @@ def trace(
                 res = model(input)
 
         out_tensors = _extract_tensors(res, torch)
+        _retained_tensors.extend(out_tensors)
         for idx, ot in enumerate(out_tensors):
             output_metadata.append(
                 {
@@ -252,9 +292,16 @@ def trace(
                 }
             )
             # Mark final output connections
-            ot_id = _get_tensor_id(ot)
-            if ot_id in producer_map:
-                source_id = producer_map[ot_id]
+            obj_id = id(ot)
+            dptr = None
+            try:
+                if hasattr(ot, "data_ptr") and ot.data_ptr() != 0:
+                    dptr = ot.data_ptr()
+            except Exception:
+                pass
+
+            if obj_id in producer_by_obj_id:
+                source_id = producer_by_obj_id[obj_id]
                 raw_edges.append(
                     TraceEdge(
                         source=source_id,
@@ -262,11 +309,27 @@ def trace(
                         edge_type="explicit_tensor",
                         tensor_shape=list(ot.shape),
                         tensor_dtype=str(ot.dtype).replace("torch.", ""),
-                        description="Model final output",
+                        description="Model final output (verified object)",
+                        is_uncertain=False,
+                    )
+                )
+            elif dptr is not None and dptr in producer_by_data_ptr:
+                source_id = producer_by_data_ptr[dptr]
+                raw_edges.append(
+                    TraceEdge(
+                        source=source_id,
+                        target="OUTPUT",
+                        edge_type="storage_alias",
+                        tensor_shape=list(ot.shape),
+                        tensor_dtype=str(ot.dtype).replace("torch.", ""),
+                        description="Model final output (shared storage alias)",
+                        is_uncertain=False,
                     )
                 )
 
     finally:
+        # Clear retained tensors
+        _retained_tensors.clear()
         # Guarantee hook removal
         for h in hooks:
             try:
@@ -286,7 +349,7 @@ def trace(
 
     total_duration_ms = (time.perf_counter() - trace_start) * 1000.0
 
-    # Optional torch.fx analysis
+    # Optional torch.fx analysis with multi-input and residual skip propagation
     trace_mode = "hooks"
     fx_edges: list[TraceEdge] = []
     if use_fx is not False:
@@ -295,39 +358,68 @@ def trace(
 
             fx_graph = fx.symbolic_trace(model)
             trace_mode = "torch.fx+hooks"
-            # Extract FX edges where nodes map to modules
-            prev_mod_node = "INPUT"
+
+            fx_node_sources: dict[Any, set[str]] = {}
+            fx_mod_call_counts: dict[str, int] = {}
+
             for node in fx_graph.graph.nodes:
-                if node.op == "call_module":
+                if node.op == "placeholder":
+                    fx_node_sources[node] = {"INPUT"}
+                elif node.op == "call_module":
                     target_name = str(node.target)
-                    fx_edges.append(
-                        TraceEdge(
-                            source=prev_mod_node,
-                            target=target_name,
-                            edge_type="symbolic_fx",
-                            description="Symbolic FX data dependency",
-                        )
-                    )
-                    prev_mod_node = target_name
+                    call_idx = fx_mod_call_counts.get(target_name, 0)
+                    fx_mod_call_counts[target_name] = call_idx + 1
+                    mod_id = f"{target_name}#{call_idx}"
+
+                    for inp in node.all_input_nodes:
+                        for src in fx_node_sources.get(inp, set()):
+                            if src != mod_id:
+                                fx_edges.append(
+                                    TraceEdge(
+                                        source=src,
+                                        target=mod_id,
+                                        edge_type="symbolic_fx",
+                                        description="Symbolic FX verified data dependency",
+                                        is_uncertain=False,
+                                    )
+                                )
+                    fx_node_sources[node] = {mod_id}
+                elif node.op in ("call_function", "call_method", "get_attr"):
+                    # Propagate sources through functions/methods/attributes (e.g. add, cat, view, slice)
+                    srcs: set[str] = set()
+                    for inp in node.all_input_nodes:
+                        srcs.update(fx_node_sources.get(inp, set()))
+                    fx_node_sources[node] = srcs
                 elif node.op == "output":
-                    fx_edges.append(
-                        TraceEdge(
-                            source=prev_mod_node,
-                            target="OUTPUT",
-                            edge_type="symbolic_fx",
-                            description="Symbolic FX output dependency",
-                        )
-                    )
+                    for inp in node.all_input_nodes:
+                        for src in fx_node_sources.get(inp, set()):
+                            fx_edges.append(
+                                TraceEdge(
+                                    source=src,
+                                    target="OUTPUT",
+                                    edge_type="symbolic_fx",
+                                    description="Symbolic FX output dependency",
+                                    is_uncertain=False,
+                                )
+                            )
         except Exception as exc:
             if use_fx is True:
                 warnings.append(f"torch.fx symbolic trace failed: {exc}")
             trace_mode = "hooks"
 
-    # Merge edges with deduplication
+    # Merge edges with deduplication and metadata enrichment
     final_edges: list[TraceEdge] = []
     seen_edges = set()
+
+    # Prioritize hook edges that have observed shapes/dtypes
     for e in raw_edges:
-        key = (e.source, e.target, e.edge_type)
+        key = (e.source, e.target)
+        seen_edges.add(key)
+        final_edges.append(e)
+
+    # Add non-redundant FX edges (e.g. residual skips, branches where intermediate ops were unhooked functions)
+    for e in fx_edges:
+        key = (e.source, e.target)
         if key not in seen_edges:
             seen_edges.add(key)
             final_edges.append(e)
@@ -345,7 +437,8 @@ def trace(
                         source=src,
                         target=tgt,
                         edge_type="inferred_sequential",
-                        description="Inferred sequential execution order",
+                        description="Inferred sequential execution order (data dependency unverified)",
+                        is_uncertain=True,
                     )
                 )
             limitations.append(

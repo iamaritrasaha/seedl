@@ -117,26 +117,46 @@ This document provides the authoritative, step-by-step checklist for repository 
 
 ## Post-Release Tasks
 
-### Step 7: Update Documentation Website, GitHub Pages & README Notice
+### Step 7: Separate Website & Documentation PR (Post-Release)
 
-Now that `seedl==0.5.0` is published to PyPI:
-- [ ] **Update `.github/workflows/pages.yml`**
-  - Update line: `pip install --upgrade "seedl==0.4.0"` to `"seedl==0.5.0"`.
-- [ ] **Update `website/generate_assets.py` / `website/index.html`**
-  - Ensure version badge displays `0.5.0`.
-  - Re-generate website assets if needed (`python website/generate_assets.py`).
-  - Verify website locally: `python scripts/verify_website.py`.
-- [ ] **Update `README.md` Version Notice**
-  - Update note: change `Current Published Version on PyPI: [SeeDL 0.4.0](https://pypi.org/project/seedl/0.4.0/)` to `[SeeDL 0.5.0](https://pypi.org/project/seedl/0.5.0/)`.
-  - Remove the `(Release Preparation)` subtitle so it reads `## 🌌 SeeDL 0.5.0: The Neural Observatory`.
-  - Update install command to `pip install seedl==0.5.0`.
-- [ ] **Commit and push post-release updates to `main`**
-  ```bash
-  git add .github/workflows/pages.yml website/ README.md
-  git commit -m "docs(release): bump live documentation and README to published SeeDL 0.5.0"
-  git push origin main
-  ```
-  - Verify GitHub Pages deployment succeeds at `https://iamaritrasaha.github.io/seedl/`.
+> [!IMPORTANT]
+> **Manual Deployment & Isolation Guardrail:**
+> GitHub Pages deployment is **strictly manual** via GitHub Actions `workflow_dispatch` in `.github/workflows/pages.yml`. Pushing changes to `main` does **not** automatically deploy the website.
+> Because `.github/workflows/pages.yml` installs published SeeDL packages from PyPI using `uv pip install`, website updates must be developed and merged in a **separate dedicated Pull Request** after `seedl==0.5.0` is confirmed live on PyPI.
+
+Create a separate website update branch (e.g. `feature/website-0.5.0`) and pull request containing the following steps:
+
+- [ ] **1. Update pinned package version in workflow**
+  - In `.github/workflows/pages.yml`, update line 29:
+    `uv pip install 'seedl==0.4.0' 'plotly==7.1.0' 'qiskit==2.5.2'` $\to$ `uv pip install 'seedl==0.5.0' 'plotly==7.1.0' 'qiskit==2.5.2'`
+  - Update assertion in line 30: `assert seedl.__version__ == '0.5.0'`
+- [ ] **2. Update `website/generate.py`**
+  - Update generated demonstration assets using real SeeDL 0.5.0 APIs.
+  - Run `python website/generate.py` to regenerate static and interactive assets.
+- [ ] **3. Update `website/check.py`**
+  - Update static link, provenance, and example verification checks.
+  - Run `python website/check.py` to ensure all checks pass.
+- [ ] **4. Update website documentation**
+  - Update `website/docs/` files to document new 0.5.0 APIs and capabilities.
+  - Update version badges across `website/index.html` and `website/playground.html` to `0.5.0`.
+- [ ] **5. Update playground demos using real SeeDL 0.5.0 APIs**
+  - Incorporate Neural Observatory interactive demos (e.g., execution flow, attention rollout, gradient health) into `website/playground.html`.
+- [ ] **6. Preserve existing website redesign improvements**
+  - Maintain PR #15 design enhancements, accessibility landmarks, theme tokens, and typography.
+- [ ] **7. Verify actual browser interactions**
+  - Run Playwright browser interaction verification:
+    ```bash
+    python scripts/verify_website.py
+    ```
+  - Confirm 100% test pass rate across all suites.
+- [ ] **8. Pass CI on the Website PR**
+  - Ensure all GitHub Actions CI checks on the website PR pass.
+- [ ] **9. Manual merge by maintainer**
+  - Review and merge the website PR into `main`.
+- [ ] **10. Manual deployment through Pages workflow**
+  - Navigate to **Actions** $\to$ **Official website (manual deployment)** (`.github/workflows/pages.yml`).
+  - Click **Run workflow** on branch `main` to trigger deployment.
+  - Confirm deployment succeeds at `https://iamaritrasaha.github.io/seedl/`.
 
 ### Step 8: Community Announcement & Communication
 

@@ -67,14 +67,14 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **Current Published Version on PyPI**: [SeeDL 0.4.0](https://pypi.org/project/seedl/0.4.0/)<br>
-> **Release In Preparation on this Branch**: **SeeDL 0.5.0 — Neural Observatory**<br>
-> Install the current published release from PyPI:<br>
-> `pip install seedl==0.4.0` or `pip install "seedl[all]==0.4.0"`
+> **SeeDL 0.5.0 — The Neural Observatory**: Advanced open-source scientific visualization, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
+>
+> Install SeeDL:
+> `pip install seedl==0.5.0` or `pip install "seedl[all]==0.5.0"`
 
 ---
 
-## 🌌 SeeDL 0.5.0: The Neural Observatory (Release Preparation)
+## 🌌 SeeDL 0.5.0: The Neural Observatory
 
 SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite for non-destructive execution graph tracing, multi-layer Transformer rollout, attribution benchmarking, gradient health diagnostics, quantum noise simulation, dataset intelligence, and publication-ready scientific reports.
 
@@ -97,8 +97,9 @@ SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite 
 - **Training Run Comparison (`sd.compare_runs`)**:
   - Two-run training comparison with step alignment, final deltas, pointwise absolute differences, and missing metric alerts.
 - **Quantum Noise Simulation (`sd.quantum_noise`)**:
-  - Open quantum system decoherence analysis via Kraus operators (depolarizing, amplitude damping, phase damping).
-  - Single-qubit Bloch sphere trajectories, purity, von Neumann entropy, and entanglement negativity.
+  - Single-qubit open quantum system decoherence analysis via Kraus operators (depolarizing, amplitude damping, phase damping).
+  - Single-qubit Bloch sphere trajectories, purity, coherence, and von Neumann entropy.
+  - Bipartite two-qubit entanglement analysis (`sd.entanglement`) and Peres-Horodecki negativity computation (`compute_two_qubit_negativity`) are provided as separate analysis capabilities.
 - **Dataset Intelligence (`sd.dataset_health`, `sd.dataset_drift`)**:
   - Summary health profiles, numerical condition estimation, Population Stability Index (PSI), and Jensen-Shannon Divergence (JSD).
 - **Scientific Report Builder (`sd.report`)**:
@@ -126,8 +127,8 @@ loss.backward()
 health_view = sd.gradient_health(model)
 print(health_view.summary)
 
-# 3. Simulate noisy quantum channel decoherence
-noise_view = sd.quantum_noise(channel="amplitude_damping", param=0.25)
+# 3. Simulate single-qubit noisy quantum channel decoherence
+noise_view = sd.quantum_noise(channel="amplitude_damping", param=0.25, steps=10)
 noise_view.save("quantum_noise.html")
 
 # 4. Compile offline scientific report

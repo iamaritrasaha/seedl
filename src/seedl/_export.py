@@ -45,6 +45,41 @@ def save_visualization(
 
 def _save_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.kind == "execution_trace":
+        from ._trace_renderers import trace_html
+
+        path.write_text(trace_html(view), encoding="utf-8")
+        return
+    if view.kind == "attention_rollout":
+        from ._transformer_observatory import attention_rollout_html
+
+        path.write_text(attention_rollout_html(view), encoding="utf-8")
+        return
+    if view.kind == "attribution_comparison":
+        from ._explain_compare import attribution_comparison_html
+
+        path.write_text(attribution_comparison_html(view), encoding="utf-8")
+        return
+    if view.kind == "gradient_health":
+        from ._gradient_health import gradient_health_html
+
+        path.write_text(gradient_health_html(view), encoding="utf-8")
+        return
+    if view.kind == "quantum_noise":
+        from ._quantum_lab import quantum_noise_html
+
+        path.write_text(quantum_noise_html(view), encoding="utf-8")
+        return
+    if view.kind == "dataset_drift":
+        from ._dataset_health import dataset_drift_html
+
+        path.write_text(dataset_drift_html(view), encoding="utf-8")
+        return
+    if view.kind == "run_comparison":
+        from ._training_compare import run_comparison_html
+
+        path.write_text(run_comparison_html(view), encoding="utf-8")
+        return
     if view.kind == "feature_maps":
         from ._features import features_html
 

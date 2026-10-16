@@ -56,6 +56,25 @@ def _summary(kind: str, data: dict[str, Any], metadata: dict[str, Any]) -> str:
         return f"Attention matrix ({data.get('seq_len')} tokens)"
     if kind == "embeddings":
         return f"Embeddings: {data.get('num_vectors')} vectors in {data.get('dim')}D"
+    if kind == "execution_trace":
+        nodes = data.get("nodes", [])
+        return (
+            f"Execution trace: {len(nodes)} operations ({data.get('total_parameters', 0):,} params)"
+        )
+    if kind == "attention_rollout":
+        return f"Attention rollout across {data.get('num_layers')} layers ({data.get('seq_len')} tokens)"
+    if kind == "attribution_comparison":
+        return f"Attribution comparison: {len(data.get('methods', []))} method(s)"
+    if kind == "gradient_health":
+        return f"Gradient health: {data.get('total_parameters_inspected')} parameters inspected"
+    if kind == "quantum_noise":
+        return f"Quantum noise: {data.get('channel')} channel (p={data.get('param', 0):.2f})"
+    if kind == "dataset_drift":
+        return f"Dataset drift: PSI={data.get('psi', 0):.4f} ({data.get('drift_level', 'Unknown')})"
+    if kind == "dataset_health":
+        return f"Dataset health: {data.get('sample_count')} samples inspected"
+    if kind == "run_comparison":
+        return f"Run comparison: {data.get('name_a')} vs {data.get('name_b')}"
     if kind.startswith("educational_"):
         return str(data.get("concept", kind))
     return str(data.get("summary", metadata.get("Summary", "")))
@@ -125,9 +144,19 @@ def see(
         simulate: For quantum circuits, compute step-by-step statevector evolution.
     """
     _validate_max_points(max_points)
-    if view not in {"auto", "neurons", "3d", "architecture", "summary", "features", "feature_maps"}:
+    if view not in {
+        "auto",
+        "neurons",
+        "3d",
+        "architecture",
+        "summary",
+        "features",
+        "feature_maps",
+        "flow",
+        "trace",
+    }:
         raise ValueError(
-            "view must be auto, neurons, 3d, architecture, summary, features, or feature_maps."
+            "view must be auto, neurons, 3d, architecture, summary, features, feature_maps, flow, or trace."
         )
     if theme not in {"light", "dark", "scientific", "minimal", "presentation"}:
         raise ValueError("theme must be light, dark, scientific, minimal, or presentation.")
@@ -149,6 +178,13 @@ def see(
         raise ValueError("min_weight must be finite and nonnegative.")
     if not math.isfinite(edge_opacity) or not 0 <= edge_opacity <= 1:
         raise ValueError("edge_opacity must be between 0 and 1.")
+    from ._execution_graph import ExecutionTrace
+
+    if isinstance(obj, ExecutionTrace):
+        return flow(obj, backend=backend)
+    if view in {"flow", "trace"}:
+        return flow(obj, input=input, backend=backend)
+
     from ._quantum import _is_qiskit_circuit, _is_qiskit_state
 
     if _is_qiskit_circuit(obj):
@@ -408,9 +444,12 @@ def explain(
     baseline: Any | None = None,
     layer: str | None = None,
     abs: bool | None = None,
+    samples: int = 25,
+    stdev_spread: float = 0.15,
+    seed: int | None = None,
     backend: str = "auto",
 ) -> Visualization:
-    """Generate input feature attributions using saliency, integrated gradients, or Grad-CAM.
+    """Generate input feature attributions using saliency, integrated gradients, Grad-CAM, or SmoothGrad.
 
     Methods:
     - 'saliency': Vanilla gradient saliency with respect to the input tensor.
@@ -420,17 +459,21 @@ def explain(
       Attributions are signed by default to satisfy the Completeness axiom:
       sum(attribution) ≈ F(input) - F(baseline).
     - 'grad_cam': Coarse spatial activation mapping for convolutional networks.
+    - 'smoothgrad': Averages gradient saliency over Gaussian noise perturbed inputs.
 
     Parameters:
     - model: PyTorch nn.Module.
     - input: Input tensor.
     - target: Target class index (defaults to argmax predicted class).
-    - method: Attribution method ('saliency', 'integrated_gradients', 'grad_cam').
+    - method: Attribution method ('saliency', 'integrated_gradients', 'grad_cam', 'smoothgrad').
     - steps: Number of interpolation steps for composite midpoint integration (default: 20).
     - baseline: Reference input tensor for integrated gradients (default: zeros).
     - layer: Target layer name or class for Grad-CAM (default: last conv layer).
     - abs: Whether to take absolute value of attributions (default: False for IG to preserve
-      completeness, True for saliency).
+      completeness, True for saliency and SmoothGrad).
+    - samples: Number of noisy perturbations for SmoothGrad (default: 25).
+    - stdev_spread: Noise standard deviation fraction relative to input range for SmoothGrad (default: 0.15).
+    - seed: Optional deterministic PRNG seed for SmoothGrad perturbations.
     - backend: Visualization backend ('auto', 'svg', 'plotly', 'matplotlib').
     """
     selected_backend = resolve_backend(backend)
@@ -445,6 +488,9 @@ def explain(
         baseline=baseline,
         layer=layer,
         abs=abs,
+        samples=samples,
+        stdev_spread=stdev_spread,
+        seed=seed,
     )
     view = Visualization(
         kind="attribution",
@@ -1132,3 +1178,284 @@ def entanglement(
     )
     _show_result(result)
     return result
+
+
+def trace(
+    model: Any,
+    input: Any,
+    *,
+    record: tuple[str, ...] | list[str] = ("shapes", "activations"),
+    max_nodes: int = 256,
+    use_fx: bool | None = None,
+    max_samples: int = 32,
+) -> Any:
+    """Record an exact, verified neural execution trace of a model forward pass."""
+    from ._trace import trace as _trace_impl
+
+    return _trace_impl(
+        model,
+        input,
+        record=record,
+        max_nodes=max_nodes,
+        use_fx=use_fx,
+        max_samples=max_samples,
+    )
+
+
+def flow(
+    trace_or_model: Any,
+    input: Any = None,
+    *,
+    record: tuple[str, ...] | list[str] = ("shapes", "activations"),
+    max_nodes: int = 256,
+    backend: str = "auto",
+    title: str | None = None,
+    mode: str = "graph",
+) -> Visualization:
+    """Create an interactive Tensor Flow and Neural Execution visualization."""
+    from ._flow import flow as _flow_impl
+
+    res = _flow_impl(
+        trace_or_model,
+        input=input,
+        record=record,
+        max_nodes=max_nodes,
+        backend=backend,
+        title=title,
+        mode=mode,
+    )
+    _show_result(res)
+    return res
+
+
+def attention_rollout(
+    attention_tensors: list[Any] | Any,
+    *,
+    tokens: list[str] | None = None,
+    include_residual: bool = True,
+    head_reduction: str = "mean",
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Compute and visualize cumulative Attention Rollout across transformer layers."""
+    from ._transformer_observatory import attention_rollout as _rollout_impl
+
+    res = _rollout_impl(
+        attention_tensors,
+        tokens=tokens,
+        include_residual=include_residual,
+        head_reduction=head_reduction,
+        backend=backend,
+        title=title,
+    )
+    _show_result(res)
+    return res
+
+
+def attention_layers(
+    attention_tensors: list[Any] | Any,
+    *,
+    tokens: list[str] | None = None,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Multi-layer Transformer Attention Explorer."""
+    from ._transformer_observatory import attention_layers as _layers_impl
+
+    res = _layers_impl(
+        attention_tensors,
+        tokens=tokens,
+        backend=backend,
+        title=title,
+    )
+    _show_result(res)
+    return res
+
+
+def gradient_health(
+    model: Any,
+    *,
+    max_parameters: int = 256,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Analyze and visualize gradient norms, distributions, and numerical health."""
+    from ._gradient_health import gradient_health as _grad_impl
+
+    res = _grad_impl(model, max_parameters=max_parameters, backend=backend, title=title)
+    _show_result(res)
+    return res
+
+
+def dataset_health(
+    dataset: Any,
+    *,
+    max_samples: int = 1000,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Analyze dataset quality, missing values, nonfinite numbers, outliers, and balance."""
+    from ._dataset_health import dataset_health as _ds_health_impl
+
+    res = _ds_health_impl(dataset, max_samples=max_samples, backend=backend, title=title)
+    _show_result(res)
+    return res
+
+
+def dataset_drift(
+    reference_data: Any,
+    comparison_data: Any,
+    *,
+    max_samples: int = 1000,
+    bins: int = 10,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Measure empirical distribution drift between reference and production dataset samples."""
+    from ._dataset_health import dataset_drift as _drift_impl
+
+    res = _drift_impl(
+        reference_data,
+        comparison_data,
+        max_samples=max_samples,
+        bins=bins,
+        backend=backend,
+        title=title,
+    )
+    _show_result(res)
+    return res
+
+
+def compare_attributions(
+    model: Any,
+    input: Any,
+    *,
+    target: int | None = None,
+    methods: tuple[str, ...] | list[str] = (
+        "saliency",
+        "integrated_gradients",
+        "smoothgrad",
+    ),
+    steps: int = 20,
+    samples: int = 25,
+    stdev_spread: float = 0.15,
+    baseline: Any | None = None,
+    layer: str | None = None,
+    abs: bool | None = None,
+    seed: int | None = 42,
+    backend: str = "auto",
+) -> Visualization:
+    """Compare multiple feature attribution methods on the same model and input."""
+    from ._explain_compare import compare_attributions as _cmp_attr_impl
+
+    res = _cmp_attr_impl(
+        model,
+        input,
+        target=target,
+        methods=methods,
+        steps=steps,
+        samples=samples,
+        stdev_spread=stdev_spread,
+        baseline=baseline,
+        layer=layer,
+        abs=abs,
+        seed=seed,
+        backend=backend,
+    )
+    _show_result(res)
+    return res
+
+
+def compare_runs(
+    run_a: Any,
+    run_b: Any,
+    *,
+    name_a: str = "Run A",
+    name_b: str = "Run B",
+    metrics: list[str] | None = None,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Compare two training runs or experiment histories with step alignment."""
+    from ._training_compare import compare_runs as _cmp_runs_impl
+
+    res = _cmp_runs_impl(
+        run_a,
+        run_b,
+        name_a=name_a,
+        name_b=name_b,
+        metrics=metrics,
+        backend=backend,
+        title=title,
+    )
+    _show_result(res)
+    return res
+
+
+def quantum_noise(
+    state: Any = None,
+    *,
+    channel: str = "depolarizing",
+    param: float = 0.3,
+    steps: int = 10,
+    backend: str = "auto",
+    title: str | None = None,
+) -> Visualization:
+    """Analyze single-qubit quantum state evolution under Kraus noise channels."""
+    from ._quantum_lab import quantum_noise_explorer as _noise_impl
+
+    res = _noise_impl(
+        state=state,
+        channel=channel,
+        param=param,
+        steps=steps,
+        backend=backend,
+        title=title,
+    )
+    _show_result(res)
+    return res
+
+
+def report(
+    title: str,
+    views: Any = None,
+    *,
+    subtitle: str = "",
+    abstract: str = "",
+    author: str = "",
+    affiliation: str = "",
+    theme: str = "dark",
+    max_size_mb: float = 25.0,
+) -> Any:
+    """Create a publication-grade scientific report combining multiple SeeDL visualizations."""
+    from ._reports import report as _report_impl
+
+    return _report_impl(
+        title=title,
+        views=views,
+        subtitle=subtitle,
+        abstract=abstract,
+        author=author,
+        affiliation=affiliation,
+        theme=theme,
+        max_size_mb=max_size_mb,
+    )
+
+
+def save_analysis(
+    views: Any,
+    filepath: Any,
+    *,
+    indent: int = 2,
+) -> Any:
+    """Save Visualization instances to a safe, reproducible JSON artifact without pickle."""
+    from ._serialization import save_analysis as _save_impl
+
+    return _save_impl(views, filepath, indent=indent)
+
+
+def load_analysis(filepath: Any) -> Any:
+    """Load reproducible Visualization instances from a safe JSON artifact."""
+    from ._serialization import load_analysis as _load_impl
+
+    return _load_impl(filepath)

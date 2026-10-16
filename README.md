@@ -91,16 +91,16 @@ SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite 
   - Layer-by-layer attention matrix heatmaps and head-level dispersion diagnostics.
 - **Advanced Explainability (`sd.compare_attributions`)**:
   - Side-by-side attribution comparison between Saliency Maps, Integrated Gradients (completeness axiom verified), and SmoothGrad.
-  - Multi-method consensus and correlation matrix.
+  - Pairwise Pearson correlation, Cosine similarity, and multi-method consensus.
 - **Gradient Health Diagnostics (`sd.gradient_health`)**:
-  - Layer-by-layer norm diagnostics, vanishing/exploding gradient detection, tied-weight transparency, and dead ReLU sparsity detection.
+  - Layer-by-layer norm diagnostics, gradient-to-weight ratios, vanishing/high gradient alerts, tied-weight transparency, and dead ReLU sparsity detection.
 - **Training Run Comparison (`sd.compare_runs`)**:
-  - Multi-run metric overlays, epoch divergence detection, and trajectory stability analysis.
+  - Two-run training comparison with step alignment, final deltas, pointwise absolute differences, and missing metric alerts.
 - **Quantum Noise Simulation (`sd.quantum_noise`)**:
   - Open quantum system decoherence analysis via Kraus operators (depolarizing, amplitude damping, phase damping).
-  - Density matrix evolution, state fidelity, trace distance, and entanglement negativity.
+  - Single-qubit Bloch sphere trajectories, purity, von Neumann entropy, and entanglement negativity.
 - **Dataset Intelligence (`sd.dataset_health`, `sd.dataset_drift`)**:
-  - Summary health profiles, numerical condition estimation, and Kolmogorov-Smirnov drift detection.
+  - Summary health profiles, numerical condition estimation, Population Stability Index (PSI), and Jensen-Shannon Divergence (JSD).
 - **Scientific Report Builder (`sd.report`)**:
   - Publication-grade offline reports embedding isolated, interactive visualization cards via sandboxed iframes with zero external CDN dependencies.
 - **Safe Analysis Serialization (`sd.save_analysis`, `sd.load_analysis`)**:

@@ -81,7 +81,9 @@ This document provides the authoritative, step-by-step checklist for repository 
   - **Tag version:** Select existing tag `v0.5.0`.
   - **Target:** `main`.
   - **Release title:** `SeeDL 0.5.0 — Neural Observatory`.
-  - **Release description:** Copy contents from `docs/RELEASE_NOTES_0.5.0.md` (update status header to published).
+  - **Release description:** Copy contents from `docs/RELEASE_NOTES_0.5.0.md`.
+    > [!IMPORTANT]
+    > **Status Header Update:** When pasting the release notes into the GitHub Release form, replace the `**Status:** Prepared for release; publication pending.` line with `**Status:** Published`. Ensure the public release does not display an unpublished or pending notice.
   - **Attach binaries (optional):** Attach the built `dist/seedl-0.5.0-py3-none-any.whl` and `dist/seedl-0.5.0.tar.gz`.
 - [ ] **Publish Release**
   - Click **Publish release**.
@@ -115,7 +117,7 @@ This document provides the authoritative, step-by-step checklist for repository 
 
 ## Post-Release Tasks
 
-### Step 7: Update Documentation Website & GitHub Pages
+### Step 7: Update Documentation Website, GitHub Pages & README Notice
 
 Now that `seedl==0.5.0` is published to PyPI:
 - [ ] **Update `.github/workflows/pages.yml`**
@@ -124,10 +126,14 @@ Now that `seedl==0.5.0` is published to PyPI:
   - Ensure version badge displays `0.5.0`.
   - Re-generate website assets if needed (`python website/generate_assets.py`).
   - Verify website locally: `python scripts/verify_website.py`.
-- [ ] **Commit and push website updates to `main`**
+- [ ] **Update `README.md` Version Notice**
+  - Update note: change `Current Published Version on PyPI: [SeeDL 0.4.0](https://pypi.org/project/seedl/0.4.0/)` to `[SeeDL 0.5.0](https://pypi.org/project/seedl/0.5.0/)`.
+  - Remove the `(Release Preparation)` subtitle so it reads `## 🌌 SeeDL 0.5.0: The Neural Observatory`.
+  - Update install command to `pip install seedl==0.5.0`.
+- [ ] **Commit and push post-release updates to `main`**
   ```bash
-  git add .github/workflows/pages.yml website/
-  git commit -m "docs(website): bump live documentation to SeeDL 0.5.0"
+  git add .github/workflows/pages.yml website/ README.md
+  git commit -m "docs(release): bump live documentation and README to published SeeDL 0.5.0"
   git push origin main
   ```
   - Verify GitHub Pages deployment succeeds at `https://iamaritrasaha.github.io/seedl/`.

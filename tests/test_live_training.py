@@ -214,7 +214,7 @@ def test_playback_exports_svg_and_notebook_html(tmp_path):
     assert view.figure.layout.uirevision == "seedl-training"
     assert "<svg" in view.to_figure("svg")
     target = view.save(tmp_path / "training.html")
-    source = target.read_text()
+    source = target.read_text(encoding="utf-8")
     assert source.count("plotly.js v") == 1
     assert "setTimeout" in source and "seedl-playback" in source
     assert "cdn.plot.ly/" not in source.split("Plotly.newPlot")[-1]

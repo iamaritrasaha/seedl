@@ -65,7 +65,7 @@ def test_loss_surface_matches_analytic_quadratic_and_preserves_state(tmp_path):
     assert m.training and m.weight.grad.item() == 7 and m.bias.grad is None and x.grad is None
     assert all(torch.equal(original[k], val) for k, val in m.state_dict().items())
     assert torch.equal(rng, torch.random.get_rng_state())
-    assert "surface" in v.save(tmp_path / "slice.html").read_text()
+    assert "surface" in v.save(tmp_path / "slice.html").read_text(encoding="utf-8")
 
 
 def test_loss_requires_consent_and_valid_axes_and_cleans_failure():

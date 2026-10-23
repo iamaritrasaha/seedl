@@ -86,3 +86,33 @@ def test_multi_backend_consistency_for_new_visualizations():
         assert fig is not None
         if b == "matplotlib":
             plt.close(fig)
+
+
+def test_export_unicode_and_default_windows_encoding(tmp_path):
+    """Regression test ensuring exports with Unicode characters preserve fidelity without relying on system locale."""
+    unicode_title = "Neural α-Flow & λ-Attributions ∑(Δθ)"
+    unicode_notes = ["Learning rate η ≈ 0.001", "Gradient norm ||∇L|| ≤ 1.0"]
+
+    view = sd.see([0.1, 0.5, 0.9], backend="svg")
+    view.title = unicode_title
+    view.notes = unicode_notes
+
+    # SVG export
+    svg_path = tmp_path / "unicode_plot.svg"
+    view.save(svg_path)
+    svg_text = svg_path.read_text(encoding="utf-8")
+    assert "α-Flow" in svg_text
+    assert "λ-Attributions" in svg_text
+
+    # HTML export
+    html_path = tmp_path / "unicode_plot.html"
+    view.save(html_path)
+    html_text = html_path.read_text(encoding="utf-8")
+    assert "α-Flow" in html_text
+    assert "λ-Attributions" in html_text
+    assert "η ≈ 0.001" in html_text
+
+    # Direct view.to_html() contract
+    direct_html = view.to_html()
+    assert "α-Flow" in direct_html
+    assert "Exported by SeeDL" in direct_html

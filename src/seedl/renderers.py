@@ -34,6 +34,11 @@ def resolve_backend(backend: str) -> str:
 
 def render(view: Visualization, backend: str) -> Any:
     """Build a backend figure from a ``Visualization`` without changing its data."""
+    if view.kind == "tensor_explorer":
+        from ._tensor_explorer import svg_tensor_explorer
+
+        resolve_backend(backend)
+        return svg_tensor_explorer(view.data, view.metadata, view.notes)
     if view.kind == "training_playback":
         from ._playback import playback_figure, static_training
 

@@ -89,7 +89,7 @@ def close_values(actual, expected):
 
 
 def verify_recorded_demos(page):
-    manifest = json.loads((ROOT / "website/demos/manifest.json").read_text())
+    manifest = json.loads((ROOT / "website/demos/manifest.json").read_text(encoding="utf-8"))
     page.locator("#tab-training").click()
     training = page.locator("#training iframe").element_handle().content_frame()
     playback_ready(training)

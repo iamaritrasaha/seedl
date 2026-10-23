@@ -48,6 +48,13 @@ def is_torch_module(value: Any, torch: Any | None = None) -> bool:
     return bool(torch is not None and isinstance(value, torch.nn.Module))
 
 
+def is_numpy_array(value: Any, np: Any | None = None) -> bool:
+    if np is None and not _framework_type(value, "numpy"):
+        return False
+    np = np if np is not None else _numpy_module()
+    return bool(np is not None and isinstance(value, np.ndarray))
+
+
 def _fmt(number: Any, precision: int = 5) -> str:
     if number is None:
         return "n/a"
@@ -94,8 +101,15 @@ def _metadata_from_stats(
     mean: float | None,
     std: float | None,
     nonfinite: int,
+    rank: int | None = None,
+    memory_bytes: int | None = None,
+    nan_count: int | None = None,
+    inf_count: int | None = None,
+    sparsity_pct: float | None = None,
 ) -> dict[str, Any]:
-    return {
+    from ._tensors import format_memory_bytes
+
+    meta: dict[str, Any] = {
         "Shape": str(shape),
         "Elements": count,
         "Data type": dtype,
@@ -107,6 +121,16 @@ def _metadata_from_stats(
         "Requires gradients": requires_grad,
         "Non-finite values": nonfinite,
     }
+    meta["Rank"] = rank if rank is not None else len(shape)
+    if memory_bytes is not None:
+        meta["Estimated memory"] = format_memory_bytes(memory_bytes)
+    if sparsity_pct is not None:
+        meta["Sparsity"] = f"{sparsity_pct:.1f}%"
+    if nan_count is not None and nan_count > 0:
+        meta["NaN values"] = nan_count
+    if inf_count is not None and inf_count > 0:
+        meta["Infinite values"] = inf_count
+    return meta
 
 
 def _torch_chunks(tensor: Any, chunk_size: int = 1_048_576):
@@ -126,23 +150,30 @@ def _torch_chunks(tensor: Any, chunk_size: int = 1_048_576):
 
 def _torch_statistics(
     tensor: Any,
-) -> tuple[float | None, float | None, float | None, float | None, float | None, int]:
+    chunk_size: int = 1_048_576,
+    *,
+    return_counts: bool = False,
+) -> tuple[Any, ...]:
     """Compute exact-shape summaries in bounded chunks without a full-size temporary."""
     torch = _torch_module()
     assert torch is not None
-    stats_dtype = (
-        torch.float64
-        if tensor.dtype == torch.float64 or not tensor.dtype.is_floating_point
-        else torch.float32
-    )
+    is_fp = bool(tensor.dtype.is_floating_point)
+    stats_dtype = torch.float64 if tensor.dtype == torch.float64 or not is_fp else torch.float32
     finite_count = 0
     nonfinite = 0
+    nan_count = 0
+    inf_count = 0
+    zero_count = 0
     minimum: float | None = None
     maximum: float | None = None
     mean: float | None = None
     m2: float | None = None
     scale = 0.0
-    for chunk in _torch_chunks(tensor):
+    for chunk in _torch_chunks(tensor, chunk_size=chunk_size):
+        zero_count += int((chunk == 0).sum().item())
+        if is_fp:
+            nan_count += int(torch.isnan(chunk).sum().item())
+            inf_count += int(torch.isinf(chunk).sum().item())
         values = chunk.to(dtype=stats_dtype)
         mask = torch.isfinite(values)
         nonfinite += int(values.numel()) - int(mask.sum().item())
@@ -176,6 +207,8 @@ def _torch_statistics(
             mean += delta * size / combined
             finite_count = combined
     if nonfinite:
+        if return_counts:
+            return None, None, None, None, None, nonfinite, nan_count, inf_count, zero_count
         return None, None, None, None, None, nonfinite
     std = None
     if finite_count:
@@ -183,6 +216,18 @@ def _torch_statistics(
         assert mean is not None
         mean *= scale
         std = math.sqrt(max(m2 / finite_count, 0.0)) * scale
+    if return_counts:
+        return (
+            minimum,
+            maximum,
+            mean,
+            std,
+            scale if finite_count else None,
+            0,
+            nan_count,
+            inf_count,
+            zero_count,
+        )
     return minimum, maximum, mean, std, scale if finite_count else None, 0
 
 
@@ -207,7 +252,7 @@ def _torch_sample(tensor: Any, max_points: int) -> list[Any]:
 
 
 def _torch_tensor_data(
-    tensor: Any, max_points: int
+    tensor: Any, max_points: int, layout: str | None = None
 ) -> tuple[str, dict[str, Any], dict[str, Any], list[str]]:
     torch = _torch_module()
     assert torch is not None
@@ -238,11 +283,51 @@ def _torch_tensor_data(
     dtype = str(detached.dtype).replace("torch.", "")
     device = str(detached.device)
     requires_grad = bool(tensor.requires_grad)
-    minimum, maximum, mean, std, max_abs, nonfinite = _torch_statistics(values)
+    (
+        minimum,
+        maximum,
+        mean,
+        std,
+        max_abs,
+        nonfinite,
+        nan_count,
+        inf_count,
+        zero_count,
+    ) = _torch_statistics(values, return_counts=True)
     if nonfinite:
-        notes.append(
-            f"{nonfinite} non-finite value(s) are present; aggregate statistics are unavailable."
-        )
+        if nan_count and inf_count:
+            notes.append(
+                f"{nonfinite} non-finite value(s) present ({nan_count} NaN, {inf_count} Inf); "
+                "aggregate statistics are unavailable."
+            )
+        elif nan_count:
+            notes.append(
+                f"{nan_count} NaN value(s) are present; aggregate statistics are unavailable."
+            )
+        elif inf_count:
+            notes.append(
+                f"{inf_count} infinite value(s) are present; aggregate statistics are unavailable."
+            )
+        else:
+            notes.append(
+                f"{nonfinite} non-finite value(s) are present; aggregate statistics are unavailable."
+            )
+
+    from ._tensors import (
+        format_sparsity,
+        is_ambiguous_image_layout,
+        make_image_grid,
+        resolve_image_layout,
+    )
+
+    sparsity_pct = (zero_count / count) * 100.0 if count else 0.0
+    if sparsity_pct >= 50.0 and count > 10 and not sparse:
+        notes.append(f"High sparsity: {format_sparsity(zero_count, count)} are zero.")
+
+    total_bytes = (
+        count * int(detached.element_size()) if hasattr(detached, "element_size") else count * 4
+    )
+
     metadata = _metadata_from_stats(
         shape=shape,
         count=count,
@@ -254,6 +339,11 @@ def _torch_tensor_data(
         mean=mean,
         std=std,
         nonfinite=nonfinite,
+        rank=len(shape),
+        memory_bytes=total_bytes,
+        nan_count=nan_count,
+        inf_count=inf_count,
+        sparsity_pct=sparsity_pct,
     )
     metadata["Maximum absolute value"] = _fmt(max_abs)
     if sparse:
@@ -279,13 +369,62 @@ def _torch_tensor_data(
             notes,
         )
 
-    sampled = _torch_sample(detached, max_points)
-    if count > len(sampled) and (
-        len(shape) == 1 or (len(shape) > 2 and _image_layout(shape) is None)
-    ):
-        notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
+    image_candidate = resolve_image_layout(shape, layout)
+    if image_candidate is not None:
+        mode, channels = image_candidate
+        if mode in ("channels_first", "channels_last"):
+            pixels, channels = _torch_image_preview(detached, (mode, channels), max_points)
+            notes.append(
+                "Image layout was inferred from a 1, 3, or 4 channel axis. "
+                "Values are scaled for display; tensor data is unchanged."
+                if layout is None
+                else f"Visualized using explicit {layout.upper()} image layout."
+            )
+            notes.append(
+                f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
+                "float [0, 1] values retained, integers [0, 255] divided by 255, "
+                "other ranges min-max scaled; non-finite components shown as mid-gray."
+            )
+            return (
+                "image",
+                {"pixels": pixels, "channels": channels, "shape": shape, "layout": mode},
+                metadata,
+                notes,
+            )
+        if mode in ("batch_channels_first", "batch_channels_last"):
+            batch_size = shape[0]
+            preview_count = min(batch_size, 16)
+            batch_slice = detached[:preview_count]
+            if mode == "batch_channels_first":
+                batch_slice = batch_slice.permute(0, 2, 3, 1)
+            sub_h, sub_w = int(batch_slice.shape[1]), int(batch_slice.shape[2])
+            sub_pts = max(1, max_points // max(1, preview_count))
+            ystep, xstep = _preview_steps(sub_h, sub_w, 64, sub_pts)
+            downsampled = batch_slice[:, ::ystep, ::xstep][:, :64, :64]
+            scaled = _image_scale(downsampled, detached.dtype).to(device="cpu").tolist()
+            grid_pixels, out_chan, rows, cols = make_image_grid(
+                scaled, channels, max_images=preview_count
+            )
+            notes.append(
+                f"Batch image grid: showing {preview_count} of {batch_size} images tiled in a {rows}x{cols} grid."
+            )
+            return (
+                "image",
+                {
+                    "pixels": grid_pixels,
+                    "channels": channels,
+                    "shape": shape,
+                    "layout": mode,
+                    "batch_grid": (rows, cols),
+                },
+                metadata,
+                notes,
+            )
 
+    sampled = _torch_sample(detached, max_points)
     if len(shape) == 1:
+        if count > len(sampled):
+            notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
         return (
             "sequence",
             {
@@ -314,20 +453,20 @@ def _torch_tensor_data(
             notes,
         )
 
-    image_candidate = _image_layout(shape)
-    if image_candidate is not None:
-        pixels, channels = _torch_image_preview(detached, image_candidate, max_points)
-        notes.append(
-            "Image layout was inferred from a 1, 3, or 4 channel axis. "
-            "Values are scaled for display; tensor data is unchanged."
-        )
-        notes.append(
-            f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
-            "float [0, 1] values retained, integers [0, 255] divided by 255, "
-            "other ranges min-max scaled; non-finite components shown as mid-gray."
-        )
-        return "image", {"pixels": pixels, "channels": channels, "shape": shape}, metadata, notes
+    if layout is None and is_ambiguous_image_layout(shape):
+        if len(shape) == 4:
+            notes.append(
+                f"Shape {shape} has an ambiguous channel position (both first and last dimensions are valid channels); "
+                "specify layout='NCHW' or layout='NHWC' explicitly to render as an image."
+            )
+        else:
+            notes.append(
+                f"Shape {shape} has an ambiguous channel position (both first and last dimensions are valid channels); "
+                "specify layout='CHW' or layout='HWC' explicitly to render as an image."
+            )
 
+    if count > len(sampled):
+        notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
     notes.append(
         "Higher-dimensional data is shown as a value distribution from an evenly spaced sample."
     )
@@ -342,16 +481,6 @@ def _preview_steps(height: int, width: int, side_limit: int, max_points: int) ->
         else:
             xstep += 1
     return ystep, xstep
-
-
-def _image_layout(shape: tuple[int, ...]) -> tuple[str, int] | None:
-    if len(shape) != 3:
-        return None
-    if shape[0] in (1, 3, 4) and min(shape[1:]) >= 16:
-        return "channels_first", shape[0]
-    if shape[-1] in (1, 3, 4) and min(shape[:2]) >= 16:
-        return "channels_last", shape[-1]
-    return None
 
 
 def _image_scale(values: Any, dtype: Any) -> Any:
@@ -398,7 +527,7 @@ def _torch_image_preview(
 
 
 def _numpy_array_data(
-    array: Any, max_points: int
+    array: Any, max_points: int, layout: str | None = None
 ) -> tuple[str, dict[str, Any], dict[str, Any], list[str]]:
     np = _numpy_module()
     assert np is not None
@@ -412,11 +541,48 @@ def _numpy_array_data(
     notes: list[str] = []
     if not (np.issubdtype(array.dtype, np.number) or np.issubdtype(array.dtype, np.bool_)):
         raise SeeDLError(f"Only real numeric NumPy arrays are supported, received dtype {dtype!r}.")
-    minimum, maximum, mean, std, nonfinite = _numpy_statistics(array)
+    (
+        minimum,
+        maximum,
+        mean,
+        std,
+        nonfinite,
+        nan_count,
+        inf_count,
+        zero_count,
+    ) = _numpy_statistics(array, return_counts=True)
     if nonfinite:
-        notes.append(
-            f"{nonfinite} non-finite value(s) are present; aggregate statistics are unavailable."
-        )
+        if nan_count and inf_count:
+            notes.append(
+                f"{nonfinite} non-finite value(s) present ({nan_count} NaN, {inf_count} Inf); "
+                "aggregate statistics are unavailable."
+            )
+        elif nan_count:
+            notes.append(
+                f"{nan_count} NaN value(s) are present; aggregate statistics are unavailable."
+            )
+        elif inf_count:
+            notes.append(
+                f"{inf_count} infinite value(s) are present; aggregate statistics are unavailable."
+            )
+        else:
+            notes.append(
+                f"{nonfinite} non-finite value(s) are present; aggregate statistics are unavailable."
+            )
+
+    from ._tensors import (
+        format_sparsity,
+        is_ambiguous_image_layout,
+        make_image_grid,
+        resolve_image_layout,
+    )
+
+    sparsity_pct = (zero_count / count) * 100.0 if count else 0.0
+    if sparsity_pct >= 50.0 and count > 10:
+        notes.append(f"High sparsity: {format_sparsity(zero_count, count)} are zero.")
+
+    total_bytes = count * int(array.itemsize)
+
     metadata = _metadata_from_stats(
         shape=shape,
         count=count,
@@ -428,6 +594,11 @@ def _numpy_array_data(
         mean=mean,
         std=std,
         nonfinite=nonfinite,
+        rank=len(shape),
+        memory_bytes=total_bytes,
+        nan_count=nan_count,
+        inf_count=inf_count,
+        sparsity_pct=sparsity_pct,
     )
     if count == 0:
         notes.append("This array is empty, so there are no values to plot.")
@@ -443,6 +614,61 @@ def _numpy_array_data(
             metadata,
             notes,
         )
+
+    image_candidate = resolve_image_layout(shape, layout)
+    if image_candidate is not None:
+        mode, channels = image_candidate
+        if mode in ("channels_first", "channels_last"):
+            pixels, channels = _numpy_image_preview(array, (mode, channels), max_points)
+            notes.append(
+                "Image layout was inferred from a 1, 3, or 4 channel axis. "
+                "Values are scaled for display; array data is unchanged."
+                if layout is None
+                else f"Visualized using explicit {layout.upper()} image layout."
+            )
+            notes.append(
+                f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
+                "float [0, 1] values retained, integers [0, 255] divided by 255, "
+                "other ranges min-max scaled; non-finite components shown as mid-gray."
+            )
+            return (
+                "image",
+                {"pixels": pixels, "channels": channels, "shape": shape, "layout": mode},
+                metadata,
+                notes,
+            )
+        if mode in ("batch_channels_first", "batch_channels_last"):
+            batch_size = shape[0]
+            preview_count = min(batch_size, 16)
+            batch_slice = array[:preview_count]
+            if mode == "batch_channels_first":
+                batch_slice = np.moveaxis(batch_slice, 1, -1)
+            sub_h, sub_w = int(batch_slice.shape[1]), int(batch_slice.shape[2])
+            sub_pts = max(1, max_points // max(1, preview_count))
+            ystep, xstep = _preview_steps(sub_h, sub_w, 64, sub_pts)
+            downsampled = batch_slice[:, ::ystep, ::xstep][:, :64, :64].astype(
+                np.float64, copy=False
+            )
+            scaled = _numpy_image_scale(downsampled, array.dtype).tolist()
+            grid_pixels, out_chan, rows, cols = make_image_grid(
+                scaled, channels, max_images=preview_count
+            )
+            notes.append(
+                f"Batch image grid: showing {preview_count} of {batch_size} images tiled in a {rows}x{cols} grid."
+            )
+            return (
+                "image",
+                {
+                    "pixels": grid_pixels,
+                    "channels": channels,
+                    "shape": shape,
+                    "layout": mode,
+                    "batch_grid": (rows, cols),
+                },
+                metadata,
+                notes,
+            )
+
     if len(shape) == 1:
         step = max(1, math.ceil(count / max_points))
         sample = array.flat[::step][:max_points].tolist()
@@ -475,19 +701,19 @@ def _numpy_array_data(
             metadata,
             notes,
         )
-    image_candidate = _image_layout(shape)
-    if image_candidate is not None:
-        pixels, channels = _numpy_image_preview(array, image_candidate, max_points)
-        notes.append(
-            "Image layout was inferred from a 1, 3, or 4 channel axis. "
-            "Values are scaled for display; array data is unchanged."
-        )
-        notes.append(
-            f"Preview: {len(pixels)} rows × {len(pixels[0])} columns; "
-            "float [0, 1] values retained, integers [0, 255] divided by 255, "
-            "other ranges min-max scaled; non-finite components shown as mid-gray."
-        )
-        return "image", {"pixels": pixels, "channels": channels, "shape": shape}, metadata, notes
+
+    if layout is None and is_ambiguous_image_layout(shape):
+        if len(shape) == 4:
+            notes.append(
+                f"Array shape {shape} has an ambiguous image layout (both first and last dimensions can be channels); "
+                "specify layout='NCHW' or layout='NHWC' to visualize as an image."
+            )
+        else:
+            notes.append(
+                f"Array shape {shape} has an ambiguous image layout (both first and last dimensions can be channels); "
+                "specify layout='CHW' or layout='HWC' to visualize as an image."
+            )
+
     step = max(1, math.ceil(count / max_points))
     sample = array.flat[::step][:max_points].tolist()
     notes.append(
@@ -498,12 +724,19 @@ def _numpy_array_data(
     return "distribution", {"sample": sample, "shape": shape}, metadata, notes
 
 
-def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
+def _numpy_statistics(
+    array: Any,
+    chunk_size: int = 1_048_576,
+    *,
+    return_counts: bool = False,
+) -> tuple[Any, ...]:
     """Compute numeric summaries with bounded temporary arrays."""
     np = _numpy_module()
     assert np is not None
     count = int(array.size)
     if not count:
+        if return_counts:
+            return None, None, None, None, 0, 0, 0, 0
         return None, None, None, None, 0
     if array.ndim == 0 or count <= chunk_size:
         chunks = (array.reshape(-1),)
@@ -521,13 +754,17 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
                 yield from iter_chunks(part[tuple(index)])
 
         chunks = iter_chunks(array)
-    finite_count = nonfinite = 0
+    finite_count = nonfinite = nan_count = inf_count = zero_count = 0
     minimum: float | None = None
     maximum: float | None = None
     mean: float | None = None
     m2: float | None = None
     scale = 0.0
     for chunk in chunks:
+        zero_count += int(np.count_nonzero(chunk == 0))
+        if np.issubdtype(chunk.dtype, np.floating):
+            nan_count += int(np.isnan(chunk).sum())
+            inf_count += int(np.isinf(chunk).sum())
         values = np.asarray(chunk, dtype=np.float64)
         finite = np.isfinite(values)
         nonfinite += int(values.size - int(finite.sum()))
@@ -561,6 +798,8 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
             mean += delta * size / combined
             finite_count = combined
     if nonfinite:
+        if return_counts:
+            return None, None, None, None, nonfinite, nan_count, inf_count, zero_count
         return None, None, None, None, nonfinite
     std = None
     if finite_count:
@@ -568,7 +807,30 @@ def _numpy_statistics(array: Any, chunk_size: int = 1_048_576):
         assert mean is not None
         mean *= scale
         std = math.sqrt(max(m2 / finite_count, 0.0)) * scale
+    if return_counts:
+        return minimum, maximum, mean, std, 0, nan_count, inf_count, zero_count
     return minimum, maximum, mean, std, 0
+
+
+def _numpy_image_scale(array: Any, dtype: Any) -> Any:
+    np = _numpy_module()
+    assert np is not None
+    integer_image = np.issubdtype(dtype, np.integer)
+    finite = np.isfinite(array)
+    if not finite.any():
+        return np.full_like(array, 0.5)
+    valid = array[finite]
+    low, high = float(np.min(valid)), float(np.max(valid))
+    if integer_image and low >= 0 and high <= 255:
+        scaled = array / 255.0
+    elif low >= 0 and high <= 1:
+        scaled = array
+    elif high == low:
+        scaled = np.full_like(array, 0.5)
+    else:
+        scale = max(abs(low), abs(high))
+        scaled = (array / scale - low / scale) / (high / scale - low / scale)
+    return np.where(finite, scaled, 0.5)
 
 
 def _numpy_image_preview(
@@ -576,29 +838,15 @@ def _numpy_image_preview(
 ) -> tuple[list[Any], int]:
     np = _numpy_module()
     assert np is not None
+    orig_dtype = array.dtype
     mode, channels = layout
     if mode == "channels_first":
         array = np.moveaxis(array, 0, -1)
     height, width = array.shape[:2]
     ystep, xstep = _preview_steps(height, width, 128, max_points)
-    integer_image = np.issubdtype(array.dtype, np.integer)
     array = array[::ystep, ::xstep][:128, :128].astype(np.float64, copy=False)
-    finite = np.isfinite(array)
-    if not finite.any():
-        return np.full_like(array, 0.5).tolist(), channels
-    valid = array[finite]
-    low, high = float(np.min(valid)), float(np.max(valid))
-    if integer_image and low >= 0 and high <= 255:
-        array = array / 255.0
-    elif low >= 0 and high <= 1:
-        pass
-    elif high == low:
-        array = np.full_like(array, 0.5)
-    else:
-        scale = max(abs(low), abs(high))
-        array = (array / scale - low / scale) / (high / scale - low / scale)
-    array = np.where(finite, array, 0.5)
-    return array.tolist(), channels
+    scaled = _numpy_image_scale(array, orig_dtype)
+    return scaled.tolist(), channels
 
 
 def _numeric_sequence(values: Any, *, label: str) -> list[float]:
@@ -1164,7 +1412,7 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
         current_limit = min(sample_limit, remaining_sample_points)
         sample = _torch_sample(values, current_limit) if count and current_limit else []
         remaining_sample_points -= len(sample)
-        _, _, mean, std, max_abs, nonfinite = _torch_statistics(values)
+        _, _, mean, std, max_abs, nonfinite, *_ = _torch_statistics(values)
         l2_norm_val = None
         if nonfinite == 0 and count:
             mean_value, std_value, max_abs_value = mean, std, max_abs
@@ -1246,7 +1494,7 @@ def _gradient_data(model: Any, max_points: int) -> tuple[dict[str, Any], str, li
 
 
 def inspect_object(
-    obj: Any, *, example_input: Any | None, max_points: int
+    obj: Any, *, example_input: Any | None, max_points: int, layout: str | None = None
 ) -> tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
     """Return the semantic view payload for a supported object."""
     torch = _torch_module() if _framework_type(obj, "torch") else None
@@ -1255,11 +1503,11 @@ def inspect_object(
         data["summary"] = summary
         return "model", f"{type(obj).__name__} architecture", data, {"Summary": summary}, notes
     if torch is not None and isinstance(obj, torch.Tensor):
-        kind, data, metadata, notes = _torch_tensor_data(obj, max_points)
+        kind, data, metadata, notes = _torch_tensor_data(obj, max_points, layout=layout)
         return kind, "Tensor visualization", data, metadata, notes
     np = _numpy_module() if _framework_type(obj, "numpy") else None
     if np is not None and isinstance(obj, np.ndarray):
-        kind, data, metadata, notes = _numpy_array_data(obj, max_points)
+        kind, data, metadata, notes = _numpy_array_data(obj, max_points, layout=layout)
         return kind, "NumPy array visualization", data, metadata, notes
     if np is not None and isinstance(obj, np.generic):
         obj = obj.item()

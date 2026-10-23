@@ -151,7 +151,7 @@ def test_scatter3d_real_depth_and_export(tmp_path):
     assert v.figure.layout.scene.dragmode == "orbit"
     assert v.figure.layout.scene.camera.eye.y < 0
     path = v.save(tmp_path / "3d.html")
-    text = path.read_text()
+    text = path.read_text(encoding="utf-8")
     assert '"type":"scatter3d"' in text and '"scrollZoom": true' in text
     assert '<script src="https://cdn.plot.ly' not in text
     assert "2D projection" in v.to_figure("svg")

@@ -45,6 +45,11 @@ def save_visualization(
 
 def _save_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.kind == "tensor_explorer":
+        from ._tensor_explorer import tensor_explorer_html
+
+        path.write_text(tensor_explorer_html(view, full_html=True), encoding="utf-8")
+        return
     if view.kind == "execution_trace":
         from ._trace_renderers import trace_html
 

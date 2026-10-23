@@ -99,6 +99,7 @@ def see(
     *,
     input: Any | None = None,
     slice: Any | None = None,
+    layout: str | None = None,
     detail: str = "summary",
     compare: Any | None = None,
     backend: str = "auto",
@@ -126,7 +127,9 @@ def see(
         input: Used for PyTorch model inspection. The model is called once with that
             input under eval mode and without gradients; temporary hooks and buffer
             updates are restored.
-        slice: Optional slice specification for higher-dimensional tensors.
+        slice: Optional slice specification for higher-dimensional tensors. Accepts
+            integers, slice objects, tuples, or string syntax like '0, :, :'.
+        layout: Optional explicit channel layout for 3D/4D tensors ('CHW', 'HWC', 'NCHW', 'NHWC').
         detail: Detail level for model hierarchy ('summary' or 'full'/'leaves').
         compare: Optional second object to compare against (e.g. model or history).
         backend: 'auto' (Plotly when installed, otherwise SVG), 'plotly', 'matplotlib', or 'svg'.
@@ -289,11 +292,17 @@ def see(
 
     # Slice support for tensors/arrays
     slice_note = None
+    orig_shape = getattr(obj, "shape", None)
     if slice is not None:
         try:
-            orig_shape = getattr(obj, "shape", None)
-            obj = obj[slice]
+            from ._tensors import parse_slice_spec
+
+            shape_tuple = tuple(int(s) for s in orig_shape) if orig_shape is not None else None
+            parsed_slice = parse_slice_spec(slice, shape_tuple)
+            obj = obj[parsed_slice]
             slice_note = f"Showing slice {slice} of original shape {orig_shape}."
+        except SeeDLError:
+            raise
         except Exception as exc:
             raise SeeDLError(f"Failed to slice object with {slice}: {exc}") from exc
 
@@ -337,10 +346,14 @@ def see(
             title = "Neural network" + (" · 3D" if view == "3d" else "")
     else:
         kind, title, data, metadata, notes = inspect_object(
-            obj, example_input=input, max_points=max_points
+            obj, example_input=input, max_points=max_points, layout=layout
         )
     if slice_note:
         notes.insert(0, slice_note)
+        if orig_shape is not None:
+            metadata["Original shape"] = str(orig_shape)
+            data["slice"] = str(slice)
+            data["original_shape"] = tuple(int(s) for s in orig_shape)
 
     result = Visualization(
         kind=kind,

@@ -77,6 +77,10 @@ def _summary(kind: str, data: dict[str, Any], metadata: dict[str, Any]) -> str:
         return f"Dataset health: {data.get('sample_count')} samples inspected"
     if kind == "run_comparison":
         return f"Run comparison: {data.get('name_a')} vs {data.get('name_b')}"
+    if kind == "tensor_explorer":
+        shape = tuple(data.get("shape", ()))
+        axes_count = len(data.get("axes", []))
+        return f"Interactive exploration · shape {shape} · {axes_count} slicing axes"
     if kind.startswith("educational_"):
         return str(data.get("concept", kind))
     return str(data.get("summary", metadata.get("Summary", "")))
@@ -102,6 +106,8 @@ def see(
     input: Any | None = None,
     slice: Any | None = None,
     layout: str | None = None,
+    dim_names: list[str] | tuple[str, ...] | None = None,
+    max_frames: int = 32,
     detail: str = "summary",
     compare: Any | None = None,
     backend: str = "auto",
@@ -132,12 +138,19 @@ def see(
         slice: Optional slice specification for higher-dimensional tensors. Accepts
             integers, slice objects, tuples, or string syntax like '0, :, :'.
         layout: Optional explicit channel layout for 3D/4D tensors ('CHW', 'HWC', 'NCHW', 'NHWC').
+        dim_names: Optional semantic dimension names for multidimensional tensors (e.g.
+            ['batch', 'channels', 'height', 'width']).
+        max_frames: Maximum number of slice preview frames extracted per dimension axis
+            for interactive tensor exploration (default 32).
         detail: Detail level for model hierarchy ('summary' or 'full'/'leaves').
         compare: Optional second object to compare against (e.g. model or history).
         backend: 'auto' (Plotly when installed, otherwise SVG), 'plotly', 'matplotlib', or 'svg'.
-        interactive: True (forces Plotly), False (forces SVG if auto), or None.
+        interactive: If True on a multidimensional tensor, launches the Interactive Tensor
+            Explorer with client-side slice navigation sliders and dimension switching.
+            Also forces Plotly for supported models when True.
         max_points: Bounded sampling limit for large arrays and sequences.
-        view: Model display: auto, neurons, 3d (requires Plotly), architecture, summary.
+        view: Model display: auto, neurons, 3d (requires Plotly), architecture, summary,
+            interactive, or explorer.
         theme: Model graph theme: scientific, dark, light, minimal, or presentation.
         color_by: auto (activations when captured), layer, activation, or bias gradient.
         sample: Zero-based batch sample for neuron activations; accepts 1D or 2D input.
@@ -159,9 +172,11 @@ def see(
         "feature_maps",
         "flow",
         "trace",
+        "interactive",
+        "explorer",
     }:
         raise ValueError(
-            "view must be auto, neurons, 3d, architecture, summary, features, feature_maps, flow, or trace."
+            "view must be auto, neurons, 3d, architecture, summary, features, feature_maps, flow, trace, interactive, or explorer."
         )
     if theme not in {"light", "dark", "scientific", "minimal", "presentation"}:
         raise ValueError("theme must be light, dark, scientific, minimal, or presentation.")
@@ -230,9 +245,38 @@ def see(
             backend=backend,
         )
 
+    is_tensor = is_torch_tensor(obj) or is_numpy_array(obj)
+    is_multidim_tensor = is_tensor and len(getattr(obj, "shape", ())) >= 2
+
+    if view in {"interactive", "explorer"}:
+        if is_torch_module(obj):
+            raise SeeDLError(
+                f"view='{view}' is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
+            )
+        if not is_tensor:
+            raise SeeDLError(
+                f"view='{view}' is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
+            )
+        if not is_multidim_tensor:
+            raise SeeDLError(
+                f"view='{view}' requires at least 2 dimensions, got shape {getattr(obj, 'shape', ())}."
+            )
+
+    if dim_names is not None:
+        if is_torch_module(obj):
+            raise SeeDLError(
+                "The dim_names= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
+            )
+        if not is_tensor:
+            raise SeeDLError(
+                f"The dim_names= argument is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
+            )
+
+    if not isinstance(max_frames, int) or max_frames <= 0:
+        raise ValueError("max_frames must be a positive integer.")
+
     if (
-        view != "auto"
-        and view not in {"features", "feature_maps"}
+        view not in {"auto", "features", "feature_maps", "interactive", "explorer"}
         and (not is_torch_module(obj) or compare is not None)
     ):
         raise ValueError("Explicit view options require a model without compare=.")
@@ -242,11 +286,20 @@ def see(
         backend = "plotly"
     if interactive is not None and not isinstance(interactive, bool):
         raise TypeError("interactive must be True, False, or None.")
+
+    launch_interactive_tensor = (
+        interactive is True or view in {"interactive", "explorer"}
+    ) and is_multidim_tensor
+
     if interactive is True:
-        if backend == "auto":
-            backend = "plotly"
-        elif backend != "plotly":
-            raise ValueError("interactive=True requires backend='plotly' or backend='auto'.")
+        if launch_interactive_tensor:
+            if backend == "auto":
+                backend = "svg"
+        else:
+            if backend == "auto":
+                backend = "plotly"
+            elif backend != "plotly":
+                raise ValueError("interactive=True requires backend='plotly' or backend='auto'.")
     elif interactive is False and backend == "auto":
         backend = "svg"
     selected_backend = resolve_backend(backend)
@@ -361,9 +414,35 @@ def see(
         if data.get("neuron_graph"):
             title = "Neural network" + (" · 3D" if view == "3d" else "")
     else:
-        kind, title, data, metadata, notes = inspect_object(
-            obj, example_input=input, max_points=max_points, layout=layout
-        )
+        if launch_interactive_tensor:
+            current_rank = len(getattr(obj, "shape", ()))
+            if current_rank < 2:
+                raise SeeDLError(
+                    f"Interactive tensor exploration requires at least 2 dimensions, "
+                    f"got rank {current_rank} with shape {getattr(obj, 'shape', ())}."
+                )
+            from ._tensor_explorer import build_tensor_explorer_payload
+
+            data, metadata, notes = build_tensor_explorer_payload(
+                obj,
+                dim_names=dim_names,
+                layout=layout,
+                max_frames=max_frames,
+                max_slice_points=max_points,
+            )
+            kind, title = "tensor_explorer", "Interactive Tensor Explorer"
+        else:
+            kind, title, data, metadata, notes = inspect_object(
+                obj, example_input=input, max_points=max_points, layout=layout
+            )
+            if dim_names is not None and is_tensor:
+                from ._tensor_explorer import validate_dim_names
+
+                rank = len(getattr(obj, "shape", ()))
+                shape_tuple = tuple(int(s) for s in getattr(obj, "shape", ()))
+                validated = validate_dim_names(dim_names, rank, shape_tuple)
+                metadata["Dimension names"] = ", ".join(validated)
+                data["dim_names"] = validated
     if slice_note:
         notes.insert(0, slice_note)
         if orig_shape is not None:

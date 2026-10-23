@@ -117,6 +117,10 @@ class Visualization:
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         """Let IPython display the selected backend without an extra server."""
         del include, exclude
+        if self.kind == "tensor_explorer":
+            from ._tensor_explorer import tensor_explorer_html
+
+            return {"text/html": tensor_explorer_html(self, full_html=False), "text/plain": str(self)}
         if self.backend == "plotly" and (
             self.kind == "training_playback"
             or (self.kind == "quantum_circuit" and self.data.get("simulate"))
@@ -147,7 +151,11 @@ class Visualization:
         return {"image/svg+xml": self.figure, "text/plain": str(self)}
 
     def _repr_html_(self) -> str | None:
-        """Expose HTML only for SVG; do not override the selected backend MIME type."""
+        """Expose HTML for SVG and interactive widgets; do not override the selected backend MIME type."""
+        if self.kind == "tensor_explorer":
+            from ._tensor_explorer import tensor_explorer_html
+
+            return tensor_explorer_html(self, full_html=False)
         if self.backend != "svg":
             return None
         from .renderers import render

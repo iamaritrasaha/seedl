@@ -230,9 +230,13 @@ def build_tensor_explorer_payload(
                     sampled = sub[:, ::ystep, ::xstep][:, :64, :64].permute(1, 2, 0)
                     sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
                     frame_pixels = sampled_cpu.tolist()
-                    fmin = float(sampled_cpu.min().item()) if sampled_cpu.numel() else 0.0
-                    fmax = float(sampled_cpu.max().item()) if sampled_cpu.numel() else 0.0
-                    fmean = float(sampled_cpu.mean().item()) if sampled_cpu.numel() else 0.0
+                    finite_mask = torch_mod.isfinite(sampled_cpu)
+                    if finite_mask.any():
+                        fmin = float(sampled_cpu[finite_mask].min().item())
+                        fmax = float(sampled_cpu[finite_mask].max().item())
+                        fmean = float(sampled_cpu[finite_mask].mean().item())
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -251,9 +255,13 @@ def build_tensor_explorer_payload(
                     sampled = sub[::ystep, ::xstep][:64, :64]
                     sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
                     frame_pixels = sampled_cpu.tolist()
-                    fmin = float(sampled_cpu.min().item()) if sampled_cpu.numel() else 0.0
-                    fmax = float(sampled_cpu.max().item()) if sampled_cpu.numel() else 0.0
-                    fmean = float(sampled_cpu.mean().item()) if sampled_cpu.numel() else 0.0
+                    finite_mask = torch_mod.isfinite(sampled_cpu)
+                    if finite_mask.any():
+                        fmin = float(sampled_cpu[finite_mask].min().item())
+                        fmax = float(sampled_cpu[finite_mask].max().item())
+                        fmean = float(sampled_cpu[finite_mask].mean().item())
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -284,9 +292,13 @@ def build_tensor_explorer_payload(
                         sampled = flat_2d[::ystep, ::xstep][:64, :64]
 
                     sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
-                    fmin = float(sampled_cpu.min().item()) if sampled_cpu.numel() else 0.0
-                    fmax = float(sampled_cpu.max().item()) if sampled_cpu.numel() else 0.0
-                    fmean = float(sampled_cpu.mean().item()) if sampled_cpu.numel() else 0.0
+                    finite_mask = torch_mod.isfinite(sampled_cpu)
+                    if finite_mask.any():
+                        fmin = float(sampled_cpu[finite_mask].min().item())
+                        fmax = float(sampled_cpu[finite_mask].max().item())
+                        fmean = float(sampled_cpu[finite_mask].mean().item())
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -310,9 +322,13 @@ def build_tensor_explorer_payload(
                     h, w = sub_shape[1], sub_shape[2]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                     sampled = np.moveaxis(sub[:, ::ystep, ::xstep][:, :64, :64], 0, -1).astype(np.float32)
-                    fmin = float(np.min(sampled)) if sampled.size else 0.0
-                    fmax = float(np.max(sampled)) if sampled.size else 0.0
-                    fmean = float(np.mean(sampled)) if sampled.size else 0.0
+                    finite_mask = np.isfinite(sampled)
+                    if np.any(finite_mask):
+                        fmin = float(np.min(sampled[finite_mask]))
+                        fmax = float(np.max(sampled[finite_mask]))
+                        fmean = float(np.mean(sampled[finite_mask]))
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -329,9 +345,13 @@ def build_tensor_explorer_payload(
                     h, w = sub_shape[0], sub_shape[1]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                     sampled = sub[::ystep, ::xstep][:64, :64].astype(np.float32)
-                    fmin = float(np.min(sampled)) if sampled.size else 0.0
-                    fmax = float(np.max(sampled)) if sampled.size else 0.0
-                    fmean = float(np.mean(sampled)) if sampled.size else 0.0
+                    finite_mask = np.isfinite(sampled)
+                    if np.any(finite_mask):
+                        fmin = float(np.min(sampled[finite_mask]))
+                        fmax = float(np.max(sampled[finite_mask]))
+                        fmean = float(np.mean(sampled[finite_mask]))
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -359,9 +379,13 @@ def build_tensor_explorer_payload(
                         ystep, xstep = _preview_steps(first_dim, rest, 64, max_slice_points)
                         sampled = flat_2d[::ystep, ::xstep][:64, :64].astype(np.float32)
 
-                    fmin = float(np.min(sampled)) if sampled.size else 0.0
-                    fmax = float(np.max(sampled)) if sampled.size else 0.0
-                    fmean = float(np.mean(sampled)) if sampled.size else 0.0
+                    finite_mask = np.isfinite(sampled)
+                    if np.any(finite_mask):
+                        fmin = float(np.min(sampled[finite_mask]))
+                        fmax = float(np.max(sampled[finite_mask]))
+                        fmean = float(np.mean(sampled[finite_mask]))
+                    else:
+                        fmin, fmax, fmean = 0.0, 1.0, 0.0
                     frames.append(
                         {
                             "index": idx,
@@ -463,7 +487,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     )
 
     widget_body = f"""
-<div id="{container_id}" class="seedl-tensor-explorer-widget">
+<div id="{container_id}" class="seedl-tensor-explorer-widget" tabindex="0" role="region" aria-label="Interactive Tensor Explorer">
   <div class="ste-header">
     <div class="ste-title-row">
       <h2 class="ste-title">{title_escaped}</h2>
@@ -476,24 +500,24 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   <div class="ste-controls">
     <div class="ste-axis-selector-bar">
       <span class="ste-label">Slicing Dimension:</span>
-      <div class="ste-axis-buttons" id="{container_id}-axis-buttons"></div>
+      <div class="ste-axis-buttons" id="{container_id}-axis-buttons" role="tablist" aria-label="Slicing dimensions"></div>
     </div>
 
     <div class="ste-slider-row">
       <div class="ste-playback-buttons">
-        <button type="button" class="ste-btn" id="{container_id}-prev-btn" title="Previous slice">◀</button>
-        <button type="button" class="ste-btn ste-btn-primary" id="{container_id}-play-btn" title="Play/Pause playback">▶ Play</button>
-        <button type="button" class="ste-btn" id="{container_id}-next-btn" title="Next slice">▶</button>
+        <button type="button" class="ste-btn" id="{container_id}-prev-btn" title="Previous slice" aria-label="Previous slice">◀</button>
+        <button type="button" class="ste-btn ste-btn-primary" id="{container_id}-play-btn" title="Play/Pause playback" aria-label="Play slice playback">▶ Play</button>
+        <button type="button" class="ste-btn" id="{container_id}-next-btn" title="Next slice" aria-label="Next slice">▶</button>
       </div>
-      <input type="range" class="ste-range" id="{container_id}-slider" min="0" max="0" value="0" />
-      <span class="ste-index-badge" id="{container_id}-index-badge">Slice: 0 / 0</span>
+      <input type="range" class="ste-range" id="{container_id}-slider" min="0" max="0" value="0" aria-label="Tensor slice slider" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" />
+      <span class="ste-index-badge" id="{container_id}-index-badge" aria-live="polite">Slice: 0 / 0</span>
     </div>
   </div>
 
   <div class="ste-viewport">
     <div class="ste-canvas-container">
-      <canvas id="{container_id}-canvas" class="ste-canvas" width="256" height="256"></canvas>
-      <div id="{container_id}-tooltip" class="ste-tooltip" style="display:none;"></div>
+      <canvas id="{container_id}-canvas" class="ste-canvas" width="256" height="256" aria-label="Tensor slice visualization"></canvas>
+      <div id="{container_id}-tooltip" class="ste-tooltip" style="display:none;" role="tooltip"></div>
     </div>
     <div class="ste-slice-meta" id="{container_id}-slice-meta">
       <div class="ste-meta-card">
@@ -502,7 +526,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       </div>
       <div class="ste-palette-selector">
         <span class="ste-sublabel">Colormap:</span>
-        <select id="{container_id}-colormap-select" class="ste-select">
+        <select id="{container_id}-colormap-select" class="ste-select" aria-label="Select colormap">
           <option value="viridis" selected>Viridis</option>
           <option value="coolwarm">Coolwarm</option>
           <option value="grayscale">Grayscale</option>
@@ -544,8 +568,17 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   let playInterval = null;
   let activeColormap = "viridis";
 
+  function escapeHtml(str) {{
+    if (str == null) return "";
+    return String(str)
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+  }}
+
   function colormapViridis(t) {{
-    // t in [0, 1]
     const r = Math.max(0, Math.min(255, Math.round(255 * (0.2 + 0.8 * Math.pow(t, 2)))));
     const g = Math.max(0, Math.min(255, Math.round(255 * Math.sin(t * Math.PI))));
     const b = Math.max(0, Math.min(255, Math.round(255 * (0.6 - 0.4 * t))));
@@ -565,7 +598,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   }}
 
   function colormapSpectral(t) {{
-    const hue = (1.0 - t) * 240; // blue to red
+    const hue = (1.0 - t) * 240;
     const c = 1.0;
     const x = c * (1 - Math.abs(((hue / 60) % 2) - 1));
     let r1=0, g1=0, b1=0;
@@ -577,9 +610,11 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   }}
 
   function getColor(val, min, max, map) {{
-    if (isNaN(val) || !isFinite(val)) return [128, 128, 128, 255]; // Gray for non-finite
-    const range = (max - min) || 1.0;
-    const t = Math.max(0, Math.min(1, (val - min) / range));
+    if (isNaN(val) || !isFinite(val)) return [148, 163, 184, 255]; // Gray-400 for non-finite
+    const safeMin = (min != null && !isNaN(min) && isFinite(min)) ? min : 0.0;
+    const safeMax = (max != null && !isNaN(max) && isFinite(max)) ? max : 1.0;
+    const range = (safeMax - safeMin) || 1.0;
+    const t = Math.max(0, Math.min(1, (val - safeMin) / range));
     let rgb;
     if (map === "coolwarm") rgb = colormapCoolwarm(t);
     else if (map === "grayscale") rgb = colormapGrayscale(t);
@@ -590,20 +625,38 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
   function renderCurrentFrame() {{
     const axisData = payload.axes[currentAxisIdx];
-    if (!axisData || !axisData.frames || axisData.frames.length === 0) return;
+    if (!axisData || !axisData.frames || axisData.frames.length === 0) {{
+      if (axisData) {{
+        indexBadge.textContent = `${{escapeHtml(axisData.name)}} = empty (0 slices)`;
+        sliceStats.innerHTML = `<div class="ste-stat-row"><span>Dimension:</span> <strong>${{escapeHtml(axisData.name)}}</strong></div><div class="ste-stat-row"><span>Status:</span> <em>No slices available in this dimension</em></div>`;
+      }}
+      if (ctx) {{
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = "#64748b";
+        ctx.font = "14px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText("Empty Dimension", canvas.width / 2, canvas.height / 2);
+      }}
+      return;
+    }}
     const frame = axisData.frames[currentFrameIdx];
     if (!frame || !ctx) return;
 
     slider.value = currentFrameIdx;
+    slider.setAttribute("aria-valuenow", currentFrameIdx);
     indexBadge.textContent = `${{axisData.name}} = ${{frame.index}} (${{currentFrameIdx + 1}}/${{axisData.frames.length}})`;
 
+    const minStr = frame.min != null && !isNaN(frame.min) && isFinite(frame.min) ? frame.min.toFixed(4) : (frame.min != null && isNaN(frame.min) ? 'NaN' : 'n/a');
+    const maxStr = frame.max != null && !isNaN(frame.max) && isFinite(frame.max) ? frame.max.toFixed(4) : (frame.max != null && isNaN(frame.max) ? 'NaN' : 'n/a');
+    const meanStr = frame.mean != null && !isNaN(frame.mean) && isFinite(frame.mean) ? frame.mean.toFixed(4) : (frame.mean != null && isNaN(frame.mean) ? 'NaN' : 'n/a');
+
     sliceStats.innerHTML = `
-      <div class="ste-stat-row"><span>Dimension:</span> <strong>${{axisData.name}} (Axis ${{axisData.axis}})</strong></div>
+      <div class="ste-stat-row"><span>Dimension:</span> <strong>${{escapeHtml(axisData.name)}} (Axis ${{axisData.axis}})</strong></div>
       <div class="ste-stat-row"><span>Index in Tensor:</span> <strong>${{frame.index}} / ${{axisData.total_slices - 1}}</strong></div>
       <div class="ste-stat-row"><span>Frame Shape:</span> <strong>${{frame.shape ? frame.shape.join(' × ') : '2D'}}</strong></div>
-      <div class="ste-stat-row"><span>Slice Min:</span> <strong>${{frame.min != null ? frame.min.toFixed(4) : 'n/a'}}</strong></div>
-      <div class="ste-stat-row"><span>Slice Max:</span> <strong>${{frame.max != null ? frame.max.toFixed(4) : 'n/a'}}</strong></div>
-      <div class="ste-stat-row"><span>Slice Mean:</span> <strong>${{frame.mean != null ? frame.mean.toFixed(4) : 'n/a'}}</strong></div>
+      <div class="ste-stat-row"><span>Slice Min:</span> <strong>${{minStr}}</strong></div>
+      <div class="ste-stat-row"><span>Slice Max:</span> <strong>${{maxStr}}</strong></div>
+      <div class="ste-stat-row"><span>Slice Mean:</span> <strong>${{meanStr}}</strong></div>
     `;
 
     const canvasWidth = 256;
@@ -634,7 +687,6 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
           }}
         }}
       }}
-      // Scale up crisply to 256x256
       const offCanvas = document.createElement("canvas");
       offCanvas.width = cols;
       offCanvas.height = rows;
@@ -670,7 +722,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     currentAxisIdx = idx;
     currentFrameIdx = 0;
     const axisData = payload.axes[currentAxisIdx];
-    slider.max = (axisData.frames.length - 1);
+    const maxIdx = Math.max(0, axisData.frames.length - 1);
+    slider.max = maxIdx;
+    slider.setAttribute("aria-valuemax", maxIdx);
     slider.value = 0;
     updateAxisButtons();
     renderCurrentFrame();
@@ -683,6 +737,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       btn.type = "button";
       btn.className = `ste-btn ${{idx === currentAxisIdx ? 'ste-btn-active' : ''}}`;
       btn.textContent = `${{ax.name}} (Axis ${{ax.axis}}, size ${{ax.size}})`;
+      btn.setAttribute("role", "tab");
+      btn.setAttribute("aria-selected", idx === currentAxisIdx ? "true" : "false");
       btn.addEventListener("click", () => switchAxis(idx));
       axisButtonsContainer.appendChild(btn);
     }});
@@ -694,18 +750,20 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       playInterval = null;
       isPlaying = false;
       playBtn.textContent = "▶ Play";
+      playBtn.setAttribute("aria-label", "Play slice playback");
     }} else {{
       isPlaying = true;
       playBtn.textContent = "⏸ Pause";
-      const axisData = payload.axes[currentAxisIdx];
+      playBtn.setAttribute("aria-label", "Pause slice playback");
       playInterval = setInterval(() => {{
-        currentFrameIdx = (currentFrameIdx + 1) % axisData.frames.length;
+        const curAxis = payload.axes[currentAxisIdx];
+        if (!curAxis || !curAxis.frames || curAxis.frames.length === 0) return;
+        currentFrameIdx = (currentFrameIdx + 1) % curAxis.frames.length;
         renderCurrentFrame();
       }}, 400);
     }}
   }}
 
-  // Event Listeners
   slider.addEventListener("input", (e) => {{
     currentFrameIdx = parseInt(e.target.value, 10);
     renderCurrentFrame();
@@ -713,12 +771,14 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
   prevBtn.addEventListener("click", () => {{
     const axisData = payload.axes[currentAxisIdx];
+    if (!axisData || !axisData.frames || axisData.frames.length === 0) return;
     currentFrameIdx = (currentFrameIdx - 1 + axisData.frames.length) % axisData.frames.length;
     renderCurrentFrame();
   }});
 
   nextBtn.addEventListener("click", () => {{
     const axisData = payload.axes[currentAxisIdx];
+    if (!axisData || !axisData.frames || axisData.frames.length === 0) return;
     currentFrameIdx = (currentFrameIdx + 1) % axisData.frames.length;
     renderCurrentFrame();
   }});
@@ -730,18 +790,66 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     renderCurrentFrame();
   }});
 
-  // Tooltip on canvas hover
   canvas.addEventListener("mousemove", (e) => {{
     const rect = canvas.getBoundingClientRect();
-    const x = Math.floor((e.clientX - rect.left) / (rect.width / canvas.width));
-    const y = Math.floor((e.clientY - rect.top) / (rect.height / canvas.height));
+    const clientX = e.clientX - rect.left;
+    const clientY = e.clientY - rect.top;
+    if (clientX < 0 || clientX >= rect.width || clientY < 0 || clientY >= rect.height) {{
+      tooltip.style.display = "none";
+      return;
+    }}
     const axisData = payload.axes[currentAxisIdx];
+    if (!axisData || !axisData.frames) return;
     const frame = axisData.frames[currentFrameIdx];
-    if (frame && frame.values && frame.values[y] && frame.values[y][x] !== undefined) {{
+    if (!frame) return;
+
+    let rows = 0;
+    let cols = 0;
+    if (frame.shape && frame.shape.length >= 2) {{
+      rows = frame.shape[0];
+      cols = frame.shape[1];
+    }} else if (frame.values && frame.values.length > 0) {{
+      rows = frame.values.length;
+      cols = frame.values[0].length;
+    }} else if (frame.pixels && frame.pixels.length > 0) {{
+      rows = frame.pixels.length;
+      cols = frame.pixels[0].length;
+    }}
+    if (rows === 0 || cols === 0) {{
+      tooltip.style.display = "none";
+      return;
+    }}
+
+    const col = Math.min(cols - 1, Math.max(0, Math.floor((clientX / rect.width) * cols)));
+    const row = Math.min(rows - 1, Math.max(0, Math.floor((clientY / rect.height) * rows)));
+
+    let tipText = "";
+    if (frame.type === "image" && frame.pixels && frame.pixels[row] && frame.pixels[row][col] !== undefined) {{
+      const p = frame.pixels[row][col];
+      if (Array.isArray(p)) {{
+        const rgb = p.map(v => typeof v === 'number' ? v.toFixed(3) : v).join(", ");
+        tipText = `[${{row}}, ${{col}}] RGB: (${{rgb}})`;
+      }} else {{
+        tipText = `[${{row}}, ${{col}}]: ${{Number(p).toFixed(4)}}`;
+      }}
+    }} else if (frame.values && frame.values[row] && frame.values[row][col] !== undefined) {{
+      const v = frame.values[row][col];
+      if (isNaN(v)) {{
+        tipText = `[${{row}}, ${{col}}]: NaN`;
+      }} else if (!isFinite(v)) {{
+        tipText = `[${{row}}, ${{col}}]: ${{v > 0 ? '+Inf' : '-Inf'}}`;
+      }} else {{
+        tipText = `[${{row}}, ${{col}}]: ${{Number(v).toFixed(4)}}`;
+      }}
+    }}
+
+    if (tipText) {{
       tooltip.style.display = "block";
-      tooltip.style.left = `${{e.clientX - rect.left + 15}}px`;
-      tooltip.style.top = `${{e.clientY - rect.top + 10}}px`;
-      tooltip.textContent = `[${{y}}, ${{x}}]: ${{Number(frame.values[y][x]).toFixed(4)}}`;
+      const tooltipX = Math.min(rect.width - 130, Math.max(10, clientX + 15));
+      const tooltipY = Math.max(10, clientY - 30);
+      tooltip.style.left = `${{tooltipX}}px`;
+      tooltip.style.top = `${{tooltipY}}px`;
+      tooltip.textContent = tipText;
     }} else {{
       tooltip.style.display = "none";
     }}
@@ -749,6 +857,19 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
   canvas.addEventListener("mouseleave", () => {{
     tooltip.style.display = "none";
+  }});
+
+  root.addEventListener("keydown", (e) => {{
+    if (e.key === "ArrowLeft") {{
+      e.preventDefault();
+      prevBtn.click();
+    }} else if (e.key === "ArrowRight") {{
+      e.preventDefault();
+      nextBtn.click();
+    }} else if (e.key === " " && e.target.tagName !== "BUTTON" && e.target.tagName !== "SELECT") {{
+      e.preventDefault();
+      playBtn.click();
+    }}
   }});
 
   // Initial render
@@ -771,6 +892,11 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   margin: 12px auto;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
   box-sizing: border-box;
+  outline: none;
+}
+.seedl-tensor-explorer-widget:focus-visible {
+  outline: 2px solid var(--ste-accent, #38bdf8);
+  outline-offset: 2px;
 }
 .seedl-tensor-explorer-widget * {
   box-sizing: border-box;

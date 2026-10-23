@@ -6,7 +6,9 @@ from typing import Any
 
 from ._inspect import (
     inspect_object,
+    is_numpy_array,
     is_torch_module,
+    is_torch_tensor,
 )
 from ._training import Tracker
 from .exceptions import SeeDLError
@@ -289,6 +291,20 @@ def see(
 
     if input is not None and not is_torch_module(obj):
         raise SeeDLError("The input= argument is only used when visualizing a PyTorch nn.Module.")
+
+    if is_torch_module(obj):
+        if slice is not None:
+            raise SeeDLError(
+                "The slice= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
+            )
+        if layout is not None:
+            raise SeeDLError(
+                "The layout= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
+            )
+    elif layout is not None and not (is_torch_tensor(obj) or is_numpy_array(obj)):
+        raise SeeDLError(
+            f"The layout= argument is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
+        )
 
     # Slice support for tensors/arrays
     slice_note = None

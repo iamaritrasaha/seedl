@@ -266,3 +266,142 @@ def test_large_tensor_chunked_statistics_and_memory():
     assert "5.7 MB" in v_np.metadata["Estimated memory"]
 
 
+def test_slice_step_zero_rejected():
+    from seedl.exceptions import SeeDLError
+
+    np = pytest.importorskip("numpy")
+    arr = np.arange(10)
+
+    with pytest.raises(SeeDLError, match="[Ss]lice step cannot be zero"):
+        sd.see(arr, slice="0:5:0")
+
+    with pytest.raises(SeeDLError, match="[Ss]lice step cannot be zero"):
+        sd.see(arr, slice="::0")
+
+    with pytest.raises(SeeDLError, match="[Ss]lice step cannot be zero"):
+        sd.see(arr, slice=slice(0, 5, 0))
+
+
+def test_layout_validation_errors():
+    from seedl.exceptions import SeeDLError
+
+    torch = pytest.importorskip("torch")
+    np = pytest.importorskip("numpy")
+
+    # 2D tensor cannot have CHW layout
+    with pytest.raises(SeeDLError, match="requires a 3D tensor"):
+        sd.see(torch.zeros(10, 10), layout="CHW")
+
+    with pytest.raises(SeeDLError, match="requires a 3D tensor"):
+        sd.see(np.zeros((10, 10)), layout="CHW")
+
+    # 3D tensor cannot have NCHW layout
+    with pytest.raises(SeeDLError, match="requires a 4D batch tensor"):
+        sd.see(torch.zeros(3, 32, 32), layout="NCHW")
+
+    # Invalid layout string
+    with pytest.raises(SeeDLError, match="Unsupported layout 'INVALID'"):
+        sd.see(torch.zeros(3, 32, 32), layout="INVALID")
+
+    # Layout on non-tensor scalar
+    with pytest.raises(SeeDLError, match="layout= argument is only supported"):
+        sd.see(0.73, layout="CHW")
+
+
+def test_slice_and_layout_on_nn_module_rejected():
+    from seedl.exceptions import SeeDLError
+
+    pytest.importorskip("torch")
+    from torch import nn
+
+    model = nn.Linear(4, 2)
+
+    with pytest.raises(SeeDLError, match="slice= argument is only supported"):
+        sd.see(model, slice=0)
+
+    with pytest.raises(SeeDLError, match="layout= argument is only supported"):
+        sd.see(model, layout="CHW")
+
+
+def test_empty_tensor_and_empty_slice_graceful_handling():
+    torch = pytest.importorskip("torch")
+    np = pytest.importorskip("numpy")
+
+    # Empty 1D and 2D arrays
+    for empty in [np.zeros((0,)), np.zeros((0, 10)), torch.zeros(0), torch.zeros(0, 10)]:
+        v = sd.see(empty, backend="svg")
+        assert v.kind == "distribution"
+        assert v.metadata["Elements"] == 0
+        assert v.metadata["Estimated memory"] == "0 B"
+        assert any("empty" in note for note in v.notes)
+
+    # Empty slice from non-empty array
+    arr = np.arange(20).reshape(4, 5)
+    v_slice = sd.see(arr, slice="2:2", backend="svg")
+    assert v_slice.kind == "distribution"
+    assert v_slice.metadata["Elements"] == 0
+    assert any("empty" in note for note in v_slice.notes)
+
+
+def test_welford_variance_numerical_stability():
+    np = pytest.importorskip("numpy")
+    torch = pytest.importorskip("torch")
+    from seedl._inspect import _numpy_statistics, _torch_statistics
+
+    # Classic catastrophic cancellation test: large baseline offset with small variation
+    shift = 1e9
+    data = [shift + 1.0, shift + 2.0, shift + 3.0]
+    expected_std = np.std(data)  # ~0.816496580927726
+
+    # NumPy chunked Welford
+    x_np = np.array(data, dtype=np.float64)
+    _, _, mean_np, std_np, _ = _numpy_statistics(x_np, chunk_size=2)
+    assert std_np == pytest.approx(expected_std, rel=1e-6)
+
+    # PyTorch chunked Welford
+    x_torch = torch.tensor(data, dtype=torch.float64)
+    _, _, mean_th, std_th, _, _ = _torch_statistics(x_torch, chunk_size=2)
+    assert std_th == pytest.approx(expected_std, rel=1e-6)
+
+
+def test_4d_ambiguous_layout_note_and_image_grid_notes():
+    torch = pytest.importorskip("torch")
+
+    # 4D ambiguous shape (8, 3, 32, 3)
+    t = torch.zeros(8, 3, 32, 3)
+    v = sd.see(t, backend="svg")
+    assert v.kind == "distribution"
+    # Note must instruct NCHW or NHWC for 4D
+    assert any("NCHW" in note and "NHWC" in note for note in v.notes)
+
+    # When explicit NCHW is provided, renders image grid without spurious sampling note
+    v_nchw = sd.see(t, layout="NCHW", backend="svg")
+    assert v_nchw.kind == "image"
+    assert any("Batch image grid" in note for note in v_nchw.notes)
+    assert not any("evenly spaced sample values" in note for note in v_nchw.notes)
+
+
+def test_negative_step_and_ellipsis_slicing():
+    np = pytest.importorskip("numpy")
+    torch = pytest.importorskip("torch")
+
+    # 3D tensor
+    arr = np.arange(24).reshape(2, 3, 4)
+
+    # Reversal
+    v_rev = sd.see(arr, slice="::-1", backend="svg")
+    assert v_rev.metadata["Shape"] == "(2, 3, 4)"
+
+    # Ellipsis at start
+    v_ell = sd.see(arr, slice="..., -1", backend="svg")
+    assert v_ell.metadata["Shape"] == "(2, 3)"
+    assert v_ell.kind == "matrix"
+
+    # Ellipsis in middle on 4D PyTorch tensor
+    t4 = torch.zeros(2, 3, 4, 5)
+    v_mid = sd.see(t4, slice="0, ..., 0", backend="svg")
+    assert v_mid.metadata["Shape"] == "(3, 4)"
+    assert v_mid.kind == "matrix"
+
+
+

@@ -203,6 +203,8 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
                         step = int(step_s) if step_s.strip() else None
                     except ValueError as err:
                         raise SeeDLError(f"Invalid integer in slice range {p!r}: {err}") from err
+                    if step == 0:
+                        raise SeeDLError(f"Slice step cannot be zero in {p!r}.")
                     parsed_items.append(slice(start, stop, step))
                 else:
                     raise SeeDLError(f"Invalid slice syntax: {p!r}")
@@ -220,6 +222,10 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
         parsed_tuple = (slice_spec,)
     else:
         parsed_tuple = (slice_spec,)
+
+    for item in parsed_tuple:
+        if isinstance(item, slice) and item.step == 0:
+            raise SeeDLError("Slice step cannot be zero.")
 
     # Dimension and bounds checks when shape is known
     if shape is not None:

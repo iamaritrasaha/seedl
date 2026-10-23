@@ -48,6 +48,13 @@ def is_torch_module(value: Any, torch: Any | None = None) -> bool:
     return bool(torch is not None and isinstance(value, torch.nn.Module))
 
 
+def is_numpy_array(value: Any, np: Any | None = None) -> bool:
+    if np is None and not _framework_type(value, "numpy"):
+        return False
+    np = np if np is not None else _numpy_module()
+    return bool(np is not None and isinstance(value, np.ndarray))
+
+
 def _fmt(number: Any, precision: int = 5) -> str:
     if number is None:
         return "n/a"
@@ -354,41 +361,6 @@ def _torch_tensor_data(
             notes,
         )
 
-    sampled = _torch_sample(detached, max_points)
-    if count > len(sampled) and (
-        len(shape) == 1 or (len(shape) > 2 and _image_layout(shape) is None)
-    ):
-        notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
-
-    if len(shape) == 1:
-        return (
-            "sequence",
-            {
-                "values": sampled,
-                "x": list(range(0, count, math.ceil(count / max_points))),
-                "label": "Tensor value",
-                "shape": shape,
-            },
-            metadata,
-            notes,
-        )
-    if len(shape) == 2:
-        row_step, col_step = _preview_steps(shape[0], shape[1], 80, max_points)
-        preview = detached[::row_step, ::col_step][:80, :80].to(device="cpu").tolist()
-        if len(preview) != shape[0] or (preview and len(preview[0]) != shape[1]):
-            notes.append("The heatmap is a downsampled preview of the full matrix.")
-        return (
-            "matrix",
-            {
-                "values": preview,
-                "shape": shape,
-                "row_indices": list(range(0, shape[0], row_step)),
-                "column_indices": list(range(0, shape[1], col_step)),
-            },
-            metadata,
-            notes,
-        )
-
     image_candidate = resolve_image_layout(shape, layout)
     if image_candidate is not None:
         mode, channels = image_candidate
@@ -441,12 +413,52 @@ def _torch_tensor_data(
                 notes,
             )
 
-    if layout is None and is_ambiguous_image_layout(shape):
-        notes.append(
-            f"Shape {shape} has an ambiguous channel position (both first and last dimensions are valid channels); "
-            "specify layout='CHW' or layout='HWC' explicitly to render as an image."
+    sampled = _torch_sample(detached, max_points)
+    if len(shape) == 1:
+        if count > len(sampled):
+            notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
+        return (
+            "sequence",
+            {
+                "values": sampled,
+                "x": list(range(0, count, math.ceil(count / max_points))),
+                "label": "Tensor value",
+                "shape": shape,
+            },
+            metadata,
+            notes,
+        )
+    if len(shape) == 2:
+        row_step, col_step = _preview_steps(shape[0], shape[1], 80, max_points)
+        preview = detached[::row_step, ::col_step][:80, :80].to(device="cpu").tolist()
+        if len(preview) != shape[0] or (preview and len(preview[0]) != shape[1]):
+            notes.append("The heatmap is a downsampled preview of the full matrix.")
+        return (
+            "matrix",
+            {
+                "values": preview,
+                "shape": shape,
+                "row_indices": list(range(0, shape[0], row_step)),
+                "column_indices": list(range(0, shape[1], col_step)),
+            },
+            metadata,
+            notes,
         )
 
+    if layout is None and is_ambiguous_image_layout(shape):
+        if len(shape) == 4:
+            notes.append(
+                f"Shape {shape} has an ambiguous channel position (both first and last dimensions are valid channels); "
+                "specify layout='NCHW' or layout='NHWC' explicitly to render as an image."
+            )
+        else:
+            notes.append(
+                f"Shape {shape} has an ambiguous channel position (both first and last dimensions are valid channels); "
+                "specify layout='CHW' or layout='HWC' explicitly to render as an image."
+            )
+
+    if count > len(sampled):
+        notes.append(f"Showing {len(sampled):,} evenly spaced sample values out of {count:,}.")
     notes.append(
         "Higher-dimensional data is shown as a value distribution from an evenly spaced sample."
     )
@@ -461,16 +473,6 @@ def _preview_steps(height: int, width: int, side_limit: int, max_points: int) ->
         else:
             xstep += 1
     return ystep, xstep
-
-
-def _image_layout(shape: tuple[int, ...]) -> tuple[str, int] | None:
-    if len(shape) != 3:
-        return None
-    if shape[0] in (1, 3, 4) and min(shape[1:]) >= 16:
-        return "channels_first", shape[0]
-    if shape[-1] in (1, 3, 4) and min(shape[:2]) >= 16:
-        return "channels_last", shape[-1]
-    return None
 
 
 def _image_scale(values: Any, dtype: Any) -> Any:
@@ -604,38 +606,6 @@ def _numpy_array_data(
             metadata,
             notes,
         )
-    if len(shape) == 1:
-        step = max(1, math.ceil(count / max_points))
-        sample = array.flat[::step][:max_points].tolist()
-        if len(sample) < count:
-            notes.append(f"Showing {len(sample):,} evenly spaced sample values out of {count:,}.")
-        return (
-            "sequence",
-            {
-                "values": sample,
-                "x": list(range(0, count, step)),
-                "label": "Array value",
-                "shape": shape,
-            },
-            metadata,
-            notes,
-        )
-    if len(shape) == 2:
-        step_y, step_x = _preview_steps(shape[0], shape[1], 80, max_points)
-        preview = array[::step_y, ::step_x][:80, :80].tolist()
-        if step_y > 1 or step_x > 1:
-            notes.append("The heatmap is a downsampled preview of the full matrix.")
-        return (
-            "matrix",
-            {
-                "values": preview,
-                "shape": shape,
-                "row_indices": list(range(0, shape[0], step_y)),
-                "column_indices": list(range(0, shape[1], step_x)),
-            },
-            metadata,
-            notes,
-        )
 
     image_candidate = resolve_image_layout(shape, layout)
     if image_candidate is not None:
@@ -689,11 +659,50 @@ def _numpy_array_data(
                 notes,
             )
 
-    if layout is None and is_ambiguous_image_layout(shape):
-        notes.append(
-            f"Array shape {shape} has an ambiguous image layout (both first and last dimensions can be channels); "
-            "specify layout='CHW' or layout='HWC' to visualize as an image."
+    if len(shape) == 1:
+        step = max(1, math.ceil(count / max_points))
+        sample = array.flat[::step][:max_points].tolist()
+        if len(sample) < count:
+            notes.append(f"Showing {len(sample):,} evenly spaced sample values out of {count:,}.")
+        return (
+            "sequence",
+            {
+                "values": sample,
+                "x": list(range(0, count, step)),
+                "label": "Array value",
+                "shape": shape,
+            },
+            metadata,
+            notes,
         )
+    if len(shape) == 2:
+        step_y, step_x = _preview_steps(shape[0], shape[1], 80, max_points)
+        preview = array[::step_y, ::step_x][:80, :80].tolist()
+        if step_y > 1 or step_x > 1:
+            notes.append("The heatmap is a downsampled preview of the full matrix.")
+        return (
+            "matrix",
+            {
+                "values": preview,
+                "shape": shape,
+                "row_indices": list(range(0, shape[0], step_y)),
+                "column_indices": list(range(0, shape[1], step_x)),
+            },
+            metadata,
+            notes,
+        )
+
+    if layout is None and is_ambiguous_image_layout(shape):
+        if len(shape) == 4:
+            notes.append(
+                f"Array shape {shape} has an ambiguous image layout (both first and last dimensions can be channels); "
+                "specify layout='NCHW' or layout='NHWC' to visualize as an image."
+            )
+        else:
+            notes.append(
+                f"Array shape {shape} has an ambiguous image layout (both first and last dimensions can be channels); "
+                "specify layout='CHW' or layout='HWC' to visualize as an image."
+            )
 
     step = max(1, math.ceil(count / max_points))
     sample = array.flat[::step][:max_points].tolist()

@@ -275,9 +275,8 @@ def see(
     if not isinstance(max_frames, int) or max_frames <= 0:
         raise ValueError("max_frames must be a positive integer.")
 
-    if (
-        view not in {"auto", "features", "feature_maps", "interactive", "explorer"}
-        and (not is_torch_module(obj) or compare is not None)
+    if view not in {"auto", "features", "feature_maps", "interactive", "explorer"} and (
+        not is_torch_module(obj) or compare is not None
     ):
         raise ValueError("Explicit view options require a model without compare=.")
     if view == "3d":

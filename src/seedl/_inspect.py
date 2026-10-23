@@ -158,11 +158,7 @@ def _torch_statistics(
     torch = _torch_module()
     assert torch is not None
     is_fp = bool(tensor.dtype.is_floating_point)
-    stats_dtype = (
-        torch.float64
-        if tensor.dtype == torch.float64 or not is_fp
-        else torch.float32
-    )
+    stats_dtype = torch.float64 if tensor.dtype == torch.float64 or not is_fp else torch.float32
     finite_count = 0
     nonfinite = 0
     nan_count = 0
@@ -221,7 +217,17 @@ def _torch_statistics(
         mean *= scale
         std = math.sqrt(max(m2 / finite_count, 0.0)) * scale
     if return_counts:
-        return minimum, maximum, mean, std, scale if finite_count else None, 0, nan_count, inf_count, zero_count
+        return (
+            minimum,
+            maximum,
+            mean,
+            std,
+            scale if finite_count else None,
+            0,
+            nan_count,
+            inf_count,
+            zero_count,
+        )
     return minimum, maximum, mean, std, scale if finite_count else None, 0
 
 
@@ -318,7 +324,9 @@ def _torch_tensor_data(
     if sparsity_pct >= 50.0 and count > 10 and not sparse:
         notes.append(f"High sparsity: {format_sparsity(zero_count, count)} are zero.")
 
-    total_bytes = count * int(detached.element_size()) if hasattr(detached, "element_size") else count * 4
+    total_bytes = (
+        count * int(detached.element_size()) if hasattr(detached, "element_size") else count * 4
+    )
 
     metadata = _metadata_from_stats(
         shape=shape,
@@ -638,7 +646,9 @@ def _numpy_array_data(
             sub_h, sub_w = int(batch_slice.shape[1]), int(batch_slice.shape[2])
             sub_pts = max(1, max_points // max(1, preview_count))
             ystep, xstep = _preview_steps(sub_h, sub_w, 64, sub_pts)
-            downsampled = batch_slice[:, ::ystep, ::xstep][:, :64, :64].astype(np.float64, copy=False)
+            downsampled = batch_slice[:, ::ystep, ::xstep][:, :64, :64].astype(
+                np.float64, copy=False
+            )
             scaled = _numpy_image_scale(downsampled, array.dtype).tolist()
             grid_pixels, out_chan, rows, cols = make_image_grid(
                 scaled, channels, max_images=preview_count

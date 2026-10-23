@@ -120,7 +120,10 @@ class Visualization:
         if self.kind == "tensor_explorer":
             from ._tensor_explorer import tensor_explorer_html
 
-            return {"text/html": tensor_explorer_html(self, full_html=False), "text/plain": str(self)}
+            return {
+                "text/html": tensor_explorer_html(self, full_html=False),
+                "text/plain": str(self),
+            }
         if self.backend == "plotly" and (
             self.kind == "training_playback"
             or (self.kind == "quantum_circuit" and self.data.get("simulate"))

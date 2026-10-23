@@ -241,7 +241,11 @@ def build_tensor_explorer_payload(
                         {
                             "index": idx,
                             "type": "image",
-                            "shape": [int(sampled.shape[0]), int(sampled.shape[1]), int(sampled.shape[2])],
+                            "shape": [
+                                int(sampled.shape[0]),
+                                int(sampled.shape[1]),
+                                int(sampled.shape[2]),
+                            ],
                             "pixels": frame_pixels,
                             "min": fmin,
                             "max": fmax,
@@ -266,7 +270,11 @@ def build_tensor_explorer_payload(
                         {
                             "index": idx,
                             "type": "image",
-                            "shape": [int(sampled.shape[0]), int(sampled.shape[1]), int(sampled.shape[2])],
+                            "shape": [
+                                int(sampled.shape[0]),
+                                int(sampled.shape[1]),
+                                int(sampled.shape[2]),
+                            ],
                             "pixels": frame_pixels,
                             "min": fmin,
                             "max": fmax,
@@ -321,7 +329,9 @@ def build_tensor_explorer_payload(
                     is_sub_image = True
                     h, w = sub_shape[1], sub_shape[2]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
-                    sampled = np.moveaxis(sub[:, ::ystep, ::xstep][:, :64, :64], 0, -1).astype(np.float32)
+                    sampled = np.moveaxis(sub[:, ::ystep, ::xstep][:, :64, :64], 0, -1).astype(
+                        np.float32
+                    )
                     finite_mask = np.isfinite(sampled)
                     if np.any(finite_mask):
                         fmin = float(np.min(sampled[finite_mask]))
@@ -474,16 +484,11 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
     meta_html = "".join(meta_chips)
 
-    notes_html = "".join(
-        f"<li>{html.escape(str(note))}</li>" for note in view.notes
-    )
+    notes_html = "".join(f"<li>{html.escape(str(note))}</li>" for note in view.notes)
 
     # Serialize JSON payload safely for embedding in script tag
     payload_json = (
-        json.dumps(data)
-        .replace("<", "\\u003c")
-        .replace(">", "\\u003e")
-        .replace("&", "\\u0026")
+        json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     )
 
     widget_body = f"""
@@ -1150,7 +1155,9 @@ def svg_tensor_explorer(data: dict[str, Any], metadata: dict[str, Any], notes: l
     shape_str = html.escape(str(metadata.get("Shape", data.get("shape"))))
     rank_str = html.escape(str(metadata.get("Rank", data.get("rank"))))
     dtype_str = html.escape(str(metadata.get("Data type", data.get("dtype"))))
-    dim_names_str = html.escape(str(metadata.get("Dimension names", ", ".join(data.get("dim_names", [])))))
+    dim_names_str = html.escape(
+        str(metadata.get("Dimension names", ", ".join(data.get("dim_names", []))))
+    )
 
     axes = data.get("axes", [])
     primary_axis = axes[0] if axes else {}

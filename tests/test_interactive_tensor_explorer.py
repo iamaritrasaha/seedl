@@ -306,7 +306,7 @@ def test_tensor_explorer_notebook_representations():
     bundle = view._repr_mimebundle_()
     assert "text/html" in bundle
     assert "text/plain" in bundle
-    assert "<div id=\"seedl-tensor-explorer" in bundle["text/html"]
+    assert '<div id="seedl-tensor-explorer' in bundle["text/html"]
 
     repr_html = view._repr_html_()
     assert repr_html is not None

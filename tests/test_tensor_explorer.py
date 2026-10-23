@@ -402,6 +402,3 @@ def test_negative_step_and_ellipsis_slicing():
     v_mid = sd.see(t4, slice="0, ..., 0", backend="svg")
     assert v_mid.metadata["Shape"] == "(3, 4)"
     assert v_mid.kind == "matrix"
-
-
-

@@ -189,7 +189,9 @@ def test_notebook_mime_multiple_views_are_independent(browser, tmp_path):
     _, view = training_view()
     first, second = view._repr_mimebundle_()["text/html"], view._repr_mimebundle_()["text/html"]
     target = tmp_path / "notebook-output.html"
-    target.write_text("<!DOCTYPE html><html><body>" + first + second + "</body></html>", encoding="utf-8")
+    target.write_text(
+        "<!DOCTYPE html><html><body>" + first + second + "</body></html>", encoding="utf-8"
+    )
     page = browser.new_page()
     errors = []
     page.on("pageerror", lambda error: errors.append(str(error)))

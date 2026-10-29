@@ -69,7 +69,7 @@ def main() -> None:
             checked += 1
 
     manifest = json.loads((ROOT / "demos/manifest.json").read_text())
-    assert manifest["seedl"] == "0.5.0", f"Expected manifest version 0.5.0, got {manifest['seedl']}"
+    assert manifest["seedl"] == "0.6.0", f"Expected manifest version 0.6.0, got {manifest['seedl']}"
     demo_files = list((ROOT / "demos").glob("*.html"))
     assert len(manifest["sha256"]) == len(demo_files)
     assert len(manifest["sha256"]) >= 30, (
@@ -78,8 +78,9 @@ def main() -> None:
 
     for path in paths:
         text = path.read_text()
-        assert 'class="version">0.5.0' in text, f"Outdated version badge in {path.name}"
-        # Current API links use 0.5.0; historical release notes links are preserved
+        assert 'class="version">0.6.0' in text, f"Outdated version badge in {path.name}"
+        # Current API links use 0.6.0; historical release notes links are preserved
+        assert "blob/v0.5.0/src/" not in text, f"Stale 0.5.0 API link in {path.name}"
         assert "blob/v0.4.0/src/" not in text, f"Stale 0.4.0 API link in {path.name}"
         assert "blob/v0.3.0/src/" not in text, f"Stale 0.3.0 API link in {path.name}"
         assert "blob/v0.2.0/src/" not in text, f"Stale 0.2.0 API link in {path.name}"

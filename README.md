@@ -67,18 +67,24 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **SeeDL 0.5.0 — The Neural Observatory**: Advanced open-source scientific visualization, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
+> **SeeDL 0.6.0 — Neural Observatory & Multidimensional Tensor Explorer**: Advanced open-source scientific visualization, client-side multidimensional tensor slicing, layer-level activation diagnostics, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
 >
 > Install SeeDL:
-> `pip install seedl==0.5.0` or `pip install "seedl[all]==0.5.0"`
+> `pip install seedl==0.6.0` or `pip install "seedl[all]==0.6.0"`
 
 ---
 
-## 🌌 SeeDL 0.5.0: The Neural Observatory
+## 🌌 SeeDL 0.6.0: The Neural Observatory & Tensor Explorer
 
-SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite for non-destructive execution graph tracing, multi-layer Transformer rollout, attribution benchmarking, gradient health diagnostics, quantum noise simulation, dataset intelligence, and publication-ready scientific reports.
+SeeDL 0.6.0 introduces the **Interactive Multidimensional Tensor Explorer** and comprehensive **Model Observability & Activation Diagnostics**, alongside the laboratory-grade Neural Observatory for execution graph tracing, Transformer attention rollout, attribution benchmarking, gradient health diagnostics, and quantum noise simulation.
 
-### Key Capabilities in 0.5.0:
+### Key Capabilities in 0.6.0:
+
+- **Interactive Multidimensional Tensor Explorer (`sd.see(tensor, interactive=True)`)**:
+  - Interactive client-side slice scrubber and multidimensional visualizer for 3D, 4D, 5D, and higher-order tensors.
+  - Dynamic dimension selectors (Batch, Channel, Depth, Height, Width) with real-time continuous slider scrubbing.
+  - Multi-colormap support (`viridis`, `plasma`, `coolwarm`, `grayscale`), interactive zoom/pan, dynamic cursor inspection, and instant slice summary statistics.
+  - Fully offline, zero-dependency client-side HTML Canvas renderer (zero external CDN calls, works offline in any modern browser).
 
 - **Neural Execution Tracing (`sd.trace`)**:
   - Non-destructive execution graph recording with runtime hook interception and optional `torch.fx` symbolic analysis.
@@ -151,7 +157,7 @@ report = sd.report(
 report.save("diagnostic_report.html")
 ```
 
-See the [Official Release Notes](docs/RELEASE_NOTES_0.5.0.md) and runnable examples in `examples/`.
+See the [Official Release Notes](docs/RELEASE_NOTES_0.6.0.md) and runnable examples in `examples/`.
 
 ---
 

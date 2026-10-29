@@ -1,4 +1,4 @@
-"""Build deterministic SeeDL 0.5.0 demos; no server or CDN is needed at runtime.
+"""Build deterministic SeeDL 0.6.0 demos; no server or CDN is needed at runtime.
 
 Run from the repository root using the published SeeDL package:
     .venv/bin/python website/generate.py
@@ -129,7 +129,7 @@ def export_playback(view, name):
     document = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{name} · SeeDL 0.5.0</title>"
+        f"<title>{name} · SeeDL 0.6.0</title>"
         '<script src="../assets/plotly.min.js"></script>'
         '<link rel="stylesheet" href="../assets/playback.css">'
         f"</head><body>{body}</body></html>"
@@ -159,7 +159,7 @@ def export(view, name: str, *, network: bool = False) -> None:
     document = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{view.kind} · SeeDL 0.5.0</title>"
+        f"<title>{view.kind} · SeeDL 0.6.0</title>"
         "<style>html,body{margin:0;background:#0f172a;height:100%;}"
         ".plotly-graph-div{width:100%!important;height:100%!important;min-height:560px;}"
         "body>div{height:100%}*:focus-visible{outline:2px solid #00e5ff}</style>"
@@ -228,8 +228,8 @@ def build_report_preview_svg(report: object) -> str:
 
 
 def main() -> None:
-    if sd.__version__ != "0.5.0":
-        raise RuntimeError(f"Build these demos with SeeDL 0.5.0, found {sd.__version__}.")
+    if sd.__version__ != "0.6.0":
+        raise RuntimeError(f"Build these demos with SeeDL 0.6.0, found {sd.__version__}.")
     assert "site-packages" in str(Path(sd.__file__).resolve()), (
         f"SeeDL must be imported from installed package, got {sd.__file__}"
     )
@@ -858,12 +858,12 @@ def main() -> None:
     }
     (ROOT / "demos/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (ROOT / ".nojekyll").touch()
-    print(f"Built {len(manifest['sha256'])} authentic SeeDL 0.5.0 demos; one shared Plotly bundle.")
+    print(f"Built {len(manifest['sha256'])} authentic SeeDL 0.6.0 demos; one shared Plotly bundle.")
 
 
 if __name__ == "__main__":
     with contextlib.redirect_stdout(io.StringIO()):
         main()
     print(
-        "Built authentic SeeDL 0.5.0 demonstrations, training snapshots, and shared Plotly bundle."
+        "Built authentic SeeDL 0.6.0 demonstrations, training snapshots, and shared Plotly bundle."
     )

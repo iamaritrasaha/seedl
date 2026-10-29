@@ -1022,8 +1022,14 @@ def _parameter_numel(parameter: Any) -> int | None:
 
 
 def _run_model_observation(
-    model: Any, example_input: Any, *, capture_values: bool, max_points: int
-) -> dict[int, dict[str, Any]]:
+    model: Any,
+    example_input: Any,
+    *,
+    capture_values: bool,
+    max_points: int,
+    zero_threshold: float = 0.8,
+    saturation_threshold: float = 0.5,
+) -> dict[Any, Any]:
     torch = _torch_module()
     if torch is None:
         raise MissingDependencyError(
@@ -1054,79 +1060,119 @@ def _run_model_observation(
         )
         for _, module in modules
     ]
-    observations: dict[int, dict[str, Any]] = {}
+    observations: dict[Any, Any] = {}
+    module_call_counts: dict[int, int] = {}
+    pre_inputs: dict[int, list[str]] = {}
+    invocations_by_module: dict[int, list[dict[str, Any]]] = {}
+    execution_order_counter = 0
     handles = []
 
     def make_pre(module_id: int):
         def hook(_module: Any, args: Any) -> None:
+            shape_str = _shape_text(args, torch)
             observation = observations.setdefault(module_id, {})
-            observation["input_shape"] = _shape_text(args, torch)
+            observation["input_shape"] = shape_str
+            pre_inputs.setdefault(module_id, []).append(shape_str)
 
         return hook
 
     def make_post(module_id: int, name: str, module: Any):
         def hook(_module: Any, _args: Any, output: Any) -> None:
-            nonlocal remaining_sample_points
+            nonlocal remaining_sample_points, execution_order_counter
+            call_idx = module_call_counts.get(module_id, 0)
+            module_call_counts[module_id] = call_idx + 1
+
+            current_exec_order = execution_order_counter
+            execution_order_counter += 1
+
+            inputs_list = pre_inputs.get(module_id, [])
+            inp_shape = inputs_list[call_idx] if call_idx < len(inputs_list) else "—"
+            out_shape = _shape_text(output, torch)
+
             observation = observations.setdefault(module_id, {})
-            observation["output_shape"] = _shape_text(output, torch)
+            observation["output_shape"] = out_shape
             if capture_values:
                 tensor = _first_tensor(output, torch)
                 if tensor is not None:
-                    old_sample_count = len(observation.get("sample", []))
-                    available = remaining_sample_points + old_sample_count
-                    current_limit = min(sample_limit, available)
-                    payload = _torch_tensor_data(tensor, max(current_limit, 1))
+                    t_det = tensor.detach()
+                    num_elements = t_det.numel()
+                    tensor_shape = tuple(int(size) for size in t_det.shape)
+
+                    # Bounded sampling across all observed modules
+                    current_limit = min(sample_limit, remaining_sample_points)
                     sample = (
                         _torch_sample(
-                            tensor.detach()
-                            if tensor.layout == torch.strided
-                            else tensor.detach().to_sparse_coo().coalesce().values(),
+                            t_det
+                            if t_det.layout == torch.strided
+                            else t_det.to_sparse_coo().coalesce().values(),
                             current_limit,
                         )
-                        if current_limit
+                        if current_limit and num_elements > 0
                         else []
                     )
-                    remaining_sample_points = available - len(sample)
-                    observation["sample"] = sample
-                    observation["stats"] = payload[2]
-                    observation["tensor_shape"] = tuple(int(size) for size in tensor.shape)
-                    observation["module_name"] = name
-                    observation["module_type"] = type(module).__name__
+                    remaining_sample_points = max(0, remaining_sample_points - len(sample))
 
-                    # Diagnostics: dead units and saturation
-                    dead_fraction = 0.0
+                    # Numerically stable, memory-safe bounded statistics
+                    (
+                        t_min,
+                        t_max,
+                        t_mean,
+                        t_std,
+                        scale_val,
+                        nonfinite_cnt,
+                        nan_cnt,
+                        inf_cnt,
+                        zero_cnt,
+                    ) = _torch_statistics(t_det, return_counts=True)
+                    zero_frac = (zero_cnt / float(num_elements)) if num_elements > 0 else 0.0
+
+                    payload = _torch_tensor_data(t_det, max(current_limit, 1))
+                    stats_metadata = payload[2]
+
+                    # Layer diagnostics: saturation, inactivity, instability
+                    mod_lower = type(module).__name__.lower()
+                    is_relu_like = any(act in mod_lower for act in ("relu", "gelu", "silu"))
+                    relu_inact = zero_frac if is_relu_like else None
+
                     sat_note = None
-                    if tensor.numel() > 0:
+                    sat_frac = None
+                    if is_relu_like and zero_frac > zero_threshold:
+                        sat_note = f"{zero_frac * 100:.1f}% zero/inactive units on this input"
+                    elif "sigmoid" in mod_lower and num_elements > 0:
                         try:
-                            t_flat = tensor.detach().reshape(-1).to(dtype=torch.float32)
-                            t_fin = t_flat[torch.isfinite(t_flat)]
-                            if t_fin.numel() > 0:
-                                zeros = int((t_fin == 0).sum().item())
-                                dead_fraction = zeros / float(t_fin.numel())
-                                mod_lower = type(module).__name__.lower()
-                                if "relu" in mod_lower and dead_fraction > 0.8:
-                                    sat_note = f"{dead_fraction * 100:.1f}% zero/dead units"
-                                elif "sigmoid" in mod_lower:
-                                    s_cnt = int(((t_fin < 0.05) | (t_fin > 0.95)).sum().item())
-                                    if s_cnt / float(t_fin.numel()) > 0.5:
-                                        sat_note = f"{(s_cnt / float(t_fin.numel())) * 100:.1f}% saturated (<0.05 or >0.95)"
-                                elif "tanh" in mod_lower:
-                                    t_cnt = int(((t_fin < -0.95) | (t_fin > 0.95)).sum().item())
-                                    if t_cnt / float(t_fin.numel()) > 0.5:
-                                        sat_note = f"{(t_cnt / float(t_fin.numel())) * 100:.1f}% saturated (<-0.95 or >0.95)"
+                            s_cnt = int(((t_det < 0.05) | (t_det > 0.95)).sum().item())
+                            sat_frac = s_cnt / float(num_elements)
+                            if sat_frac > saturation_threshold:
+                                sat_note = f"{sat_frac * 100:.1f}% saturated (<0.05 or >0.95)"
                         except Exception:
                             pass
-                    observation["dead_fraction"] = dead_fraction
-                    observation["saturation_note"] = sat_note
+                    elif "tanh" in mod_lower and num_elements > 0:
+                        try:
+                            t_cnt = int(((t_det < -0.95) | (t_det > 0.95)).sum().item())
+                            sat_frac = t_cnt / float(num_elements)
+                            if sat_frac > saturation_threshold:
+                                sat_note = f"{sat_frac * 100:.1f}% saturated (<-0.95 or >0.95)"
+                        except Exception:
+                            pass
+
+                    # Instability detection
+                    instability = None
+                    if nonfinite_cnt > 0:
+                        instability = f"Non-finite activations ({nan_cnt} NaN, {inf_cnt} Inf)"
+                    elif scale_val is not None and scale_val > 100.0:
+                        instability = f"Large activation magnitude (max |value| = {scale_val:.2f})"
+                    elif scale_val is not None and 0.0 < scale_val < 1e-7:
+                        instability = (
+                            f"Near-zero activation magnitude (max |value| = {scale_val:.2e})"
+                        )
 
                     # Feature maps for 4D conv tensors (N, C, H, W)
                     feat_preview = None
-                    if tensor.ndim == 4 and tensor.shape[1] >= 1 and min(tensor.shape[2:]) >= 4:
+                    if t_det.ndim == 4 and t_det.shape[1] >= 1 and min(t_det.shape[2:]) >= 4:
                         try:
                             from ._tensors import make_image_grid
 
-                            t_det = tensor.detach()
-                            num_c = min(int(tensor.shape[1]), 16)
+                            num_c = min(int(t_det.shape[1]), 16)
                             c_slices = []
                             for c in range(num_c):
                                 s2d = t_det[0, c].to(dtype=torch.float32)
@@ -1140,6 +1186,47 @@ def _run_model_observation(
                             feat_preview = grid
                         except Exception:
                             pass
+
+                    inv_record = {
+                        "module_id": module_id,
+                        "module_name": name,
+                        "module_type": type(module).__name__,
+                        "invocation_index": call_idx,
+                        "execution_order": current_exec_order,
+                        "input_shape": inp_shape,
+                        "output_shape": out_shape,
+                        "tensor_shape": tensor_shape,
+                        "num_elements": num_elements,
+                        "sample": sample,
+                        "stats": stats_metadata,
+                        "min": t_min,
+                        "max": t_max,
+                        "mean": t_mean,
+                        "std": t_std,
+                        "max_abs": scale_val,
+                        "nonfinite_count": nonfinite_cnt,
+                        "nan_count": nan_cnt,
+                        "inf_count": inf_cnt,
+                        "zero_count": zero_cnt,
+                        "zero_fraction": zero_frac,
+                        "zero_fraction_sampled": False,
+                        "dead_fraction": zero_frac,
+                        "inactivity_fraction": zero_frac,
+                        "relu_inactivity": relu_inact,
+                        "saturation_fraction": sat_frac,
+                        "saturation_note": sat_note,
+                        "instability_warning": instability,
+                        "feature_maps": feat_preview,
+                    }
+                    invocations_by_module.setdefault(module_id, []).append(inv_record)
+
+                    observation["sample"] = sample
+                    observation["stats"] = stats_metadata
+                    observation["tensor_shape"] = tensor_shape
+                    observation["module_name"] = name
+                    observation["module_type"] = type(module).__name__
+                    observation["dead_fraction"] = zero_frac
+                    observation["saturation_note"] = sat_note
                     observation["feature_maps"] = feat_preview
                 else:
                     old_sample_count = len(observation.pop("sample", []))
@@ -1184,6 +1271,7 @@ def _run_model_observation(
             finally:
                 for module, training in states:
                     module.training = training
+    observations["_invocations_by_module"] = invocations_by_module
     return observations
 
 
@@ -1300,45 +1388,93 @@ def _model_data(model: Any, example_input: Any | None) -> tuple[dict[str, Any], 
 
 
 def _activation_data(
-    model: Any, example_input: Any, max_points: int
+    model: Any,
+    example_input: Any,
+    max_points: int,
+    zero_threshold: float = 0.8,
+    saturation_threshold: float = 0.5,
 ) -> tuple[dict[str, Any], str, list[str]]:
     observations = _run_model_observation(
-        model, example_input, capture_values=True, max_points=max_points
+        model,
+        example_input,
+        capture_values=True,
+        max_points=max_points,
+        zero_threshold=zero_threshold,
+        saturation_threshold=saturation_threshold,
     )
-    layers = []
+    invocations_by_module: dict[int, list[dict[str, Any]]] = observations.get(
+        "_invocations_by_module", {}
+    )
+    layers: list[dict[str, Any]] = []
+    has_repeated_invocations = False
+
     for name, module in model.named_modules():
-        observation = observations.get(id(module), {})
-        if "tensor_shape" not in observation:
+        mod_invs = invocations_by_module.get(id(module))
+        if not mod_invs:
             continue
-        stats = observation["stats"]
-        layers.append(
-            {
-                "name": name or "(root)",
-                "type": type(module).__name__,
-                "shape": str(observation["tensor_shape"]),
-                "sample": observation.get("sample", [])[:max_points],
-                "mean": stats.get("Mean", "n/a"),
-                "std": stats.get("Std. deviation", "n/a"),
-                "max_abs": stats.get("Maximum absolute value"),
-                "finite": "yes"
-                if stats.get("Non-finite values") == 0
-                else f"no ({stats.get('Non-finite values')})",
-                "status": "available",
-                "dead_fraction": observation.get("dead_fraction", 0.0),
-                "saturation_note": observation.get("saturation_note"),
-                "feature_maps": observation.get("feature_maps"),
-            }
-        )
+        total_calls = len(mod_invs)
+        if total_calls > 1:
+            has_repeated_invocations = True
+
+        for inv in mod_invs:
+            if total_calls == 1:
+                display_name = name or "(root)"
+            else:
+                display_name = f"{name or '(root)'} (call {inv['invocation_index'] + 1})"
+
+            stats = inv["stats"]
+            layers.append(
+                {
+                    "name": display_name,
+                    "base_name": name or "(root)",
+                    "module_name": name or "(root)",
+                    "type": inv["module_type"],
+                    "invocation_index": inv["invocation_index"],
+                    "total_invocations": total_calls,
+                    "execution_order": inv["execution_order"],
+                    "shape": str(inv["tensor_shape"]),
+                    "tensor_shape": inv["tensor_shape"],
+                    "num_elements": inv["num_elements"],
+                    "sample": inv["sample"][:max_points],
+                    "mean": stats.get("Mean", _fmt(inv["mean"])),
+                    "std": stats.get("Std. deviation", _fmt(inv["std"])),
+                    "min": _fmt(inv["min"]),
+                    "max": _fmt(inv["max"]),
+                    "max_abs": inv["max_abs"],
+                    "finite": (
+                        "yes" if inv["nonfinite_count"] == 0 else f"no ({inv['nonfinite_count']})"
+                    ),
+                    "nonfinite_count": inv["nonfinite_count"],
+                    "nan_count": inv["nan_count"],
+                    "inf_count": inv["inf_count"],
+                    "status": "available",
+                    "zero_count": inv["zero_count"],
+                    "zero_fraction": inv["zero_fraction"],
+                    "zero_fraction_sampled": inv["zero_fraction_sampled"],
+                    "dead_fraction": inv["dead_fraction"],
+                    "inactivity_fraction": inv["inactivity_fraction"],
+                    "relu_inactivity": inv["relu_inactivity"],
+                    "saturation_fraction": inv["saturation_fraction"],
+                    "saturation_note": inv["saturation_note"],
+                    "instability_warning": inv["instability_warning"],
+                    "feature_maps": inv["feature_maps"],
+                }
+            )
+
     notes = [
         "Captured in one eval-mode forward pass under no_grad(); training flags and "
         "ordinary buffer updates were restored. Custom forward side effects are not sandboxed.",
-        "Each row shows the first tensor output from that module; repeated uses show the last "
-        "observed output. Sample values share a max_points budget across modules.",
+        "Each row shows the first tensor output from that module invocation. "
+        "Sample values share a max_points budget across modules.",
     ]
+    if has_repeated_invocations:
+        notes.append(
+            "Repeated module invocations detected: each execution is tracked individually with distinct activation diagnostics."
+        )
     dead_layers = [
         layer["name"]
         for layer in layers
-        if layer.get("dead_fraction", 0.0) > 0.8
+        if layer.get("zero_fraction", 0.0) > zero_threshold
         and any(
             act in layer.get("type", "").lower()
             for act in ("relu", "gelu", "silu", "sigmoid", "tanh")
@@ -1346,12 +1482,17 @@ def _activation_data(
     ]
     if dead_layers:
         notes.append(
-            f"Dead unit alert (heuristic): {len(dead_layers)} activation layer(s) have >80% inactive zeros: {', '.join(dead_layers[:5])}"
+            f"Dead unit alert (heuristic): {len(dead_layers)} activation layer(s) have >{int(zero_threshold * 100)}% inactive zeros: {', '.join(dead_layers[:5])}. Note: observed response pattern on this input, not a permanent diagnosis."
         )
     sat_layers = [layer["name"] for layer in layers if layer.get("saturation_note")]
     if sat_layers:
         notes.append(
             f"Saturation detected in {len(sat_layers)} layer(s): {', '.join(sat_layers[:5])}"
+        )
+    unstable_layers = [layer["name"] for layer in layers if layer.get("instability_warning")]
+    if unstable_layers:
+        notes.append(
+            f"Numerical instability detected in {len(unstable_layers)} layer(s): {', '.join(unstable_layers[:5])}"
         )
     if not layers:
         notes.append("No tensor outputs were captured for this input.")

@@ -94,6 +94,13 @@ SeeDL 0.5.0 introduces **The Neural Observatory**, an advanced laboratory suite 
   - Pairwise Pearson correlation, Cosine similarity, and multi-method consensus.
 - **Gradient Health Diagnostics (`sd.gradient_health`)**:
   - Layer-by-layer norm diagnostics, gradient-to-weight ratios, vanishing/high gradient alerts, tied-weight transparency, and dead ReLU sparsity detection.
+  - Memory-safe sparse-aware statistics on sparse tensors (e.g. `nn.Embedding(..., sparse=True)`) without dense allocations, distinguishing stored values from implicit zeros.
+- **Layer-Level Activation Diagnostics (`sd.activations`)**:
+  - Detailed mean, standard deviation, minimum, maximum, and bounded distribution samples across executed layers.
+  - Exact zero fractions, non-finite (NaN/Inf) detection, and activation magnitude instability warnings.
+  - ReLU inactivity and Sigmoid/Tanh saturation diagnostics with configurable thresholds (`zero_threshold`, `saturation_threshold`).
+  - Repeated module execution tracking (RNNs, weight sharing, looped layers) preserving individual invocation statistics without overwriting.
+  - Filtered layer selection (`layers="layer_name"`) with matching summary metrics and targeted notes.
 - **Training Run Comparison (`sd.compare_runs`)**:
   - Two-run training comparison with step alignment, final deltas, pointwise absolute differences, and missing metric alerts.
 - **Quantum Noise Simulation (`sd.quantum_noise`)**:
@@ -127,14 +134,18 @@ loss.backward()
 health_view = sd.gradient_health(model)
 print(health_view.summary)
 
-# 3. Simulate single-qubit noisy quantum channel decoherence
+# 3. Diagnose layer-level activations and saturation
+act_view = sd.activations(model, input=x, zero_threshold=0.8)
+act_view.save("activations.html")
+
+# 4. Simulate single-qubit noisy quantum channel decoherence
 noise_view = sd.quantum_noise(channel="amplitude_damping", param=0.25, steps=10)
 noise_view.save("quantum_noise.html")
 
-# 4. Compile offline scientific report
+# 5. Compile offline scientific report
 report = sd.report(
     title="Neural Observatory Diagnostic Report",
-    views=[flow_view, health_view, noise_view],
+    views=[flow_view, health_view, act_view, noise_view],
     author="Scientific Research Team",
 )
 report.save("diagnostic_report.html")
@@ -454,12 +465,15 @@ import seedl as sd
 # Visualize 1D vectors, 2D weight matrices, or image tensors
 sd.see(my_tensor)
 
-# Inspect all layer activations from a forward pass:
-sd.activations(model, input=x)
+# Inspect layer activations with configurable inactivity/saturation diagnostics:
+sd.activations(model, input=x, zero_threshold=0.8, saturation_threshold=0.5)
 
-# Diagnose gradient health (vanishing / exploding gradients) after loss.backward():
+# Target specific layers or module types with matching summaries:
+sd.activations(model, input=x, layers=["layer1", "layer2"])
+
+# Diagnose gradient health (with memory-safe sparse gradient support):
 loss.backward()
-sd.gradients(model)
+sd.gradient_health(model)
 ```
 
 </details>

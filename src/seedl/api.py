@@ -97,7 +97,13 @@ def _show_result(view: Visualization) -> None:
             return
     except ImportError:
         pass
-    print(view)
+    try:
+        print(view)
+    except UnicodeEncodeError:
+        import sys
+
+        enc = sys.stdout.encoding or "ascii"
+        print(str(view).encode(enc, errors="replace").decode(enc))
 
 
 def see(
@@ -469,13 +475,22 @@ def activations(
     layers: str | list[str] = "all",
     backend: str = "auto",
     max_points: int = 2_048,
+    zero_threshold: float = 0.8,
+    saturation_threshold: float = 0.5,
 ) -> Visualization:
     """Capture layer outputs and feature maps from one input-driven forward pass."""
     _validate_max_points(max_points)
     selected_backend = resolve_backend(backend)
     from ._activations import capture_activations
 
-    data, summary, notes = capture_activations(model, input, layers=layers, max_points=max_points)
+    data, summary, notes = capture_activations(
+        model,
+        input,
+        layers=layers,
+        max_points=max_points,
+        zero_threshold=zero_threshold,
+        saturation_threshold=saturation_threshold,
+    )
     view = Visualization(
         kind="activations",
         title=f"{type(model).__name__} activations",

@@ -10,9 +10,15 @@ from pathlib import Path
 
 import pytest
 
-from seedl import __version__ as CURRENT_VERSION
-
 ROOT = Path(__file__).resolve().parents[1]
+
+try:
+    import tomllib
+except ModuleNotFoundError:
+    import tomli as tomllib  # type: ignore[no-redef]
+with open(ROOT / "pyproject.toml", "rb") as _f:
+    CURRENT_VERSION = tomllib.load(_f)["project"]["version"]
+
 SCRIPT = ROOT / "scripts" / "verify_release.py"
 
 

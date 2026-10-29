@@ -78,6 +78,9 @@ def inspect_gradient_health(
                 "num_elements": num_elements,
                 "is_tied": is_tied,
                 "has_grad": False,
+                "is_sparse": False,
+                "stored_elements": 0,
+                "implicit_zeros": num_elements,
                 "requires_grad": param.requires_grad,
                 "weight_norm": weight_norm,
                 "l1_norm": None,
@@ -91,57 +94,134 @@ def inspect_gradient_health(
             }
         else:
             grad = param.grad.detach()
-            if grad.is_sparse:
-                grad = grad.to_dense()
-            float_grad = grad.float()
-
-            is_finite = torch.isfinite(float_grad)
-            nonfinite_cnt = int((~is_finite).sum().item())
-            total_nonfinite += nonfinite_cnt
-
-            if nonfinite_cnt == 0:
-                l1 = float(float_grad.norm(1).item())
-                l2 = float(float_grad.norm(2).item())
-                max_abs = float(float_grad.abs().max().item())
-                mean_val = float(float_grad.mean().item())
-                std_val = float(float_grad.std().item()) if num_elements > 1 else 0.0
-                zero_cnt = int((float_grad == 0.0).sum().item())
-                zero_frac = zero_cnt / float(num_elements) if num_elements > 0 else 0.0
-
-                if not is_tied:
-                    tot_l1 += l1
-                    tot_l2_sq += l2**2
-                    total_zero_elements += zero_cnt
-                    total_elements += num_elements
-            else:
-                l1, l2, max_abs, mean_val, std_val = (
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
+            is_sparse = bool(
+                grad.is_sparse or (hasattr(grad, "layout") and grad.layout != torch.strided)
+            )
+            if is_sparse:
+                coalesced = (
+                    grad.coalesce()
+                    if hasattr(grad, "coalesce")
+                    else grad.to_sparse_coo().coalesce()
                 )
-                zero_frac = float("nan")
+                vals = coalesced.values()
+                stored_elements = vals.numel()
+                implicit_zeros = num_elements - stored_elements
+                is_fp = vals.dtype.is_floating_point
 
-            ratio = (l2 / weight_norm) if (weight_norm > 1e-12 and math.isfinite(l2)) else None
+                nonfinite_cnt = int((~torch.isfinite(vals)).sum().item()) if is_fp else 0
+                total_nonfinite += nonfinite_cnt
 
-            record = {
-                "name": name,
-                "shape": shape,
-                "num_elements": num_elements,
-                "is_tied": is_tied,
-                "has_grad": True,
-                "requires_grad": param.requires_grad,
-                "weight_norm": weight_norm,
-                "l1_norm": l1 if math.isfinite(l1) else None,
-                "l2_norm": l2 if math.isfinite(l2) else None,
-                "max_abs": max_abs if math.isfinite(max_abs) else None,
-                "mean": mean_val if math.isfinite(mean_val) else None,
-                "std": std_val if math.isfinite(std_val) else None,
-                "zero_fraction": zero_frac if math.isfinite(zero_frac) else None,
-                "nonfinite_count": nonfinite_cnt,
-                "grad_to_weight_ratio": ratio,
-            }
+                if nonfinite_cnt == 0:
+                    vals_float = vals.float() if is_fp else vals.to(dtype=torch.float32)
+                    l1 = float(vals_float.norm(1).item())
+                    l2 = float(vals_float.norm(2).item())
+                    max_abs = float(vals_float.abs().max().item()) if stored_elements > 0 else 0.0
+                    sum_val = float(vals_float.sum().item())
+                    mean_val = (sum_val / float(num_elements)) if num_elements > 0 else 0.0
+
+                    if num_elements > 1:
+                        stored_dev_sq = float(((vals_float - mean_val) ** 2).sum().item())
+                        zero_dev_sq = float(implicit_zeros * (mean_val**2))
+                        var_val = max(0.0, (stored_dev_sq + zero_dev_sq) / float(num_elements - 1))
+                        std_val = math.sqrt(var_val)
+                    else:
+                        std_val = 0.0
+
+                    stored_zeros = int((vals == 0).sum().item())
+                    zero_cnt = implicit_zeros + stored_zeros
+                    zero_frac = zero_cnt / float(num_elements) if num_elements > 0 else 0.0
+
+                    if not is_tied:
+                        tot_l1 += l1
+                        tot_l2_sq += l2**2
+                        total_zero_elements += zero_cnt
+                        total_elements += num_elements
+                else:
+                    l1, l2, max_abs, mean_val, std_val = (
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                    )
+                    zero_frac = float("nan")
+
+                ratio = (l2 / weight_norm) if (weight_norm > 1e-12 and math.isfinite(l2)) else None
+
+                record = {
+                    "name": name,
+                    "shape": shape,
+                    "num_elements": num_elements,
+                    "is_tied": is_tied,
+                    "has_grad": True,
+                    "is_sparse": True,
+                    "stored_elements": stored_elements,
+                    "implicit_zeros": implicit_zeros,
+                    "requires_grad": param.requires_grad,
+                    "weight_norm": weight_norm,
+                    "l1_norm": l1 if math.isfinite(l1) else None,
+                    "l2_norm": l2 if math.isfinite(l2) else None,
+                    "max_abs": max_abs if math.isfinite(max_abs) else None,
+                    "mean": mean_val if math.isfinite(mean_val) else None,
+                    "std": std_val if math.isfinite(std_val) else None,
+                    "zero_fraction": zero_frac if math.isfinite(zero_frac) else None,
+                    "nonfinite_count": nonfinite_cnt,
+                    "grad_to_weight_ratio": ratio,
+                }
+            else:
+                is_fp = grad.dtype.is_floating_point
+                nonfinite_cnt = int((~torch.isfinite(grad)).sum().item()) if is_fp else 0
+                total_nonfinite += nonfinite_cnt
+
+                if nonfinite_cnt == 0:
+                    float_grad = (
+                        grad if grad.dtype in (torch.float32, torch.float64) else grad.float()
+                    )
+                    l1 = float(float_grad.norm(1).item())
+                    l2 = float(float_grad.norm(2).item())
+                    max_abs = float(float_grad.abs().max().item()) if num_elements > 0 else 0.0
+                    mean_val = float(float_grad.mean().item()) if num_elements > 0 else 0.0
+                    std_val = float(float_grad.std().item()) if num_elements > 1 else 0.0
+                    zero_cnt = int((grad == 0).sum().item())
+                    zero_frac = zero_cnt / float(num_elements) if num_elements > 0 else 0.0
+
+                    if not is_tied:
+                        tot_l1 += l1
+                        tot_l2_sq += l2**2
+                        total_zero_elements += zero_cnt
+                        total_elements += num_elements
+                else:
+                    l1, l2, max_abs, mean_val, std_val = (
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                        float("nan"),
+                    )
+                    zero_frac = float("nan")
+
+                ratio = (l2 / weight_norm) if (weight_norm > 1e-12 and math.isfinite(l2)) else None
+
+                record = {
+                    "name": name,
+                    "shape": shape,
+                    "num_elements": num_elements,
+                    "is_tied": is_tied,
+                    "has_grad": True,
+                    "is_sparse": False,
+                    "stored_elements": num_elements,
+                    "implicit_zeros": 0,
+                    "requires_grad": param.requires_grad,
+                    "weight_norm": weight_norm,
+                    "l1_norm": l1 if math.isfinite(l1) else None,
+                    "l2_norm": l2 if math.isfinite(l2) else None,
+                    "max_abs": max_abs if math.isfinite(max_abs) else None,
+                    "mean": mean_val if math.isfinite(mean_val) else None,
+                    "std": std_val if math.isfinite(std_val) else None,
+                    "zero_fraction": zero_frac if math.isfinite(zero_frac) else None,
+                    "nonfinite_count": nonfinite_cnt,
+                    "grad_to_weight_ratio": ratio,
+                }
 
         param_records.append(record)
 

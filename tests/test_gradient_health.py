@@ -172,5 +172,20 @@ def test_gradient_health_sparse_and_bfloat16_gradients():
     data_sparse = inspect_gradient_health(emb)
     rec_emb = data_sparse["parameters"][0]
     assert rec_emb["has_grad"] is True
-    assert rec_emb["l1_norm"] is not None
-    assert rec_emb["l2_norm"] is not None
+    assert rec_emb["is_sparse"] is True
+    assert rec_emb["stored_elements"] == 8
+    assert rec_emb["implicit_zeros"] == 12
+    assert rec_emb["l1_norm"] == 8.0
+    assert math.isclose(rec_emb["l2_norm"], math.sqrt(8.0), rel_tol=1e-5)
+    assert math.isclose(rec_emb["mean"], 8.0 / 20.0, rel_tol=1e-5)
+    assert rec_emb["zero_fraction"] == 12.0 / 20.0
+    assert rec_emb["nonfinite_count"] == 0
+
+    # Test sparse gradient with non-finite value
+    with torch.no_grad():
+        emb.weight.grad._values()[0, 0] = float("nan")
+    data_nan_sparse = inspect_gradient_health(emb)
+    rec_nan_emb = data_nan_sparse["parameters"][0]
+    assert rec_nan_emb["nonfinite_count"] == 1
+    assert data_nan_sparse["total_nonfinite"] == 1
+    assert rec_nan_emb["l1_norm"] is None

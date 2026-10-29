@@ -1131,27 +1131,53 @@ def _run_model_observation(
 
                     # Layer diagnostics: saturation, inactivity, instability
                     mod_lower = type(module).__name__.lower()
-                    is_relu_like = any(act in mod_lower for act in ("relu", "gelu", "silu"))
-                    relu_inact = zero_frac if is_relu_like else None
+                    is_relu = "relu" in mod_lower
+                    is_gelu_like = any(act in mod_lower for act in ("gelu", "silu"))
+                    relu_inact = zero_frac if is_relu else None
+
+                    neg_frac: float | None = None
+                    if is_gelu_like and num_elements > 0:
+                        try:
+                            neg_cnt = int((t_det < 0.0).sum().item())
+                            neg_frac = neg_cnt / float(num_elements)
+                        except Exception:
+                            pass
 
                     sat_note = None
                     sat_frac = None
-                    if is_relu_like and zero_frac > zero_threshold:
+                    if is_relu and zero_frac > zero_threshold:
                         sat_note = f"{zero_frac * 100:.1f}% zero/inactive units on this input"
+                    elif is_gelu_like and neg_frac is not None and neg_frac > zero_threshold:
+                        min_str = f"{t_min:.4f}" if t_min is not None else "negative"
+                        sat_note = f"{neg_frac * 100:.1f}% negative outputs (sub-zero regime, min {min_str})"
                     elif "sigmoid" in mod_lower and num_elements > 0:
                         try:
-                            s_cnt = int(((t_det < 0.05) | (t_det > 0.95)).sum().item())
+                            low_cnt = int((t_det < 0.05).sum().item())
+                            high_cnt = int((t_det > 0.95).sum().item())
+                            s_cnt = low_cnt + high_cnt
                             sat_frac = s_cnt / float(num_elements)
                             if sat_frac > saturation_threshold:
-                                sat_note = f"{sat_frac * 100:.1f}% saturated (<0.05 or >0.95)"
+                                low_pct = (low_cnt / float(num_elements)) * 100.0
+                                high_pct = (high_cnt / float(num_elements)) * 100.0
+                                sat_note = (
+                                    f"{sat_frac * 100:.1f}% saturated "
+                                    f"({low_pct:.1f}% near 0, {high_pct:.1f}% near 1)"
+                                )
                         except Exception:
                             pass
                     elif "tanh" in mod_lower and num_elements > 0:
                         try:
-                            t_cnt = int(((t_det < -0.95) | (t_det > 0.95)).sum().item())
+                            low_cnt = int((t_det < -0.95).sum().item())
+                            high_cnt = int((t_det > 0.95).sum().item())
+                            t_cnt = low_cnt + high_cnt
                             sat_frac = t_cnt / float(num_elements)
                             if sat_frac > saturation_threshold:
-                                sat_note = f"{sat_frac * 100:.1f}% saturated (<-0.95 or >0.95)"
+                                low_pct = (low_cnt / float(num_elements)) * 100.0
+                                high_pct = (high_cnt / float(num_elements)) * 100.0
+                                sat_note = (
+                                    f"{sat_frac * 100:.1f}% saturated "
+                                    f"({low_pct:.1f}% near -1, {high_pct:.1f}% near +1)"
+                                )
                         except Exception:
                             pass
 
@@ -1213,6 +1239,7 @@ def _run_model_observation(
                         "dead_fraction": zero_frac,
                         "inactivity_fraction": zero_frac,
                         "relu_inactivity": relu_inact,
+                        "negative_fraction": neg_frac,
                         "saturation_fraction": sat_frac,
                         "saturation_note": sat_note,
                         "instability_warning": instability,
@@ -1454,6 +1481,7 @@ def _activation_data(
                     "dead_fraction": inv["dead_fraction"],
                     "inactivity_fraction": inv["inactivity_fraction"],
                     "relu_inactivity": inv["relu_inactivity"],
+                    "negative_fraction": inv.get("negative_fraction"),
                     "saturation_fraction": inv["saturation_fraction"],
                     "saturation_note": inv["saturation_note"],
                     "instability_warning": inv["instability_warning"],
@@ -1475,10 +1503,7 @@ def _activation_data(
         layer["name"]
         for layer in layers
         if layer.get("zero_fraction", 0.0) > zero_threshold
-        and any(
-            act in layer.get("type", "").lower()
-            for act in ("relu", "gelu", "silu", "sigmoid", "tanh")
-        )
+        and any(act in layer.get("type", "").lower() for act in ("relu", "relu6", "threshold"))
     ]
     if dead_layers:
         notes.append(

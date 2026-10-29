@@ -26,6 +26,7 @@ except ImportError:
 
 import seedl as sd
 from seedl._execution_graph import compute_tensor_stats
+from seedl._gradient_health import inspect_gradient_health
 from seedl.exceptions import SeeDLError
 
 
@@ -317,3 +318,142 @@ def test_rocm_gpu_smoke_and_diagnostics():
         assert layer["status"] == "available"
         # Check samples are serializable python floats, not GPU tensors
         assert all(isinstance(val, float) for val in layer["sample"])
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch required")
+def test_compute_tensor_stats_chunked_welford_and_noncontiguous_sampling():
+    """Verify compute_tensor_stats accurately computes Welford statistics on non-contiguous tensors."""
+    # Create 3D non-contiguous sliced tensor
+    full = torch.randn(100, 50, 40)
+    noncontig = full[::2, ::2, ::2]  # shape (50, 25, 20) = 25,000 elements
+    ref_mean = float(noncontig.mean().item())
+    ref_std = float(noncontig.std().item())
+    ref_min = float(noncontig.min().item())
+    ref_max = float(noncontig.max().item())
+
+    stats, samples, nonf, sparsity = compute_tensor_stats(noncontig, max_samples=16, torch=torch)
+    assert stats["num_elements"] == 25_000
+    assert nonf == 0
+    assert len(samples) == 16
+    assert abs(stats["mean"] - ref_mean) < 1e-4
+    assert abs(stats["std"] - ref_std) < 1e-4
+    assert abs(stats["min"] - ref_min) < 1e-4
+    assert abs(stats["max"] - ref_max) < 1e-4
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch required")
+def test_gelu_negative_outputs_vs_actual_zeros():
+    """Verify GELU negative outputs are not misclassified as ReLU zero inactivity."""
+
+    class ActNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.gelu = nn.GELU()
+            self.relu = nn.ReLU()
+
+        def forward(self, x):
+            return self.relu(x), self.gelu(x)
+
+    model = ActNet()
+    # Negative inputs produce exact zeros for ReLU, and negative values (~ -0.1588) for GELU
+    x = torch.tensor([[-2.0, -1.0, -0.5, -0.1]])
+    view = sd.activations(model, input=x)
+    layers = {layer["name"]: layer for layer in view.data["layers"]}
+
+    relu_layer = layers["relu"]
+    gelu_layer = layers["gelu"]
+
+    # ReLU should report 100% exact zero inactivity
+    assert relu_layer["zero_fraction"] == 1.0
+    assert relu_layer["relu_inactivity"] == 1.0
+
+    # GELU should report 0% exact zeros, but 100% negative fraction
+    assert gelu_layer["zero_fraction"] == 0.0
+    assert gelu_layer["relu_inactivity"] is None
+    assert gelu_layer["negative_fraction"] == 1.0
+    assert "negative outputs" in gelu_layer["saturation_note"]
+    assert "sub-zero regime" in gelu_layer["saturation_note"]
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch required")
+def test_sigmoid_and_tanh_bidirectional_saturation():
+    """Verify Sigmoid and Tanh detect bidirectional saturation near limits."""
+
+    class SaturatedNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            self.sig = nn.Sigmoid()
+            self.tanh = nn.Tanh()
+
+        def forward(self, x):
+            return self.sig(x), self.tanh(x)
+
+    model = SaturatedNet()
+    # Large magnitude inputs drive both upper and lower saturation
+    x = torch.tensor([[-10.0, -5.0, 5.0, 10.0]])
+    view = sd.activations(model, input=x)
+    layers = {layer["name"]: layer for layer in view.data["layers"]}
+
+    sig_layer = layers["sig"]
+    tanh_layer = layers["tanh"]
+
+    assert sig_layer["saturation_fraction"] == 1.0
+    assert "near 0" in sig_layer["saturation_note"]
+    assert "near 1" in sig_layer["saturation_note"]
+
+    assert tanh_layer["saturation_fraction"] == 1.0
+    assert "near -1" in tanh_layer["saturation_note"]
+    assert "near +1" in tanh_layer["saturation_note"]
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch required")
+def test_windows_cp1252_encoding_safety():
+    """Verify gradient health and activation summaries encode cleanly into CP1252."""
+    model = nn.Sequential(nn.Linear(4, 4), nn.ReLU())
+    x = torch.randn(2, 4)
+    loss = model(x).sum()
+    loss.backward()
+
+    health_view = sd.gradient_health(model)
+    act_view = sd.activations(model, input=x)
+
+    # Must encode cleanly to cp1252 without UnicodeEncodeError
+    summary_encoded = health_view.summary.encode("cp1252")
+    str_encoded = str(health_view).encode("cp1252")
+    act_str_encoded = str(act_view).encode("cp1252")
+
+    assert b"||grad||_2" in summary_encoded
+    assert len(str_encoded) > 0
+    assert len(act_str_encoded) > 0
+
+
+@pytest.mark.skipif(not _TORCH_AVAILABLE, reason="PyTorch required")
+def test_sparse_gradient_uncoalesced_duplicate_indices_and_tied_weights():
+    """Verify uncoalesced sparse gradients and tied parameters match exact dense math."""
+    i = torch.tensor([[1, 1], [0, 0]])
+    v = torch.tensor([2.0, 3.0])
+    sparse_grad = torch.sparse_coo_tensor(i, v, (4, 4))
+    dense_grad = sparse_grad.to_dense()
+
+    class TiedSparseNet(nn.Module):
+        def __init__(self):
+            super().__init__()
+            shared = nn.Parameter(torch.ones(4, 4))
+            self.emb1 = shared
+            self.emb2 = shared
+
+    model = TiedSparseNet()
+    model.emb1.grad = sparse_grad
+
+    data = inspect_gradient_health(model)
+    assert data["total_parameters_inspected"] == 2
+    assert data["parameters"][0]["is_tied"] is False
+    assert data["parameters"][1]["is_tied"] is True
+
+    rec = data["parameters"][0]
+    assert rec["is_sparse"] is True
+    assert rec["l1_norm"] == float(dense_grad.norm(1))
+    assert rec["l2_norm"] == float(dense_grad.norm(2))
+    assert abs(rec["mean"] - float(dense_grad.mean())) < 1e-6
+    assert abs(rec["std"] - float(dense_grad.std(unbiased=True))) < 1e-6
+    assert rec["zero_fraction"] == float((dense_grad == 0).sum() / dense_grad.numel())

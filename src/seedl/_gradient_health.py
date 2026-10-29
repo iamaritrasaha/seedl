@@ -298,7 +298,9 @@ def gradient_health(
     vis_title = title or "Gradient Health Intelligence"
     tot_params = data["total_parameters_inspected"]
     l2_str = (
-        f"||∇||₂ = {data['global_l2']:.4e}" if data["global_l2"] is not None else "||∇||₂ = NaN"
+        f"||grad||_2 = {data['global_l2']:.4e}"
+        if data["global_l2"] is not None
+        else "||grad||_2 = NaN"
     )
     summary = f"Inspected {tot_params} parameter tensor(s) · {l2_str} · {data['global_zero_fraction']:.1%} zeros"
 

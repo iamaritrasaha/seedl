@@ -97,7 +97,13 @@ def _show_result(view: Visualization) -> None:
             return
     except ImportError:
         pass
-    print(view)
+    try:
+        print(view)
+    except UnicodeEncodeError:
+        import sys
+
+        enc = sys.stdout.encoding or "ascii"
+        print(str(view).encode(enc, errors="replace").decode(enc))
 
 
 def see(

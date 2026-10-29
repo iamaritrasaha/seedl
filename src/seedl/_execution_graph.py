@@ -95,6 +95,21 @@ class ExecutionTrace:
         return [n for n in self.nodes if n.is_leaf]
 
 
+def _tensor_chunks(tensor: Any, chunk_size: int = 1_048_576):
+    """Yield bounded flattened views without allocating full-tensor copies."""
+    count = int(tensor.numel())
+    if count <= chunk_size or tensor.ndim == 0:
+        yield tensor.reshape(-1) if not tensor.is_contiguous() else tensor.view(-1)
+        return
+    axis = max(range(tensor.ndim), key=lambda idx: int(tensor.shape[idx]))
+    other_elements = count // int(tensor.shape[axis])
+    width = max(1, chunk_size // max(other_elements, 1))
+    for start in range(0, int(tensor.shape[axis]), width):
+        slices = [slice(None)] * tensor.ndim
+        slices[axis] = slice(start, start + width)
+        yield from _tensor_chunks(tensor[tuple(slices)], chunk_size)
+
+
 def compute_tensor_stats(
     t: Any,
     max_samples: int = 32,
@@ -185,31 +200,69 @@ def compute_tensor_stats(
             }
             return stats, sampled_sanitized, nonfinite_count, sparsity
 
-        # Dense tensor processing with bounded allocations
+        # Dense tensor processing with bounded chunked allocations
         is_fp = detached.dtype.is_floating_point
-        nonfinite_count = int((~torch.isfinite(detached)).sum().item()) if is_fp else 0
+        chunk_size = 1_048_576
 
-        if nonfinite_count == 0:
-            # Memory-safe fast path: no boolean mask allocation needed
-            t_min = float(detached.min().item())
-            t_max = float(detached.max().item())
-            t_mean = (
-                float(detached.mean().item())
-                if detached.dtype in (torch.float32, torch.float64)
-                else float(detached.float().mean().item())
+        dense_min: float | None = None
+        dense_max: float | None = None
+        finite_count = 0
+        mean_acc = 0.0
+        m2_acc = 0.0
+        zero_count = 0
+        nonfinite_count = 0
+
+        for chunk in _tensor_chunks(detached, chunk_size=chunk_size):
+            zero_count += int((chunk == 0).sum().item())
+            if is_fp:
+                chunk_nan = int(torch.isnan(chunk).sum().item())
+                chunk_inf = int(torch.isinf(chunk).sum().item())
+                chunk_nonfinite = chunk_nan + chunk_inf
+                nonfinite_count += chunk_nonfinite
+                if chunk_nonfinite > 0:
+                    mask = torch.isfinite(chunk)
+                    valid = chunk[mask]
+                else:
+                    valid = chunk
+            else:
+                valid = chunk
+
+            valid_size = int(valid.numel())
+            if valid_size == 0:
+                continue
+
+            valid_float = (
+                valid
+                if valid.dtype in (torch.float32, torch.float64)
+                else valid.to(dtype=torch.float32)
             )
+            c_min = float(valid_float.min().item())
+            c_max = float(valid_float.max().item())
+            dense_min = c_min if dense_min is None else min(dense_min, c_min)
+            dense_max = c_max if dense_max is None else max(dense_max, c_max)
+
+            c_mean = float(valid_float.mean().item())
+            c_m2 = float(((valid_float - c_mean) ** 2).sum().item())
+
+            if finite_count == 0:
+                mean_acc, m2_acc = c_mean, c_m2
+                finite_count = valid_size
+            else:
+                comb = finite_count + valid_size
+                delta = c_mean - mean_acc
+                m2_acc += c_m2 + delta**2 * finite_count * valid_size / comb
+                mean_acc += delta * valid_size / comb
+                finite_count = comb
+
+        if finite_count > 0:
+            t_min = dense_min if dense_min is not None else float("nan")
+            t_max = dense_max if dense_max is not None else float("nan")
+            t_mean = mean_acc
             t_std = (
-                (
-                    float(detached.std().item())
-                    if detached.dtype in (torch.float32, torch.float64)
-                    else float(detached.float().std().item())
-                )
-                if num_elements > 1
-                else 0.0
+                math.sqrt(max(0.0, m2_acc / float(finite_count - 1))) if finite_count > 1 else 0.0
             )
-            zeros = int((detached == 0).sum().item())
-            sparsity = zeros / float(num_elements)
-        elif nonfinite_count == num_elements:
+            sparsity = zero_count / float(num_elements)
+        else:
             t_min, t_max, t_mean, t_std = (
                 float("nan"),
                 float("nan"),
@@ -217,56 +270,39 @@ def compute_tensor_stats(
                 float("nan"),
             )
             sparsity = 0.0
-        else:
-            # Bounded processing of finite values only when nonfinite elements are present
-            mask = torch.isfinite(detached)
-            finite_vals = detached[mask]
-            finite_numel = finite_vals.numel()
-            if finite_numel > 0:
-                t_min = float(finite_vals.min().item())
-                t_max = float(finite_vals.max().item())
-                t_mean = (
-                    float(finite_vals.mean().item())
-                    if finite_vals.dtype in (torch.float32, torch.float64)
-                    else float(finite_vals.float().mean().item())
-                )
-                t_std = (
-                    (
-                        float(finite_vals.std().item())
-                        if finite_vals.dtype in (torch.float32, torch.float64)
-                        else float(finite_vals.float().std().item())
-                    )
-                    if finite_numel > 1
-                    else 0.0
-                )
-                zeros = int((finite_vals == 0).sum().item())
-                sparsity = zeros / float(finite_numel)
-            else:
-                t_min, t_max, t_mean, t_std = (
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
-                    float("nan"),
-                )
-                sparsity = 0.0
 
         # Memory-safe bounded sampling: only transfer max_samples elements to CPU
-        if num_elements <= max_samples:
-            sampled_tensor = detached.view(-1) if detached.is_contiguous() else detached.reshape(-1)
+        sample_count = min(max_samples, num_elements)
+        dense_samples: list[float] = []
+        if sample_count == 0:
+            dense_samples = []
+        elif detached.is_contiguous():
+            step = max(1, num_elements // sample_count)
+            indices = torch.arange(0, num_elements, step, device=detached.device)[:sample_count]
+            sampled_tensor = detached.view(-1)[indices]
+            dense_samples = (
+                sampled_tensor.float().cpu().tolist()
+                if is_fp
+                else sampled_tensor.to(dtype=torch.float32).cpu().tolist()
+            )
         else:
-            step = max(1, num_elements // max_samples)
-            flat = detached.view(-1) if detached.is_contiguous() else detached.reshape(-1)
-            sampled_tensor = flat[::step][:max_samples]
-
-        sampled_raw = (
-            sampled_tensor.float().cpu().tolist()
-            if is_fp
-            else sampled_tensor.to(dtype=torch.float32).cpu().tolist()
-        )
+            step = max(1, num_elements // sample_count)
+            indices = torch.arange(0, num_elements, step, device=detached.device)[:sample_count]
+            coords = []
+            rem = indices
+            for size in reversed(detached.shape):
+                coords.append(torch.remainder(rem, int(size)))
+                rem = torch.div(rem, int(size), rounding_mode="floor")
+            sampled_tensor = detached[tuple(reversed(coords))]
+            dense_samples = (
+                sampled_tensor.float().cpu().tolist()
+                if is_fp
+                else sampled_tensor.to(dtype=torch.float32).cpu().tolist()
+            )
 
         sampled_sanitized = [
             val if math.isfinite(val) else (999999.0 if val > 0 else -999999.0)
-            for val in sampled_raw
+            for val in dense_samples
         ]
 
         stats = {

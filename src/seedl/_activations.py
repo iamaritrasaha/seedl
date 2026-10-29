@@ -57,10 +57,7 @@ def capture_activations(
             layer["name"]
             for layer in data["layers"]
             if layer.get("zero_fraction", 0.0) > zero_threshold
-            and any(
-                act in layer.get("type", "").lower()
-                for act in ("relu", "gelu", "silu", "sigmoid", "tanh")
-            )
+            and any(act in layer.get("type", "").lower() for act in ("relu", "relu6", "threshold"))
         ]
         if dead_layers:
             notes.append(

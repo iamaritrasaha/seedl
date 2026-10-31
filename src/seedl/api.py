@@ -12,14 +12,18 @@ from ._inspect import (
 )
 from ._summaries import _summary
 from ._training import Tracker
+from ._validation import (
+    resolve_see_backend,
+    validate_max_points,
+    validate_object_arguments,
+    validate_see_options,
+    validate_tensor_view_options,
+)
 from .exceptions import SeeDLError
 from .renderers import resolve_backend
 from .view import Visualization
 
-
-def _validate_max_points(max_points: int) -> None:
-    if isinstance(max_points, bool) or not isinstance(max_points, int) or max_points < 1:
-        raise ValueError("max_points must be a positive integer.")
+_validate_max_points = validate_max_points
 
 
 def _show_result(view: Visualization) -> None:
@@ -40,6 +44,209 @@ def _show_result(view: Visualization) -> None:
 
         enc = sys.stdout.encoding or "ascii"
         print(str(view).encode(enc, errors="replace").decode(enc))
+
+
+def _see_quantum(
+    obj: Any,
+    *,
+    view: str,
+    simulate: bool,
+    theme: str,
+    backend: str,
+) -> Visualization | None:
+    """Handle quantum circuits, quantum states, and bra-ket state strings."""
+    from ._quantum import _is_qiskit_circuit, _is_qiskit_state
+
+    if _is_qiskit_circuit(obj):
+        return circuit(obj, simulate=simulate, theme=theme, backend=backend)
+    if _is_qiskit_state(obj):
+        data_arr = getattr(obj, "data", obj)
+        dim = len(data_arr) if hasattr(data_arr, "__len__") else 0
+        if dim == 2:
+            return bloch(
+                obj,
+                view=view if view in {"3d", "auto"} else "3d",
+                theme=theme,
+                backend=backend,
+            )
+        return statevector(obj, theme=theme, backend=backend)
+    if isinstance(obj, str) and obj.strip().lower() in {
+        "0",
+        "1",
+        "+",
+        "-",
+        "+i",
+        "-i",
+        "|0>",
+        "|1>",
+        "|+>",
+        "|->",
+        "|+i>",
+        "|-i>",
+        "zero",
+        "one",
+        "plus",
+        "minus",
+    }:
+        return bloch(
+            obj,
+            view=view if view in {"3d", "auto"} else "3d",
+            theme=theme,
+            backend=backend,
+        )
+    return None
+
+
+def _see_comparison(
+    obj: Any,
+    compare: Any,
+    *,
+    max_points: int,
+    backend: str,
+) -> Visualization:
+    """Generate a side-by-side comparison visualization."""
+    from ._compare import compare_objects
+
+    kind, data, summary_text, notes = compare_objects(obj, compare, max_points=max_points)
+    result = Visualization(
+        kind=kind,
+        title="Comparison",
+        summary=summary_text,
+        data=data,
+        notes=notes,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def _apply_slice(
+    obj: Any,
+    slice_spec: Any | None,
+) -> tuple[Any, str | None, Any | None]:
+    """Apply a tensor/array slice specification and record provenance note and original shape."""
+    if slice_spec is None:
+        return obj, None, None
+    orig_shape = getattr(obj, "shape", None)
+    try:
+        from ._tensors import parse_slice_spec
+
+        shape_tuple = tuple(int(s) for s in orig_shape) if orig_shape is not None else None
+        parsed_slice = parse_slice_spec(slice_spec, shape_tuple)
+        sliced_obj = obj[parsed_slice]
+        slice_note = f"Showing slice {slice_spec} of original shape {orig_shape}."
+        return sliced_obj, slice_note, orig_shape
+    except SeeDLError:
+        raise
+    except Exception as exc:
+        raise SeeDLError(f"Failed to slice object with {slice_spec}: {exc}") from exc
+
+
+def _inspect_model(
+    model: Any,
+    *,
+    input: Any | None,
+    view: str,
+    theme: str,
+    color_by: str,
+    sample: int,
+    max_neurons: int,
+    max_connections: int,
+    min_weight: float,
+    edge_opacity: float,
+    detail: str,
+    select_neuron: tuple[int, int] | str | None,
+    backend: str,
+) -> Visualization | tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
+    """Inspect PyTorch neural network architecture or 3D CNN representation."""
+    if view == "3d":
+        from ._cnn_spatial import inspect_visual_cnn, is_cnn_model
+
+        if is_cnn_model(model):
+            cnn_data, cnn_sum, cnn_notes = inspect_visual_cnn(
+                model, input, theme=theme, sample=sample
+            )
+            return Visualization(
+                kind="model",
+                title=f"{type(model).__name__} · 3D CNN",
+                summary=cnn_sum,
+                data=cnn_data,
+                notes=cnn_notes,
+                backend=backend,
+            )
+
+    from ._neurons import inspect_visual_model
+
+    data, metadata, notes = inspect_visual_model(
+        model,
+        input,
+        view=view,
+        theme=theme,
+        color_by=color_by,
+        sample=sample,
+        max_neurons=max_neurons,
+        max_connections=max_connections,
+        min_weight=min_weight,
+        edge_opacity=edge_opacity,
+        detail=detail,
+        select_neuron=select_neuron,
+    )
+    kind = "model"
+    title = f"{type(model).__name__} architecture"
+    if data.get("neuron_graph"):
+        title = "Neural network" + (" · 3D" if view == "3d" else "")
+    return kind, title, data, metadata, notes
+
+
+def _inspect_interactive_tensor(
+    obj: Any,
+    *,
+    dim_names: list[str] | tuple[str, ...] | None,
+    layout: str | None,
+    max_frames: int,
+    max_points: int,
+) -> tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
+    """Build multi-dimensional interactive tensor exploration payload."""
+    current_rank = len(getattr(obj, "shape", ()))
+    if current_rank < 2:
+        raise SeeDLError(
+            f"Interactive tensor exploration requires at least 2 dimensions, "
+            f"got rank {current_rank} with shape {getattr(obj, 'shape', ())}."
+        )
+    from ._tensor_explorer import build_tensor_explorer_payload
+
+    data, metadata, notes = build_tensor_explorer_payload(
+        obj,
+        dim_names=dim_names,
+        layout=layout,
+        max_frames=max_frames,
+        max_slice_points=max_points,
+    )
+    return "tensor_explorer", "Interactive Tensor Explorer", data, metadata, notes
+
+
+def _inspect_general(
+    obj: Any,
+    *,
+    example_input: Any | None,
+    max_points: int,
+    layout: str | None,
+    dim_names: list[str] | tuple[str, ...] | None,
+    is_tensor: bool,
+) -> tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
+    """Inspect standard numeric values, sequences, arrays, and dataset batches."""
+    kind, title, data, metadata, notes = inspect_object(
+        obj, example_input=example_input, max_points=max_points, layout=layout
+    )
+    if dim_names is not None and is_tensor:
+        from ._tensor_explorer import validate_dim_names
+
+        rank = len(getattr(obj, "shape", ()))
+        shape_tuple = tuple(int(s) for s in getattr(obj, "shape", ()))
+        validated = validate_dim_names(dim_names, rank, shape_tuple)
+        metadata["Dimension names"] = ", ".join(validated)
+        data["dim_names"] = validated
+    return kind, title, data, metadata, notes
 
 
 def see(
@@ -103,43 +310,19 @@ def see(
         select_neuron: Highlight and inspect a specific neuron as (layer, index) or 'layer:index'.
         simulate: For quantum circuits, compute step-by-step statevector evolution.
     """
-    _validate_max_points(max_points)
-    if view not in {
-        "auto",
-        "neurons",
-        "3d",
-        "architecture",
-        "summary",
-        "features",
-        "feature_maps",
-        "flow",
-        "trace",
-        "interactive",
-        "explorer",
-    }:
-        raise ValueError(
-            "view must be auto, neurons, 3d, architecture, summary, features, feature_maps, flow, trace, interactive, or explorer."
-        )
-    if theme not in {"light", "dark", "scientific", "minimal", "presentation"}:
-        raise ValueError("theme must be light, dark, scientific, minimal, or presentation.")
-    if color_by not in {"auto", "layer", "activation", "gradient"}:
-        raise ValueError("color_by must be auto, layer, activation, or gradient.")
-    if detail not in {"summary", "full", "leaves"}:
-        raise ValueError("detail must be summary, full, or leaves.")
-    for name, value, upper in (
-        ("max_neurons", max_neurons, 1000),
-        ("max_connections", max_connections, 20000),
-    ):
-        if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= upper:
-            raise ValueError(f"{name} must be an integer between 1 and {upper}.")
-    if isinstance(sample, bool) or not isinstance(sample, int) or sample < 0:
-        raise ValueError("sample must be a nonnegative integer.")
-    import math
+    validate_max_points(max_points)
+    validate_see_options(
+        view=view,
+        theme=theme,
+        color_by=color_by,
+        detail=detail,
+        max_neurons=max_neurons,
+        max_connections=max_connections,
+        sample=sample,
+        min_weight=min_weight,
+        edge_opacity=edge_opacity,
+    )
 
-    if not math.isfinite(min_weight) or min_weight < 0:
-        raise ValueError("min_weight must be finite and nonnegative.")
-    if not math.isfinite(edge_opacity) or not 0 <= edge_opacity <= 1:
-        raise ValueError("edge_opacity must be between 0 and 1.")
     from ._execution_graph import ExecutionTrace
 
     if isinstance(obj, ExecutionTrace):
@@ -147,103 +330,36 @@ def see(
     if view in {"flow", "trace"}:
         return flow(obj, input=input, backend=backend)
 
-    from ._quantum import _is_qiskit_circuit, _is_qiskit_state
-
-    if _is_qiskit_circuit(obj):
-        return circuit(obj, simulate=simulate, theme=theme, backend=backend)
-    if _is_qiskit_state(obj):
-        data_arr = getattr(obj, "data", obj)
-        dim = len(data_arr) if hasattr(data_arr, "__len__") else 0
-        if dim == 2:
-            return bloch(
-                obj,
-                view=view if view in {"3d", "auto"} else "3d",
-                theme=theme,
-                backend=backend,
-            )
-        return statevector(obj, theme=theme, backend=backend)
-    if isinstance(obj, str) and obj.strip().lower() in {
-        "0",
-        "1",
-        "+",
-        "-",
-        "+i",
-        "-i",
-        "|0>",
-        "|1>",
-        "|+>",
-        "|->",
-        "|+i>",
-        "|-i>",
-        "zero",
-        "one",
-        "plus",
-        "minus",
-    }:
-        return bloch(
-            obj,
-            view=view if view in {"3d", "auto"} else "3d",
-            theme=theme,
-            backend=backend,
-        )
+    quantum_result = _see_quantum(
+        obj,
+        view=view,
+        simulate=simulate,
+        theme=theme,
+        backend=backend,
+    )
+    if quantum_result is not None:
+        return quantum_result
 
     is_tensor = is_torch_tensor(obj) or is_numpy_array(obj)
     is_multidim_tensor = is_tensor and len(getattr(obj, "shape", ())) >= 2
+    is_module = is_torch_module(obj)
 
-    if view in {"interactive", "explorer"}:
-        if is_torch_module(obj):
-            raise SeeDLError(
-                f"view='{view}' is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
-            )
-        if not is_tensor:
-            raise SeeDLError(
-                f"view='{view}' is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
-            )
-        if not is_multidim_tensor:
-            raise SeeDLError(
-                f"view='{view}' requires at least 2 dimensions, got shape {getattr(obj, 'shape', ())}."
-            )
-
-    if dim_names is not None:
-        if is_torch_module(obj):
-            raise SeeDLError(
-                "The dim_names= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
-            )
-        if not is_tensor:
-            raise SeeDLError(
-                f"The dim_names= argument is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
-            )
-
-    if not isinstance(max_frames, int) or max_frames <= 0:
-        raise ValueError("max_frames must be a positive integer.")
-
-    if view not in {"auto", "features", "feature_maps", "interactive", "explorer"} and (
-        not is_torch_module(obj) or compare is not None
-    ):
-        raise ValueError("Explicit view options require a model without compare=.")
-    if view == "3d":
-        if backend not in {"auto", "plotly"} or interactive is False:
-            raise ValueError("view='3d' requires Plotly and interactive rendering.")
-        backend = "plotly"
-    if interactive is not None and not isinstance(interactive, bool):
-        raise TypeError("interactive must be True, False, or None.")
-
-    launch_interactive_tensor = (
-        interactive is True or view in {"interactive", "explorer"}
-    ) and is_multidim_tensor
-
-    if interactive is True:
-        if launch_interactive_tensor:
-            if backend == "auto":
-                backend = "svg"
-        else:
-            if backend == "auto":
-                backend = "plotly"
-            elif backend != "plotly":
-                raise ValueError("interactive=True requires backend='plotly' or backend='auto'.")
-    elif interactive is False and backend == "auto":
-        backend = "svg"
-    selected_backend = resolve_backend(backend)
+    validate_tensor_view_options(
+        obj,
+        view=view,
+        dim_names=dim_names,
+        max_frames=max_frames,
+        compare=compare,
+        is_tensor=is_tensor,
+        is_multidim_tensor=is_multidim_tensor,
+        is_module=is_module,
+    )
+    selected_backend = resolve_see_backend(
+        backend,
+        view=view,
+        interactive=interactive,
+        is_multidim_tensor=is_multidim_tensor,
+    )
 
     if view in {"features", "feature_maps"}:
         return features(
@@ -254,23 +370,9 @@ def see(
             backend=selected_backend,
         )
 
-    # Comparison shorthand: sd.see(model_a, compare=model_b)
     if compare is not None:
-        from ._compare import compare_objects
+        return _see_comparison(obj, compare, max_points=max_points, backend=selected_backend)
 
-        kind, data, summary_text, notes = compare_objects(obj, compare, max_points=max_points)
-        result = Visualization(
-            kind=kind,
-            title="Comparison",
-            summary=summary_text,
-            data=data,
-            notes=notes,
-            backend=selected_backend,
-        )
-        _show_result(result)
-        return result
-
-    # Handle tracker instances
     if isinstance(obj, Tracker):
         if obj.snapshots:
             if input is not None or slice is not None:
@@ -283,63 +385,25 @@ def see(
             return result
         obj = obj.history()
 
-    if input is not None and not is_torch_module(obj):
-        raise SeeDLError("The input= argument is only used when visualizing a PyTorch nn.Module.")
+    validate_object_arguments(
+        obj,
+        input=input,
+        slice=slice,
+        layout=layout,
+        is_module=is_module,
+        is_tensor=is_tensor,
+    )
 
-    if is_torch_module(obj):
-        if slice is not None:
-            raise SeeDLError(
-                "The slice= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
-            )
-        if layout is not None:
-            raise SeeDLError(
-                "The layout= argument is only supported for PyTorch tensors and NumPy arrays, not nn.Module models."
-            )
-    elif layout is not None and not (is_torch_tensor(obj) or is_numpy_array(obj)):
-        raise SeeDLError(
-            f"The layout= argument is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
-        )
+    sliced_obj, slice_note, orig_shape = _apply_slice(obj, slice)
 
-    # Slice support for tensors/arrays
-    slice_note = None
-    orig_shape = getattr(obj, "shape", None)
-    if slice is not None:
-        try:
-            from ._tensors import parse_slice_spec
+    launch_interactive_tensor = (
+        interactive is True or view in {"interactive", "explorer"}
+    ) and is_multidim_tensor
 
-            shape_tuple = tuple(int(s) for s in orig_shape) if orig_shape is not None else None
-            parsed_slice = parse_slice_spec(slice, shape_tuple)
-            obj = obj[parsed_slice]
-            slice_note = f"Showing slice {slice} of original shape {orig_shape}."
-        except SeeDLError:
-            raise
-        except Exception as exc:
-            raise SeeDLError(f"Failed to slice object with {slice}: {exc}") from exc
-
-    if is_torch_module(obj):
-        if view == "3d":
-            from ._cnn_spatial import inspect_visual_cnn, is_cnn_model
-
-            if is_cnn_model(obj):
-                cnn_data, cnn_sum, cnn_notes = inspect_visual_cnn(
-                    obj, input, theme=theme, sample=sample
-                )
-                cnn_res = Visualization(
-                    kind="model",
-                    title=f"{type(obj).__name__} · 3D CNN",
-                    summary=cnn_sum,
-                    data=cnn_data,
-                    notes=cnn_notes,
-                    backend=selected_backend,
-                )
-                _show_result(cnn_res)
-                return cnn_res
-
-        from ._neurons import inspect_visual_model
-
-        data, metadata, notes = inspect_visual_model(
-            obj,
-            input,
+    if is_module:
+        model_result = _inspect_model(
+            sliced_obj,
+            input=input,
             view=view,
             theme=theme,
             color_by=color_by,
@@ -350,40 +414,30 @@ def see(
             edge_opacity=edge_opacity,
             detail=detail,
             select_neuron=select_neuron,
+            backend=selected_backend,
         )
-        kind, title = "model", f"{type(obj).__name__} architecture"
-        if data.get("neuron_graph"):
-            title = "Neural network" + (" · 3D" if view == "3d" else "")
+        if isinstance(model_result, Visualization):
+            _show_result(model_result)
+            return model_result
+        kind, title, data, metadata, notes = model_result
+    elif launch_interactive_tensor:
+        kind, title, data, metadata, notes = _inspect_interactive_tensor(
+            sliced_obj,
+            dim_names=dim_names,
+            layout=layout,
+            max_frames=max_frames,
+            max_points=max_points,
+        )
     else:
-        if launch_interactive_tensor:
-            current_rank = len(getattr(obj, "shape", ()))
-            if current_rank < 2:
-                raise SeeDLError(
-                    f"Interactive tensor exploration requires at least 2 dimensions, "
-                    f"got rank {current_rank} with shape {getattr(obj, 'shape', ())}."
-                )
-            from ._tensor_explorer import build_tensor_explorer_payload
+        kind, title, data, metadata, notes = _inspect_general(
+            sliced_obj,
+            example_input=input,
+            max_points=max_points,
+            layout=layout,
+            dim_names=dim_names,
+            is_tensor=is_tensor,
+        )
 
-            data, metadata, notes = build_tensor_explorer_payload(
-                obj,
-                dim_names=dim_names,
-                layout=layout,
-                max_frames=max_frames,
-                max_slice_points=max_points,
-            )
-            kind, title = "tensor_explorer", "Interactive Tensor Explorer"
-        else:
-            kind, title, data, metadata, notes = inspect_object(
-                obj, example_input=input, max_points=max_points, layout=layout
-            )
-            if dim_names is not None and is_tensor:
-                from ._tensor_explorer import validate_dim_names
-
-                rank = len(getattr(obj, "shape", ()))
-                shape_tuple = tuple(int(s) for s in getattr(obj, "shape", ()))
-                validated = validate_dim_names(dim_names, rank, shape_tuple)
-                metadata["Dimension names"] = ", ".join(validated)
-                data["dim_names"] = validated
     if slice_note:
         notes.insert(0, slice_note)
         if orig_shape is not None:

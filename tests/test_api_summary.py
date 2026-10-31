@@ -25,7 +25,12 @@ from seedl.api import _summary
             "Top prediction: 'cat' (87.6%)",
         ),
         ("regression_predictions", {"count": 3}, {}, "Regression: 3 prediction(s)"),
-        ("dataset_tabular", {"samples": 50, "features": 4}, {}, "Tabular dataset: 50 samples × 4 features"),
+        (
+            "dataset_tabular",
+            {"samples": 50, "features": 4},
+            {},
+            "Tabular dataset: 50 samples × 4 features",
+        ),
         ("embeddings", {"num_vectors": 9, "dim": 2}, {}, "Embeddings: 9 vectors in 2D"),
         (
             "execution_trace",
@@ -33,7 +38,12 @@ from seedl.api import _summary
             {},
             "Execution trace: 3 operations (1,234 params)",
         ),
-        ("gradient_health", {"total_parameters_inspected": 256}, {}, "Gradient health: 256 parameters inspected"),
+        (
+            "gradient_health",
+            {"total_parameters_inspected": 256},
+            {},
+            "Gradient health: 256 parameters inspected",
+        ),
         (
             "dataset_drift",
             {"psi": 0.123456, "drift_level": "Moderate"},

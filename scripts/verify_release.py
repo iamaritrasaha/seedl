@@ -126,6 +126,16 @@ def verify_release(
         print(f"  Wheel found: {expected_whl.name}")
         print(f"  Sdist found: {expected_sdist.name}")
 
+        with tarfile.open(expected_sdist, "r:gz") as archive:
+            sdist_marker_files = [
+                member.name
+                for member in archive.getmembers()
+                if member.isfile() and Path(member.name).name == "py.typed"
+            ]
+        print(f"  Sdist typing marker paths: {sdist_marker_files or 'none'}")
+        if not sdist_marker_files:
+            raise ValueError("Sdist is missing the py.typed marker needed to build a typed wheel")
+
         # Verify wheel internal metadata
         with zipfile.ZipFile(expected_whl) as whl:
             metadata_name = f"seedl-{version}.dist-info/METADATA"

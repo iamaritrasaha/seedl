@@ -43,6 +43,10 @@ def release_tree(tmp_path):
             tmp_path / "pyproject.toml",
             arcname=f"seedl-{CURRENT_VERSION}/pyproject.toml",
         )
+        archive.add(
+            ROOT / "src/seedl/py.typed",
+            arcname=f"seedl-{CURRENT_VERSION}/src/seedl/py.typed",
+        )
     return tmp_path
 
 

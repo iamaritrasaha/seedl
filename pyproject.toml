@@ -59,10 +59,11 @@ ignore_missing_imports = true
 check_untyped_defs = true
 
 [tool.uv.build-backend]
-source-include = ["tests/**", "scripts/verify_release.py", "**/py.typed", "uv.lock"]
+module-name = "seedl"
+module-root = "src"
+source-include = ["tests/**", "scripts/verify_release.py", "src/seedl/py.typed", "uv.lock"]
 source-exclude = ["**/__pycache__/**", "**/*.pyc", ".git/**", ".venv/**", "work/**", "dist/**", "build/**"]
 wheel-exclude = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
-wheel-include = ["**/py.typed"]
 
 [build-system]
 requires = ["uv_build>=0.12.22,<0.14.0"]

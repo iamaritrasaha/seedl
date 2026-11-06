@@ -59,7 +59,7 @@ ignore_missing_imports = true
 check_untyped_defs = true
 
 [tool.uv.build-backend]
-source-include = ["tests/**", "scripts/verify_release.py", "uv.lock"]
+source-include = ["tests/**", "scripts/verify_release.py", "src/seedl/py.typed", "uv.lock"]
 source-exclude = ["**/__pycache__/**", "**/*.pyc", ".git/**", ".venv/**", "work/**", "dist/**", "build/**"]
 wheel-exclude = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
 wheel-include = ["src/seedl/py.typed"]

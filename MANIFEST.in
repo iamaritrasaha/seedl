@@ -1,0 +1,10 @@
+include LICENSE README.md pyproject.toml uv.lock
+recursive-include src *.py *.typed
+recursive-include tests *.py
+recursive-include scripts *.py
+global-exclude __pycache__ *.py[cod]
+prune .git
+prune .venv
+prune build
+prune dist
+prune work

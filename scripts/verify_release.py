@@ -138,8 +138,13 @@ def verify_release(
                 raise ValueError(f"Wheel METADATA does not specify 'Version: {version}'")
 
             # Check that py.typed exists in wheel
-            if "seedl/py.typed" not in whl.namelist():
-                raise ValueError("Wheel is missing 'seedl/py.typed'")
+            wheel_files = whl.namelist()
+            if "seedl/py.typed" not in wheel_files:
+                marker_files = [fname for fname in wheel_files if Path(fname).name == "py.typed"]
+                raise ValueError(
+                    "Wheel is missing 'seedl/py.typed'; "
+                    f"found typing marker paths: {marker_files or 'none'}"
+                )
 
             # Check that tests and examples are NOT in wheel
             for fname in whl.namelist():

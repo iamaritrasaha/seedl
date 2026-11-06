@@ -152,10 +152,11 @@ def test_build_tensor_explorer_payload_gpu_device():
     assert len(data["axes"]) >= 1
 
 
-def test_build_tensor_explorer_payload_rejects_rank_less_than_two():
-    """Verify payload builder rejects 1D arrays or scalars."""
-    with pytest.raises(SeeDLError, match="requires at least 2 dimensions"):
-        build_tensor_explorer_payload(np.array([1, 2, 3]))
+def test_build_tensor_explorer_payload_accepts_vector():
+    """Vectors render one scalar cell per frame."""
+    data, metadata, _ = build_tensor_explorer_payload(np.array([1, 2, 3]))
+    assert metadata["Rank"] == 1
+    assert data["axes"][0]["frames"][1]["values"] == [[2.0]]
 
 
 # ==============================================================================
@@ -226,10 +227,11 @@ def test_see_tensor_interactive_with_slice():
 
 
 def test_see_tensor_interactive_slice_collapse_rank():
-    """Verify slicing down to 1D rejects interactive exploration with clear error."""
+    """A slice that reduces rank remains explorable."""
     arr = np.zeros((4, 4, 4), dtype=np.float32)
-    with pytest.raises(SeeDLError, match="requires at least 2 dimensions"):
-        sd.see(arr, slice="0, 0, :", view="interactive")
+    view = sd.see(arr, slice="0, 0, :", view="interactive")
+    assert view.metadata["Rank"] == 1
+    assert view.data["shape"] == [4]
 
 
 def test_see_tensor_invalid_max_frames():

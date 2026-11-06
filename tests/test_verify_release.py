@@ -118,3 +118,29 @@ def test_invalid_wheel_rejected_without_tag(release_tree):
     result = run_verifier(release_tree, "--check-dist", ref="main")
     assert result.returncode == 1
     assert "Wheel METADATA" in result.stderr
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "seedl/__pycache__/api.pyc",
+        "seedl/.git/config",
+        "seedl/work/scratch.py",
+        "tests/test_bad.py",
+    ],
+)
+def test_development_artifacts_rejected(release_tree, entry):
+    with zipfile.ZipFile(
+        release_tree / f"dist/seedl-{CURRENT_VERSION}-py3-none-any.whl", "a"
+    ) as wheel:
+        wheel.writestr(entry, "unwanted")
+    result = run_verifier(release_tree, "--check-dist")
+    assert result.returncode == 1
+    assert "development file" in result.stderr
+
+
+def test_corrupt_sdist_rejected(release_tree):
+    (release_tree / f"dist/seedl-{CURRENT_VERSION}.tar.gz").write_bytes(b"corrupt")
+    result = run_verifier(release_tree, "--check-dist")
+    assert result.returncode == 1
+    assert "FAILED" in result.stderr

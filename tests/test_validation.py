@@ -231,17 +231,16 @@ def test_validate_tensor_view_options_interactive_on_scalar() -> None:
 
 def test_validate_tensor_view_options_interactive_on_1d_tensor() -> None:
     dummy_1d = _DummyTensor1D()
-    with pytest.raises(SeeDLError, match=r"requires at least 2 dimensions, got shape \(10,\)"):
-        validate_tensor_view_options(
-            dummy_1d,
-            view="interactive",
-            dim_names=None,
-            max_frames=32,
-            compare=None,
-            is_tensor=True,
-            is_multidim_tensor=False,
-            is_module=False,
-        )
+    validate_tensor_view_options(
+        dummy_1d,
+        view="interactive",
+        dim_names=None,
+        max_frames=32,
+        compare=None,
+        is_tensor=True,
+        is_multidim_tensor=False,
+        is_module=False,
+    )
 
 
 def test_validate_tensor_view_options_dim_names_on_module() -> None:

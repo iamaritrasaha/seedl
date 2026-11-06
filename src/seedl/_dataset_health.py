@@ -7,6 +7,7 @@ import json
 import math
 from typing import Any
 
+from ._tensor_utils import to_native
 from .exceptions import SeeDLError
 from .renderers import resolve_backend
 from .view import Visualization
@@ -14,12 +15,11 @@ from .view import Visualization
 
 def _to_flat_floats(data: Any, max_samples: int = 1000) -> list[float]:
     """Convert tensor, array, or list to flat list of floats with bounded sampling."""
+    # tolist supports bfloat16 and avoids requiring NumPy for torch inputs.
     if hasattr(data, "detach"):
-        data = data.detach()
-    if hasattr(data, "cpu"):
-        data = data.cpu()
-    if hasattr(data, "numpy"):
-        data = data.numpy()
+        data = data.detach().reshape(-1)
+        step = max(1, math.ceil(int(data.numel()) / max_samples))
+        data = to_native(data[::step][:max_samples])
 
     flat: list[float] = []
     if hasattr(data, "reshape"):
@@ -37,6 +37,8 @@ def _to_flat_floats(data: Any, max_samples: int = 1000) -> list[float]:
                 stack = list(item) + stack
             elif isinstance(item, (int, float)):
                 flat.append(float(item))
+    elif isinstance(data, (int, float)):
+        flat.append(float(data))
     return flat
 
 
@@ -47,20 +49,23 @@ def compute_histograms(
     epsilon: float = 1e-6,
 ) -> tuple[list[float], list[float], list[float]]:
     """Compute smoothed, normalized histogram probabilities for two empirical samples."""
+    if isinstance(bins, bool) or not isinstance(bins, int) or bins < 1:
+        raise ValueError("bins must be a positive integer.")
+    if not math.isfinite(epsilon) or epsilon <= 0:
+        raise ValueError("epsilon must be finite and positive.")
     all_vals = [v for v in p_vals + q_vals if math.isfinite(v)]
     if not all_vals:
         return [1.0 / bins] * bins, [1.0 / bins] * bins, [0.0] * (bins + 1)
 
     min_v = min(all_vals)
     max_v = max(all_vals)
-    if min_v == max_v:
-        max_v += 1.0
-
-    step = (max_v - min_v) / float(bins)
-    bin_edges = [min_v + i * step for i in range(bins + 1)]
+    scale = max(abs(min_v), abs(max_v)) or 1.0
+    low, high = min_v / scale, max_v / scale
+    width = high - low
+    bin_edges = [(low * (1 - i / bins) + high * (i / bins)) * scale for i in range(bins + 1)]
 
     def get_bin(val: float) -> int:
-        idx = int((val - min_v) / step)
+        idx = int((val / scale - low) / width * bins) if width else 0
         return min(bins - 1, max(0, idx))
 
     p_counts = [0] * bins
@@ -74,8 +79,8 @@ def compute_histograms(
             q_counts[get_bin(v)] += 1
 
     # Laplace smoothing
-    tot_p = len(p_vals) + bins * epsilon
-    tot_q = len(q_vals) + bins * epsilon
+    tot_p = sum(p_counts) + bins * epsilon
+    tot_q = sum(q_counts) + bins * epsilon
     p_probs = [(c + epsilon) / tot_p for c in p_counts]
     q_probs = [(c + epsilon) / tot_q for c in q_counts]
 

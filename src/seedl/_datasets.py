@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 import importlib
+import math
 from collections import Counter
 from typing import Any
 
+from ._tensor_utils import to_native
 from ._tensors import make_image_grid
 
 
@@ -29,7 +31,11 @@ def inspect_dataset(
     samples = None
     extracted_labels = labels
 
-    if hasattr(data, "__iter__") and not isinstance(data, (list, tuple, dict)):
+    if (
+        hasattr(data, "__iter__")
+        and not hasattr(data, "shape")
+        and not isinstance(data, (list, tuple, dict))
+    ):
         try:
             it = iter(data)
             first_batch = next(it)
@@ -105,16 +111,26 @@ def inspect_dataset(
                 if is_chw and torch is not None and isinstance(img, torch.Tensor):
                     img = img.permute(1, 2, 0)
                 if hasattr(img, "detach") and hasattr(img, "cpu"):
-                    arr = img.detach().cpu().to(dtype=torch.float32)
-                    # normalize
-                    low, high = float(arr.min().item()), float(arr.max().item())
-                    if high > low:
-                        norm = ((arr - low) / (high - low)).tolist()
-                    else:
-                        norm = torch.full_like(arr, 0.5).tolist()
-                    image_tiles.append(norm if channels > 1 else [[p[0]] for p in norm])
+                    from ._inspect import _image_scale
+
+                    arr = img.detach()
+                    if arr.is_complex():
+                        arr = arr.abs()
+                    norm = to_native(_image_scale(arr, arr.dtype))
+                    image_tiles.append(
+                        norm if channels > 1 else [[p[0] for p in row] for row in norm]
+                    )
                 elif hasattr(img, "tolist"):
-                    image_tiles.append(img.tolist())
+                    from ._inspect import _numpy_image_scale
+
+                    if is_chw:
+                        img = img.transpose(1, 2, 0)
+                    if img.dtype.kind == "c":
+                        img = abs(img)
+                    norm = _numpy_image_scale(img.astype(float), img.dtype).tolist()
+                    image_tiles.append(
+                        norm if channels > 1 else [[p[0] for p in row] for row in norm]
+                    )
 
             grid, _, rows, cols = make_image_grid(image_tiles, channels, max_images=16)
             summary = f"Image dataset preview: {n} sample(s) with shape {shape[1:]}"
@@ -151,16 +167,16 @@ def inspect_dataset(
             else:
                 col = [row[col_idx] for row in samples if len(row) > col_idx]
             if hasattr(col, "detach") and hasattr(col, "cpu"):
-                vals = col.detach().cpu().to(dtype=torch.float32)
-                mean_v = float(vals.mean().item())
-                min_v = float(vals.min().item())
-                max_v = float(vals.max().item())
-            elif hasattr(col, "mean"):
-                mean_v = float(col.mean())
-                min_v = float(col.min())
-                max_v = float(col.max())
+                values = to_native(col.abs() if col.is_complex() else col)
+            elif hasattr(col, "tolist"):
+                values = [abs(v) if isinstance(v, complex) else v for v in col.tolist()]
             else:
-                mean_v, min_v, max_v = 0.0, 0.0, 0.0
+                values = col
+            finite = [float(v) for v in values if math.isfinite(float(v))]
+            scale = max((abs(v) for v in finite), default=0.0)
+            mean_v = math.fsum(v / scale for v in finite) / len(finite) * scale if scale else 0.0
+            min_v = min(finite, default=0.0)
+            max_v = max(finite, default=0.0)
             feature_stats.append(
                 {
                     "feature": f"Feature {col_idx}",

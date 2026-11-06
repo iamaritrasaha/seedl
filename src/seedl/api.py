@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import builtins
 from typing import Any
 
 from ._inspect import (
@@ -133,7 +134,35 @@ def _apply_slice(
 
         shape_tuple = tuple(int(s) for s in orig_shape) if orig_shape is not None else None
         parsed_slice = parse_slice_spec(slice_spec, shape_tuple)
-        sliced_obj = obj[parsed_slice]
+        indices = parsed_slice if isinstance(parsed_slice, tuple) else (parsed_slice,)
+        if is_torch_tensor(obj) and any(
+            isinstance(i, builtins.slice) and i.step is not None and i.step < 0 for i in indices
+        ):
+            from ._inspect import _torch_module
+
+            torch = _torch_module()
+            assert torch is not None
+            sliced_obj = obj
+            axis = 0
+            for index in indices:
+                if isinstance(index, builtins.slice) and index.step is not None and index.step < 0:
+                    start, stop, step = index.indices(sliced_obj.shape[axis])
+                    selected = torch.tensor(
+                        list(range(start, stop, step)), device=obj.device, dtype=torch.long
+                    )
+                    sliced_obj = sliced_obj.index_select(axis, selected)
+                    axis += 1
+                else:
+                    sliced_obj = sliced_obj[(builtins.slice(None),) * axis + (index,)]
+                    axis += int(isinstance(index, builtins.slice))
+        else:
+            sliced_obj = obj[parsed_slice]
+        if is_numpy_array(obj) and not is_numpy_array(sliced_obj):
+            from ._inspect import _numpy_module
+
+            np = _numpy_module()
+            assert np is not None
+            sliced_obj = np.asarray(sliced_obj)
         slice_note = f"Showing slice {slice_spec} of original shape {orig_shape}."
         return sliced_obj, slice_note, orig_shape
     except SeeDLError:
@@ -207,12 +236,6 @@ def _inspect_interactive_tensor(
     max_points: int,
 ) -> tuple[str, str, dict[str, Any], dict[str, Any], list[str]]:
     """Build multi-dimensional interactive tensor exploration payload."""
-    current_rank = len(getattr(obj, "shape", ()))
-    if current_rank < 2:
-        raise SeeDLError(
-            f"Interactive tensor exploration requires at least 2 dimensions, "
-            f"got rank {current_rank} with shape {getattr(obj, 'shape', ())}."
-        )
     from ._tensor_explorer import build_tensor_explorer_payload
 
     data, metadata, notes = build_tensor_explorer_payload(
@@ -341,7 +364,7 @@ def see(
         return quantum_result
 
     is_tensor = is_torch_tensor(obj) or is_numpy_array(obj)
-    is_multidim_tensor = is_tensor and len(getattr(obj, "shape", ())) >= 2
+    is_multidim_tensor = is_tensor
     is_module = is_torch_module(obj)
 
     validate_tensor_view_options(

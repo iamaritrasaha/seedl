@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 import math
+import operator
 from typing import Any
 
-from .exceptions import SeeDLError
+from .exceptions import InvalidSliceError, SeeDLError, SliceIndexError
 
 
 def format_memory_bytes(total_bytes: int) -> str:
@@ -170,7 +171,7 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
         SeeDLError: For invalid slice syntax, excessive dimensions, or out-of-bounds indices.
     """
     if slice_spec is None:
-        return slice(None)
+        return () if shape == () else slice(None)
 
     parsed_tuple: tuple[Any, ...]
 
@@ -193,7 +194,9 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
                         start = int(start_s) if start_s.strip() else None
                         stop = int(stop_s) if stop_s.strip() else None
                     except ValueError as err:
-                        raise SeeDLError(f"Invalid integer in slice range {p!r}: {err}") from err
+                        raise InvalidSliceError(
+                            f"Invalid integer in slice range {p!r}: {err}"
+                        ) from err
                     parsed_items.append(slice(start, stop))
                 elif len(sub_parts) == 3:
                     start_s, stop_s, step_s = sub_parts
@@ -202,17 +205,19 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
                         stop = int(stop_s) if stop_s.strip() else None
                         step = int(step_s) if step_s.strip() else None
                     except ValueError as err:
-                        raise SeeDLError(f"Invalid integer in slice range {p!r}: {err}") from err
+                        raise InvalidSliceError(
+                            f"Invalid integer in slice range {p!r}: {err}"
+                        ) from err
                     if step == 0:
-                        raise SeeDLError(f"Slice step cannot be zero in {p!r}.")
+                        raise InvalidSliceError(f"Slice step cannot be zero in {p!r}.")
                     parsed_items.append(slice(start, stop, step))
                 else:
-                    raise SeeDLError(f"Invalid slice syntax: {p!r}")
+                    raise InvalidSliceError(f"Invalid slice syntax: {p!r}")
             else:
                 try:
                     parsed_items.append(int(p))
                 except ValueError as err:
-                    raise SeeDLError(
+                    raise InvalidSliceError(
                         f"Expected an integer or slice syntax in {slice_spec!r}, got {p!r}."
                     ) from err
         parsed_tuple = tuple(parsed_items)
@@ -223,24 +228,48 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
     else:
         parsed_tuple = (slice_spec,)
 
+    normalized: list[Any] = []
     for item in parsed_tuple:
-        if isinstance(item, slice) and item.step == 0:
-            raise SeeDLError("Slice step cannot be zero.")
+        if item is Ellipsis:
+            normalized.append(item)
+        elif isinstance(item, slice):
+            try:
+                slice_parts = [
+                    operator.index(v) if v is not None else None
+                    for v in (item.start, item.stop, item.step)
+                ]
+            except TypeError as exc:
+                raise InvalidSliceError(
+                    "Slice start, stop and step must be integers or None."
+                ) from exc
+            if slice_parts[2] == 0:
+                raise InvalidSliceError("Slice step cannot be zero.")
+            normalized.append(slice(*slice_parts))
+        else:
+            try:
+                if isinstance(item, bool):
+                    raise TypeError
+                normalized.append(operator.index(item))
+            except TypeError as exc:
+                raise InvalidSliceError(
+                    f"Unsupported slice index {type(item).__name__}; expected int, slice or Ellipsis."
+                ) from exc
+    parsed_tuple = tuple(normalized)
+    ellipsis_positions = [i for i, item in enumerate(parsed_tuple) if item is Ellipsis]
+    if len(ellipsis_positions) > 1:
+        raise InvalidSliceError("An index can only have a single ellipsis ('...')")
 
     # Dimension and bounds checks when shape is known
     if shape is not None:
         # Handle Ellipsis expansion
-        if Ellipsis in parsed_tuple:
-            ellipsis_count = parsed_tuple.count(Ellipsis)
-            if ellipsis_count > 1:
-                raise SeeDLError("An index can only have a single ellipsis ('...')")
+        if ellipsis_positions:
             non_ellipsis_count = len(parsed_tuple) - 1
             if non_ellipsis_count > len(shape):
-                raise SeeDLError(
+                raise SliceIndexError(
                     f"Too many slice indices ({len(parsed_tuple)}) for tensor of rank {len(shape)} with shape {shape}."
                 )
             expanded_len = len(shape) - non_ellipsis_count
-            ellipsis_idx = parsed_tuple.index(Ellipsis)
+            ellipsis_idx = ellipsis_positions[0]
             parsed_tuple = (
                 parsed_tuple[:ellipsis_idx]
                 + (slice(None),) * expanded_len
@@ -248,18 +277,18 @@ def parse_slice_spec(slice_spec: Any, shape: tuple[int, ...] | None = None) -> A
             )
 
         if len(parsed_tuple) > len(shape):
-            raise SeeDLError(
+            raise SliceIndexError(
                 f"Too many slice indices ({len(parsed_tuple)}) for tensor of rank {len(shape)} with shape {shape}."
             )
 
         for axis, (item, size) in enumerate(zip(parsed_tuple, shape, strict=False)):
             if isinstance(item, int):
                 if item < -size or item >= size:
-                    raise SeeDLError(
+                    raise SliceIndexError(
                         f"Slice index {item} is out of bounds for axis {axis} with size {size} in shape {shape}."
                     )
 
-    return parsed_tuple if len(parsed_tuple) > 1 else parsed_tuple[0]
+    return parsed_tuple[0] if len(parsed_tuple) == 1 else parsed_tuple
 
 
 def make_image_grid(

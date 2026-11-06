@@ -1,7 +1,23 @@
 [project]
 name = "seedl"
 version = "0.6.0"
-description = "A simple, deep-learning-aware visualization library"
+description = "Deep learning tensor exploration (rank, slicing, memory layouts) and quantum computing visualization"
+keywords = ["deep-learning", "tensor", "rank", "slicing", "memory-layout", "visualization", "quantum-computing", "pytorch", "numpy"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Topic :: Scientific/Engineering :: Visualization",
+    "Typing :: Typed",
+]
 readme = "README.md"
 authors = [
     { name = "Aritra Saha", email = "aritrasab@gmail.com" }
@@ -44,6 +60,8 @@ check_untyped_defs = true
 
 [tool.uv.build-backend]
 source-include = ["tests/**", "scripts/verify_release.py", "uv.lock"]
+source-exclude = ["**/__pycache__/**", "**/*.pyc", ".git/**", ".venv/**", "work/**", "dist/**", "build/**"]
+wheel-exclude = ["**/__pycache__/**", "**/*.pyc", "**/*.pyo"]
 
 [build-system]
 requires = ["uv_build>=0.12.22,<0.14.0"]

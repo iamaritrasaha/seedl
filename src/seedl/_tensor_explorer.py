@@ -14,7 +14,9 @@ from collections.abc import Sequence
 from typing import Any
 
 from ._inspect import (
+    _image_scale,
     _metadata_from_stats,
+    _numpy_image_scale,
     _numpy_module,
     _numpy_statistics,
     _preview_steps,
@@ -23,6 +25,7 @@ from ._inspect import (
     is_numpy_array,
     is_torch_tensor,
 )
+from ._tensor_utils import complex_components, tensor_layout, to_native
 from ._tensors import (
     format_sparsity,
 )
@@ -95,20 +98,24 @@ def build_tensor_explorer_payload(
 
     Transfers only downsampled slice previews from GPU to CPU to preserve memory.
     """
+    for name, value in (("max_frames", max_frames), ("max_slice_points", max_slice_points)):
+        if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+            raise ValueError(f"{name} must be a positive integer.")
     if not (is_torch_tensor(tensor) or is_numpy_array(tensor)):
-        raise SeeDLError(
-            "Interactive tensor exploration requires a PyTorch tensor or NumPy ndarray, "
-            f"got {type(tensor).__name__}."
-        )
+        np = _numpy_module()
+        if np is None:
+            raise SeeDLError("NumPy is required to explore Python lists or scalars interactively.")
+        try:
+            tensor = np.asarray(tensor)
+        except (TypeError, ValueError) as exc:
+            raise ValueError("Tensor input must be a rectangular numeric array.") from exc
+    if is_numpy_array(tensor) and tensor.dtype.kind not in "biufc":
+        raise ValueError(f"Tensor input must be numeric, received dtype {tensor.dtype}.")
+    original_layout = tensor_layout(tensor)
 
     shape = tuple(int(s) for s in tensor.shape)
     rank = len(shape)
     count = int(math.prod(shape))
-
-    if rank < 2:
-        raise SeeDLError(
-            f"Interactive tensor exploration requires at least 2 dimensions, got rank {rank} with shape {shape}."
-        )
 
     # Validate or generate dimension names
     if dim_names is not None:
@@ -170,6 +177,13 @@ def build_tensor_explorer_payload(
         sparsity_pct=sparsity_pct,
     )
     metadata["Dimension names"] = ", ".join(validated_dims)
+    metadata.update(original_layout)
+    is_complex = bool(tensor.is_complex()) if is_torch else tensor.dtype.kind == "c"
+    if is_complex:
+        metadata["Display values"] = "magnitude"
+        notes.append(
+            "Complex slices display magnitude; each frame retains probability and phase samples."
+        )
 
     if nonfinite:
         if nan_count and inf_count:
@@ -205,10 +219,10 @@ def build_tensor_explorer_payload(
     axes_payload: list[dict[str, Any]] = []
 
     for axis in slicing_axes:
-        axis_size = shape[axis]
+        axis_size = shape[axis] if rank else 1
         step = max(1, math.ceil(axis_size / max_frames))
         frame_indices = list(range(0, axis_size, step))[:max_frames]
-        axis_name = validated_dims[axis]
+        axis_name = validated_dims[axis] if rank else "scalar"
 
         frames: list[dict[str, Any]] = []
 
@@ -217,7 +231,14 @@ def build_tensor_explorer_payload(
             if is_torch:
                 torch_mod = _torch_module()
                 assert torch_mod is not None
-                sub = tensor.select(axis, idx).detach()
+                sub = (tensor.select(axis, idx) if rank else tensor).detach()
+                components = (
+                    complex_components(_torch_complex_sample(sub, max_slice_points))
+                    if is_complex
+                    else None
+                )
+                if is_complex:
+                    sub = sub.abs()
                 sub_shape = tuple(int(s) for s in sub.shape)
 
                 # Check if sub-tensor is an image (e.g. 3D with 3 channels)
@@ -228,15 +249,14 @@ def build_tensor_explorer_payload(
                     h, w = sub_shape[1], sub_shape[2]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                     sampled = sub[:, ::ystep, ::xstep][:, :64, :64].permute(1, 2, 0)
-                    sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
-                    frame_pixels = sampled_cpu.tolist()
-                    finite_mask = torch_mod.isfinite(sampled_cpu)
-                    if finite_mask.any():
-                        fmin = float(sampled_cpu[finite_mask].min().item())
-                        fmax = float(sampled_cpu[finite_mask].max().item())
-                        fmean = float(sampled_cpu[finite_mask].mean().item())
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    sampled_cpu = sampled.to(
+                        device="cpu",
+                        dtype=torch_mod.float64
+                        if sampled.dtype == torch_mod.float64
+                        else torch_mod.float32,
+                    )
+                    frame_pixels = _image_scale(sampled_cpu, sub.dtype).tolist()
+                    fmin, fmax, fmean = _frame_statistics(sampled_cpu)
                     frames.append(
                         {
                             "index": idx,
@@ -257,15 +277,14 @@ def build_tensor_explorer_payload(
                     h, w = sub_shape[0], sub_shape[1]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                     sampled = sub[::ystep, ::xstep][:64, :64]
-                    sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
-                    frame_pixels = sampled_cpu.tolist()
-                    finite_mask = torch_mod.isfinite(sampled_cpu)
-                    if finite_mask.any():
-                        fmin = float(sampled_cpu[finite_mask].min().item())
-                        fmax = float(sampled_cpu[finite_mask].max().item())
-                        fmean = float(sampled_cpu[finite_mask].mean().item())
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    sampled_cpu = sampled.to(
+                        device="cpu",
+                        dtype=torch_mod.float64
+                        if sampled.dtype == torch_mod.float64
+                        else torch_mod.float32,
+                    )
+                    frame_pixels = _image_scale(sampled_cpu, sub.dtype).tolist()
+                    fmin, fmax, fmean = _frame_statistics(sampled_cpu)
                     frames.append(
                         {
                             "index": idx,
@@ -288,8 +307,10 @@ def build_tensor_explorer_payload(
                         h, w = sub_shape[0], sub_shape[1]
                         ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                         sampled = sub[::ystep, ::xstep][:64, :64]
+                    elif len(sub_shape) == 0:
+                        sampled = sub.reshape(1, 1)
                     elif len(sub_shape) == 1:
-                        step_1d = max(1, math.ceil(sub_shape[0] / 64))
+                        step_1d = max(1, math.ceil(sub_shape[0] / min(64, max_slice_points)))
                         sampled = sub[::step_1d][:64].unsqueeze(0)
                     else:
                         # Flatten remaining inner dimensions to 2D
@@ -299,14 +320,13 @@ def build_tensor_explorer_payload(
                         ystep, xstep = _preview_steps(first_dim, rest, 64, max_slice_points)
                         sampled = flat_2d[::ystep, ::xstep][:64, :64]
 
-                    sampled_cpu = sampled.to(device="cpu", dtype=torch_mod.float32)
-                    finite_mask = torch_mod.isfinite(sampled_cpu)
-                    if finite_mask.any():
-                        fmin = float(sampled_cpu[finite_mask].min().item())
-                        fmax = float(sampled_cpu[finite_mask].max().item())
-                        fmean = float(sampled_cpu[finite_mask].mean().item())
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    sampled_cpu = sampled.to(
+                        device="cpu",
+                        dtype=torch_mod.float64
+                        if sampled.dtype == torch_mod.float64
+                        else torch_mod.float32,
+                    )
+                    fmin, fmax, fmean = _frame_statistics(sampled_cpu)
                     frames.append(
                         {
                             "index": idx,
@@ -321,7 +341,18 @@ def build_tensor_explorer_payload(
             else:
                 np = _numpy_module()
                 assert np is not None
-                sub = np.take(tensor, idx, axis=axis)
+                sub = np.take(tensor, idx, axis=axis) if rank else tensor
+                components = (
+                    complex_components(
+                        sub.flat[:: max(1, math.ceil(sub.size / max_slice_points))][
+                            :max_slice_points
+                        ].tolist()
+                    )
+                    if is_complex
+                    else None
+                )
+                if is_complex:
+                    sub = np.abs(sub)
                 sub_shape = sub.shape
 
                 is_sub_image = False
@@ -330,21 +361,15 @@ def build_tensor_explorer_payload(
                     h, w = sub_shape[1], sub_shape[2]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
                     sampled = np.moveaxis(sub[:, ::ystep, ::xstep][:, :64, :64], 0, -1).astype(
-                        np.float32
+                        np.float64
                     )
-                    finite_mask = np.isfinite(sampled)
-                    if np.any(finite_mask):
-                        fmin = float(np.min(sampled[finite_mask]))
-                        fmax = float(np.max(sampled[finite_mask]))
-                        fmean = float(np.mean(sampled[finite_mask]))
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    fmin, fmax, fmean = _frame_statistics(sampled)
                     frames.append(
                         {
                             "index": idx,
                             "type": "image",
                             "shape": list(sampled.shape),
-                            "pixels": sampled.tolist(),
+                            "pixels": _numpy_image_scale(sampled, sub.dtype).tolist(),
                             "min": fmin,
                             "max": fmax,
                             "mean": fmean,
@@ -354,20 +379,14 @@ def build_tensor_explorer_payload(
                     is_sub_image = True
                     h, w = sub_shape[0], sub_shape[1]
                     ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
-                    sampled = sub[::ystep, ::xstep][:64, :64].astype(np.float32)
-                    finite_mask = np.isfinite(sampled)
-                    if np.any(finite_mask):
-                        fmin = float(np.min(sampled[finite_mask]))
-                        fmax = float(np.max(sampled[finite_mask]))
-                        fmean = float(np.mean(sampled[finite_mask]))
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    sampled = sub[::ystep, ::xstep][:64, :64].astype(np.float64)
+                    fmin, fmax, fmean = _frame_statistics(sampled)
                     frames.append(
                         {
                             "index": idx,
                             "type": "image",
                             "shape": list(sampled.shape),
-                            "pixels": sampled.tolist(),
+                            "pixels": _numpy_image_scale(sampled, sub.dtype).tolist(),
                             "min": fmin,
                             "max": fmax,
                             "mean": fmean,
@@ -378,24 +397,20 @@ def build_tensor_explorer_payload(
                     if len(sub_shape) == 2:
                         h, w = sub_shape[0], sub_shape[1]
                         ystep, xstep = _preview_steps(h, w, 64, max_slice_points)
-                        sampled = sub[::ystep, ::xstep][:64, :64].astype(np.float32)
+                        sampled = sub[::ystep, ::xstep][:64, :64].astype(np.float64)
+                    elif len(sub_shape) == 0:
+                        sampled = sub.reshape(1, 1).astype(np.float64)
                     elif len(sub_shape) == 1:
-                        step_1d = max(1, math.ceil(sub_shape[0] / 64))
-                        sampled = np.expand_dims(sub[::step_1d][:64], 0).astype(np.float32)
+                        step_1d = max(1, math.ceil(sub_shape[0] / min(64, max_slice_points)))
+                        sampled = np.expand_dims(sub[::step_1d][:64], 0).astype(np.float64)
                     else:
                         first_dim = sub_shape[0]
                         rest = math.prod(sub_shape[1:])
                         flat_2d = sub.reshape(first_dim, rest)
                         ystep, xstep = _preview_steps(first_dim, rest, 64, max_slice_points)
-                        sampled = flat_2d[::ystep, ::xstep][:64, :64].astype(np.float32)
+                        sampled = flat_2d[::ystep, ::xstep][:64, :64].astype(np.float64)
 
-                    finite_mask = np.isfinite(sampled)
-                    if np.any(finite_mask):
-                        fmin = float(np.min(sampled[finite_mask]))
-                        fmax = float(np.max(sampled[finite_mask]))
-                        fmean = float(np.mean(sampled[finite_mask]))
-                    else:
-                        fmin, fmax, fmean = 0.0, 1.0, 0.0
+                    fmin, fmax, fmean = _frame_statistics(sampled)
                     frames.append(
                         {
                             "index": idx,
@@ -407,6 +422,9 @@ def build_tensor_explorer_payload(
                             "mean": fmean,
                         }
                     )
+
+            if components is not None:
+                frames[-1]["complex_components"] = components
 
         axes_payload.append(
             {
@@ -445,6 +463,21 @@ def build_tensor_explorer_payload(
     }
 
     return data, metadata, notes
+
+
+def _frame_statistics(sample: Any) -> tuple[float, float, float]:
+    values = [float(v) for v in to_native(sample.reshape(-1)) if math.isfinite(float(v))]
+    if not values:
+        return 0.0, 1.0, 0.0
+    scale = max(abs(v) for v in values)
+    mean = math.fsum(v / scale for v in values) / len(values) * scale if scale else 0.0
+    return min(values), max(values), mean
+
+
+def _torch_complex_sample(tensor: Any, max_points: int) -> list[complex]:
+    from ._inspect import _torch_sample
+
+    return _torch_sample(tensor, max_points)
 
 
 def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
@@ -618,8 +651,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     if (isNaN(val) || !isFinite(val)) return [148, 163, 184, 255]; // Gray-400 for non-finite
     const safeMin = (min != null && !isNaN(min) && isFinite(min)) ? min : 0.0;
     const safeMax = (max != null && !isNaN(max) && isFinite(max)) ? max : 1.0;
-    const range = (safeMax - safeMin) || 1.0;
-    const t = Math.max(0, Math.min(1, (val - safeMin) / range));
+    const scale = Math.max(Math.abs(safeMin), Math.abs(safeMax)) || 1;
+    const range = (safeMax / scale - safeMin / scale) || 1;
+    const t = Math.max(0, Math.min(1, (val / scale - safeMin / scale) / range));
     let rgb;
     if (map === "coolwarm") rgb = colormapCoolwarm(t);
     else if (map === "grayscale") rgb = colormapGrayscale(t);
@@ -668,11 +702,13 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     const canvasHeight = 256;
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
     if (frame.type === "image" && frame.pixels) {{
       const pixels = frame.pixels;
       const rows = pixels.length;
-      const cols = pixels[0].length;
+      const cols = rows ? pixels[0].length : 0;
+      if (!rows || !cols) return;
       const imgData = ctx.createImageData(cols, rows);
       for (let y = 0; y < rows; y++) {{
         for (let x = 0; x < cols; x++) {{
@@ -680,8 +716,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
           const idx = (y * cols + x) * 4;
           if (Array.isArray(p)) {{
             imgData.data[idx] = Math.round(Math.max(0, Math.min(1, p[0])) * 255);
-            imgData.data[idx + 1] = Math.round(Math.max(0, Math.min(1, p[1] || p[0])) * 255);
-            imgData.data[idx + 2] = Math.round(Math.max(0, Math.min(1, p[2] || p[0])) * 255);
+            imgData.data[idx + 1] = Math.round(Math.max(0, Math.min(1, p.length > 1 ? p[1] : p[0])) * 255);
+            imgData.data[idx + 2] = Math.round(Math.max(0, Math.min(1, p.length > 2 ? p[2] : p[0])) * 255);
             imgData.data[idx + 3] = 255;
           }} else {{
             const c = Math.round(Math.max(0, Math.min(1, p)) * 255);
@@ -701,7 +737,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     }} else if (frame.values) {{
       const values = frame.values;
       const rows = values.length;
-      const cols = values[0].length;
+      const cols = rows ? values[0].length : 0;
+      if (!rows || !cols) return;
       const imgData = ctx.createImageData(cols, rows);
       for (let y = 0; y < rows; y++) {{
         for (let x = 0; x < cols; x++) {{
@@ -1180,7 +1217,7 @@ def svg_tensor_explorer(data: dict[str, Any], metadata: dict[str, Any], notes: l
   <!-- Controls representation -->
   <rect x="260" y="125" width="460" height="200" fill="#0f172a" rx="6" stroke="#334155" stroke-width="1"/>
   <text x="280" y="160" fill="#f8fafc" font-family="-apple-system, sans-serif" font-size="14" font-weight="bold">Slice Navigation Controls</text>
-  <text x="280" y="190" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="12">Primary Axis: {primary_axis.get("name", "dim_0")} (Axis {primary_axis.get("axis", 0)})</text>
+  <text x="280" y="190" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="12">Primary Axis: {html.escape(str(primary_axis.get("name", "dim_0")))} (Axis {html.escape(str(primary_axis.get("axis", 0)))})</text>
   <text x="280" y="215" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="12">Total Slices: {primary_axis.get("total_slices", "n/a")} | Sampled Frames: {slice_count}</text>
   
   <!-- Slider graphic -->

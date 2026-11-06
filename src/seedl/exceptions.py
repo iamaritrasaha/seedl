@@ -11,3 +11,11 @@ class UnsupportedObjectError(SeeDLError, TypeError):
 
 class MissingDependencyError(SeeDLError, ImportError):
     """Raised when an explicitly requested optional renderer is unavailable."""
+
+
+class InvalidSliceError(SeeDLError, ValueError):
+    """Raised for unsupported or malformed basic tensor indices."""
+
+
+class SliceIndexError(SeeDLError, IndexError):
+    """Raised for excessive axes or an out-of-bounds tensor index."""

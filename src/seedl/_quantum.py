@@ -12,6 +12,7 @@ import cmath
 import math
 from typing import Any
 
+from ._tensor_utils import to_native
 from .exceptions import MissingDependencyError, SeeDLError
 
 # Pauli matrices
@@ -42,6 +43,13 @@ MAX_DENSITY_MATRIX_DIM: int = 256  # 8 qubits (256 x 256 = 65,536 elements)
 MAX_CIRCUIT_OPS: int = 500
 
 
+def _quantum_isclose(a: complex, b: complex) -> bool:
+    from ._inspect import _numpy_module
+
+    np = _numpy_module()
+    return bool(np.isclose(a, b, atol=1e-5, rtol=0)) if np is not None else abs(a - b) <= 1e-5
+
+
 def _validate_statevector_vec(vec: list[complex]) -> list[complex]:
     """Apply all scientific invariants to an already-parsed list of complex amplitudes.
 
@@ -69,10 +77,10 @@ def _validate_statevector_vec(vec: list[complex]) -> list[complex]:
                 "NaN and Inf amplitudes are not physically valid."
             )
 
-    norm_sq = sum(abs(c) ** 2 for c in vec)
+    norm_sq = sum(abs(c) * abs(c) for c in vec)
     if norm_sq < 1e-12:
         raise ValueError("Statevector has zero norm and cannot represent a quantum state.")
-    if abs(norm_sq - 1.0) > 1e-5:
+    if not _quantum_isclose(norm_sq, 1.0):
         raise ValueError(
             f"Statevector is not normalized (sum of |c_i|² = {norm_sq:.6f} ≠ 1.0). "
             "All valid quantum states must satisfy ⟨ψ|ψ⟩ = 1."
@@ -130,8 +138,7 @@ def parse_statevector(state: Any) -> list[complex]:
             f"{MAX_STATEVECTOR_DIM} (14 qubits) to prevent memory exhaustion."
         )
 
-    if hasattr(state, "tolist"):
-        state = state.tolist()
+    state = to_native(state)
 
     if isinstance(state, (list, tuple)):
         # Check if 1D statevector or 2D density matrix
@@ -183,8 +190,7 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
             f"{MAX_DENSITY_MATRIX_DIM}x{MAX_DENSITY_MATRIX_DIM} (8 qubits) to prevent resource exhaustion."
         )
 
-    if hasattr(rho, "tolist"):
-        rho = rho.tolist()
+    rho = to_native(rho)
 
     if not isinstance(rho, (list, tuple)) or not rho or not isinstance(rho[0], (list, tuple)):
         raise ValueError("Density matrix must be a 2D square matrix of complex numbers.")
@@ -222,7 +228,7 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
     for i in range(n):
         for j in range(i, n):
             diff = abs(mat[i][j] - mat[j][i].conjugate())
-            if diff > 1e-5:
+            if not _quantum_isclose(mat[i][j], mat[j][i].conjugate()):
                 raise ValueError(
                     f"Density matrix is not Hermitian at [{i}][{j}]: "
                     f"{mat[i][j]} != {mat[j][i].conjugate()} (diff = {diff:.2e})."
@@ -231,7 +237,7 @@ def parse_density_matrix(rho: Any) -> list[list[complex]]:
     # Check Trace: Tr(rho) == 1
     tr = sum(mat[i][i].real for i in range(n))
     tr_imag = sum(abs(mat[i][i].imag) for i in range(n))
-    if abs(tr - 1.0) > 1e-4 or tr_imag > 1e-4:
+    if not _quantum_isclose(tr, 1.0) or not _quantum_isclose(tr_imag, 0.0):
         raise ValueError(
             f"Density matrix trace must be approximately 1.0 (got Tr(rho) = {tr:.5f} + {tr_imag:.5f}i)."
         )
@@ -377,8 +383,9 @@ def get_single_qubit_gate(name: str, parameter: float | None = None) -> list[lis
 
 def apply_gate_to_state(state: list[complex], gate_matrix: list[list[complex]]) -> list[complex]:
     """Apply a 2x2 unitary matrix to a 1-qubit statevector."""
-    if len(state) != 2 or len(gate_matrix) != 2:
+    if len(state) != 2:
         raise ValueError("apply_gate_to_state requires single-qubit state and 2x2 gate.")
+    _validate_unitary_gate(gate_matrix)
     out_0 = gate_matrix[0][0] * state[0] + gate_matrix[0][1] * state[1]
     out_1 = gate_matrix[1][0] * state[0] + gate_matrix[1][1] * state[1]
     return [out_0, out_1]
@@ -388,6 +395,7 @@ def apply_gate_to_density_matrix(
     rho: list[list[complex]], gate_matrix: list[list[complex]]
 ) -> list[list[complex]]:
     """Apply unitary U to density matrix: rho' = U rho U^dagger."""
+    _validate_unitary_gate(gate_matrix)
     # First: M = U * rho
     m = [
         [gate_matrix[i][0] * rho[0][j] + gate_matrix[i][1] * rho[1][j] for j in range(2)]
@@ -400,6 +408,16 @@ def apply_gate_to_density_matrix(
     ]
     out = [[m[i][0] * u_dag[0][j] + m[i][1] * u_dag[1][j] for j in range(2)] for i in range(2)]
     return out
+
+
+def _validate_unitary_gate(gate: list[list[complex]]) -> None:
+    if len(gate) != 2 or any(len(row) != 2 for row in gate):
+        raise ValueError("Single-qubit gate must be a 2x2 unitary matrix.")
+    for i in range(2):
+        for j in range(2):
+            inner = sum(complex(gate[k][i]).conjugate() * gate[k][j] for k in range(2))
+            if not _quantum_isclose(inner, float(i == j)):
+                raise ValueError("Single-qubit gate must be unitary (U†U approximately equals I).")
 
 
 def apply_noise_channel(

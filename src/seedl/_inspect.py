@@ -9,6 +9,7 @@ from collections.abc import Mapping, Sequence
 from itertools import islice
 from typing import Any
 
+from ._tensor_utils import complex_components, tensor_layout
 from .exceptions import MissingDependencyError, SeeDLError, UnsupportedObjectError
 
 
@@ -157,8 +158,14 @@ def _torch_statistics(
     """Compute exact-shape summaries in bounded chunks without a full-size temporary."""
     torch = _torch_module()
     assert torch is not None
-    is_fp = bool(tensor.dtype.is_floating_point)
-    stats_dtype = torch.float64 if tensor.dtype == torch.float64 or not is_fp else torch.float32
+    is_fp = bool(tensor.dtype.is_floating_point or tensor.is_complex())
+    stats_dtype = (
+        torch.float64
+        if tensor.dtype in (torch.float64, torch.complex128) or not is_fp
+        else torch.float32
+    )
+    if tensor.device.type == "mps":
+        stats_dtype = torch.float32
     finite_count = 0
     nonfinite = 0
     nan_count = 0
@@ -169,7 +176,9 @@ def _torch_statistics(
     mean: float | None = None
     m2: float | None = None
     scale = 0.0
-    for chunk in _torch_chunks(tensor, chunk_size=chunk_size):
+    for chunk in _torch_chunks(tensor.detach(), chunk_size=chunk_size):
+        if chunk.is_complex():
+            chunk = chunk.abs()
         zero_count += int((chunk == 0).sum().item())
         if is_fp:
             nan_count += int(torch.isnan(chunk).sum().item())
@@ -260,10 +269,28 @@ def _torch_tensor_data(
         raise SeeDLError(
             "Quantized PyTorch tensors are not supported yet; call dequantize() first."
         )
+    original_layout = tensor_layout(tensor)
     if tensor.is_complex():
-        raise SeeDLError(
-            "Complex tensors are not visualized yet; convert real and imaginary parts separately."
+        from ._tensors import format_memory_bytes
+
+        kind, data, metadata, notes = _torch_tensor_data(tensor.detach().abs(), max_points, layout)
+        data["complex_components"] = complex_components(_torch_sample(tensor.detach(), max_points))
+        metadata.update(original_layout)
+        metadata.update(
+            {
+                "Data type": str(tensor.dtype).replace("torch.", ""),
+                "Device": str(tensor.device),
+                "Requires gradients": bool(tensor.requires_grad),
+                "Estimated memory": format_memory_bytes(
+                    int(tensor.numel()) * tensor.element_size()
+                ),
+                "Display values": "magnitude",
+            }
         )
+        notes.append(
+            "Complex values are displayed as magnitudes; sampled real, imaginary, probability and phase components are retained."
+        )
+        return kind, data, metadata, notes
     detached = tensor.detach()
     shape = tuple(int(dim) for dim in detached.shape)
     count = int(detached.numel())
@@ -346,6 +373,7 @@ def _torch_tensor_data(
         sparsity_pct=sparsity_pct,
     )
     metadata["Maximum absolute value"] = _fmt(max_abs)
+    metadata.update(original_layout)
     if sparse:
         metadata["Stored values"] = int(values.numel())
     if count == 0:
@@ -532,9 +560,23 @@ def _numpy_array_data(
     np = _numpy_module()
     assert np is not None
     if np.iscomplexobj(array):
-        raise SeeDLError(
-            "Complex arrays are not visualized yet; convert real and imaginary parts separately."
+        kind, data, metadata, complex_notes = _numpy_array_data(np.abs(array), max_points, layout)
+        step = max(1, math.ceil(int(array.size) / max_points))
+        data["complex_components"] = complex_components(array.flat[::step][:max_points].tolist())
+        metadata.update(tensor_layout(array))
+        from ._tensors import format_memory_bytes
+
+        metadata.update(
+            {
+                "Data type": str(array.dtype),
+                "Estimated memory": format_memory_bytes(int(array.nbytes)),
+                "Display values": "magnitude",
+            }
         )
+        complex_notes.append(
+            "Complex values are displayed as magnitudes; sampled real, imaginary, probability and phase components are retained."
+        )
+        return kind, data, metadata, complex_notes
     shape = tuple(int(dim) for dim in array.shape)
     count = int(array.size)
     dtype = str(array.dtype)
@@ -600,6 +642,7 @@ def _numpy_array_data(
         inf_count=inf_count,
         sparsity_pct=sparsity_pct,
     )
+    metadata.update(tensor_layout(array))
     if count == 0:
         notes.append("This array is empty, so there are no values to plot.")
         return "distribution", {"sample": [], "shape": shape}, metadata, notes
@@ -761,6 +804,8 @@ def _numpy_statistics(
     m2: float | None = None
     scale = 0.0
     for chunk in chunks:
+        if np.iscomplexobj(chunk):
+            chunk = np.abs(chunk)
         zero_count += int(np.count_nonzero(chunk == 0))
         if np.issubdtype(chunk.dtype, np.floating):
             nan_count += int(np.isnan(chunk).sum())
@@ -1677,6 +1722,43 @@ def inspect_object(
         return kind, "NumPy array visualization", data, metadata, notes
     if np is not None and isinstance(obj, np.generic):
         obj = obj.item()
+    if isinstance(obj, numbers.Complex) and not isinstance(obj, numbers.Real):
+        kind, title, data, metadata, notes = inspect_object(
+            abs(obj), example_input=None, max_points=max_points
+        )
+        data["complex_components"] = complex_components([complex(obj)])
+        metadata.update({"Type": type(obj).__name__, "Display values": "magnitude"})
+        return kind, title, data, metadata, notes
+    if isinstance(obj, (list, tuple)):
+        flat: list[Any] = []
+
+        def flatten(value: Any) -> None:
+            if isinstance(value, (list, tuple)):
+                for item in value:
+                    flatten(item)
+            else:
+                flat.append(value)
+
+        flatten(obj)
+        if any(isinstance(v, numbers.Complex) and not isinstance(v, numbers.Real) for v in flat):
+
+            def project(value: Any) -> Any:
+                return (
+                    [project(v) for v in value] if isinstance(value, (list, tuple)) else abs(value)
+                )
+
+            kind, title, data, metadata, notes = inspect_object(
+                project(obj), example_input=None, max_points=max_points
+            )
+            step = max(1, math.ceil(len(flat) / max_points))
+            data["complex_components"] = complex_components(
+                [complex(v) for v in flat[::step][:max_points]]
+            )
+            metadata["Display values"] = "magnitude"
+            notes.append(
+                "Complex values are displayed as magnitudes; probability and phase samples are retained."
+            )
+            return kind, title, data, metadata, notes
     if isinstance(obj, Mapping):
         data, summary, notes = _history_data(obj, max_points)
         data["summary"] = summary

@@ -4,6 +4,8 @@ on:
   release:
     types: [published]
 
+permissions: {}
+
 # Prevent concurrent publishing and avoid arbitrary triggers
 concurrency:
   group: publish-${{ github.ref }}
@@ -54,16 +56,16 @@ jobs:
         run: uv run --extra dev mypy
 
       - name: Validate release tag and metadata
-        run: uv run python scripts/verify_release.py --tag "${{ github.ref_name }}"
+        run: uv run python scripts/verify_release.py --tag "$GITHUB_REF_NAME"
 
       - name: Build distributions
-        run: uv build --no-sources
+        run: uv run --with build python -m build --installer uv
 
       - name: Check package metadata with twine
         run: uv run --with twine twine check --strict dist/*.whl dist/*.tar.gz
 
       - name: Verify distribution archives and files
-        run: uv run python scripts/verify_release.py --check-dist --tag "${{ github.ref_name }}"
+        run: uv run python scripts/verify_release.py --check-dist --tag "$GITHUB_REF_NAME"
 
       - name: Test isolated wheel installation
         run: |
@@ -114,7 +116,6 @@ jobs:
       url: https://pypi.org/p/seedl
     permissions:
       id-token: write  # Required for OIDC PyPI Trusted Publishing
-      contents: read   # Minimum read permissions
 
     steps:
       - name: Download verified distributions

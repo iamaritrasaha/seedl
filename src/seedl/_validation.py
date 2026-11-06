@@ -93,10 +93,6 @@ def validate_tensor_view_options(
             raise SeeDLError(
                 f"view='{view}' is only supported for PyTorch tensors and NumPy arrays, got {type(obj).__name__}."
             )
-        if not is_multidim_tensor:
-            raise SeeDLError(
-                f"view='{view}' requires at least 2 dimensions, got shape {getattr(obj, 'shape', ())}."
-            )
 
     if dim_names is not None:
         if is_module:

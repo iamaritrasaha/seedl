@@ -118,6 +118,8 @@ def compute_tensor_stats(
     """Compute bounded numerical statistics on an observed tensor without autograd graph retention."""
     if torch is not None and isinstance(t, torch.Tensor):
         detached = t.detach()
+        if detached.is_complex():
+            detached = detached.abs()
         num_elements = detached.numel()
         if num_elements == 0:
             return (

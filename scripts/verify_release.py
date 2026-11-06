@@ -13,6 +13,7 @@ from __future__ import annotations
 import argparse
 import re
 import sys
+import tarfile
 import zipfile
 from pathlib import Path
 
@@ -142,8 +143,32 @@ def verify_release(
 
             # Check that tests and examples are NOT in wheel
             for fname in whl.namelist():
-                if fname.startswith("tests/") or fname.startswith("examples/"):
+                parts = Path(fname).parts
+                if any(
+                    part
+                    in {
+                        "tests",
+                        "examples",
+                        "__pycache__",
+                        ".git",
+                        ".venv",
+                        "work",
+                        "build",
+                        "dist",
+                    }
+                    for part in parts
+                ) or fname.endswith((".pyc", ".pyo")):
                     raise ValueError(f"Wheel unexpectedly contains development file: {fname}")
+
+        # Opening and reading the source archive detects corrupt/truncated uploads.
+        with tarfile.open(expected_sdist, "r:gz") as archive:
+            project_member = f"seedl-{version}/pyproject.toml"
+            source_file = archive.extractfile(project_member)
+            if source_file is None:
+                raise ValueError("Sdist is missing pyproject.toml")
+            source_project = tomllib.loads(source_file.read().decode("utf-8"))["project"]
+            if source_project["name"] != name or source_project["version"] != version:
+                raise ValueError("Sdist project name/version does not match release metadata")
 
         print("  Wheel contents and METADATA verified cleanly.")
 

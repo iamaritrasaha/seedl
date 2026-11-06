@@ -444,3 +444,51 @@ def test_browser_tensor_unicode_and_keyboard_navigation(tmp_path: Path):
         page.screenshot(path=str(ARTIFACTS_DIR / "10_unicode_keyboard.png"))
         assert len(console_errors) == 0
         browser.close()
+
+
+@skip_without_browser
+@pytest.mark.parametrize(
+    "array",
+    [
+        np.array(7),
+        np.arange(3),
+        np.empty((0, 4)),
+        np.empty((3, 0)),
+        np.empty((2, 0, 3)),
+        np.zeros((2, 2, 2, 2, 2)),
+        np.array([[0j, 1j], [complex("nan"), -1j]]),
+    ],
+)
+def test_browser_tensor_audit_rank_empty_complex(array, tmp_path):
+    view = sd.see(array, interactive=True, backend="svg")
+    target = view.save(tmp_path / "tensor-audit.html")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        errors = []
+        page.on("pageerror", lambda error: errors.append(str(error)))
+        page.goto(target.as_uri())
+        for button in page.locator(".ste-axis-buttons button").all():
+            button.click()
+            page.locator(".ste-range").evaluate(
+                "el => {el.value = el.max; el.dispatchEvent(new Event('input'));}"
+            )
+        assert not errors
+        assert page.locator(".ste-canvas").count() == 1
+        browser.close()
+
+
+@skip_without_browser
+def test_browser_image_preserves_zero_color_channels(tmp_path):
+    array = np.zeros((2, 3, 8, 8), dtype=np.float32)
+    array[:, 0, :, :] = 1.0
+    target = sd.see(array, interactive=True, backend="svg").save(tmp_path / "red.html")
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
+        page.goto(target.as_uri())
+        pixel = page.locator(".ste-canvas").evaluate(
+            "el => Array.from(el.getContext('2d').getImageData(128,128,1,1).data)"
+        )
+        assert pixel == [255, 0, 0, 255]
+        browser.close()

@@ -7,6 +7,7 @@ import json
 import math
 from typing import Any
 
+from ._tensor_utils import to_native
 from .exceptions import SeeDLError
 from .renderers import resolve_backend
 from .view import Visualization
@@ -271,7 +272,7 @@ def attention_rollout(
     if not isinstance(attention_tensors, (list, tuple)):
         # Could be 4D tensor [layers, heads, seq, seq] or numpy array
         if hasattr(attention_tensors, "detach"):
-            attention_tensors = attention_tensors.detach().cpu().numpy()
+            attention_tensors = to_native(attention_tensors)
         elif hasattr(attention_tensors, "shape"):
             pass  # keep numpy array intact
         else:

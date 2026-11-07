@@ -15,6 +15,8 @@ def _parameter(value: Any, depth: int = 0) -> Any:
         return [_parameter(v, depth + 1) for v in value[:8]]
     if depth < 2 and isinstance(value, dict):
         return {str(k)[:80]: _parameter(v, depth + 1) for k, v in list(value.items())[:8]}
+    if isinstance(value, slice):
+        return f"slice({value.start}, {value.stop}, {value.step})"
     if hasattr(value, "shape"):
         return {"type": type(value).__name__, "shape": native(value.shape)}
     return f"<{type(value).__module__}.{type(value).__name__}>"
@@ -156,7 +158,7 @@ def inspect_estimator(
                 "description": f"{space}; top {len(take)} of {len(values)}. Impurity importance is biased toward high-cardinality features and does not measure causality or held-out predictive value.",
             }
             notes.append(
-                "Impurity-based importance uses existing feature_importances_; no permutation or refitting is implied."
+                "Impurity-based importance uses existing feature_importances_; no permutation or refitting is implied. It can favor high-cardinality features and does not establish causality or held-out predictive value."
             )
     tree = getattr(final, "tree_", None) if fitted else None
     if tree is not None:
@@ -196,4 +198,25 @@ def inspect_estimator(
             ],
             f"{space}. Showing {len(records)} of {tree.node_count} nodes, depth <= {max_depth}; children beyond the preview remain in the estimator. Missing-value routing, where supported, follows the estimator.",
         )
+    from ._sklearn_interpret import pipeline_structure
+
+    diagram, diagram_notes = pipeline_structure(model, max_nodes=max_nodes)
+    if diagram is not None:
+        panels["pipeline"] = diagram
+        notes.extend(diagram_notes)
+        for candidate, key in ((model, "transformed_feature_names"),):
+            try:
+                from sklearn.pipeline import Pipeline
+
+                prefix = candidate[:-1] if isinstance(candidate, Pipeline) else candidate
+                expanded = prefix.get_feature_names_out()
+                data[key] = [str(v) for v in expanded[:500]]
+                if len(expanded) > 500:
+                    notes.append(
+                        f"Expanded feature-name preview capped at 500 of {len(expanded)} transformed names."
+                    )
+            except (AttributeError, ValueError, TypeError):
+                notes.append(
+                    "Expanded preprocessing feature names are unavailable; transformed columns are not equated with original inputs."
+                )
     return native(data), native(meta), notes

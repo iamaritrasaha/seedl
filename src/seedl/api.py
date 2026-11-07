@@ -1664,3 +1664,77 @@ def evaluate(
     )
     _show_result(result)
     return result
+
+
+def feature_importance(
+    model: Any,
+    X: Any = None,
+    y: Any = None,
+    *,
+    method: str = "native",
+    split: str = "unspecified",
+    scoring: Any = None,
+    n_repeats: int = 5,
+    max_samples: int = 512,
+    max_features: int = 50,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Any:
+    """Display labeled native importance/coefficients, or explicit held-out permutation importance without refitting.
+
+    method='permutation' requires X and supervised target y. Permutation acts on
+    original input columns through the whole pipeline; native fitted coefficients
+    may instead refer to transformed features. Neither method proves causality.
+    """
+    from ._sklearn_interpret import feature_importance as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        method=method,
+        split=split,
+        scoring=scoring,
+        n_repeats=n_repeats,
+        max_samples=max_samples,
+        max_features=max_features,
+        random_state=random_state,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def partial_dependence(
+    model: Any,
+    X: Any,
+    features: Any,
+    *,
+    kind: str = "average",
+    target: Any = None,
+    grid_resolution: int = 30,
+    max_samples: int = 256,
+    max_ice: int = 20,
+    backend: str = "auto",
+) -> Any:
+    """Compute bounded scikit-learn PDP/ICE for numeric original-input features, without fitting.
+
+    features selects one to four columns by index/name. kind='both' includes ICE;
+    multiclass classifiers require target=<class label>. These are reference-
+    population model-response summaries, not causal interventions.
+    """
+    from ._sklearn_interpret import partial_dependence as impl
+
+    result = impl(
+        model,
+        X,
+        features,
+        kind=kind,
+        target=target,
+        grid_resolution=grid_resolution,
+        max_samples=max_samples,
+        max_ice=max_ice,
+        backend=backend,
+    )
+    _show_result(result)
+    return result

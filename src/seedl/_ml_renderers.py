@@ -115,10 +115,41 @@ def _scatter_svg(panel: dict[str, Any], width: int = 920) -> str:
     return "".join(parts)
 
 
+def _pipeline_table(panel: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "type": "table",
+        "title": panel["title"],
+        "columns": ["Stage", "Estimator / transformer", "Role", "Input columns"],
+        "rows": [
+            ["  " * n["depth"] + n["name"], n["estimator"], n["role"], n["columns"]]
+            for n in panel["nodes"]
+        ],
+        "description": panel.get("description", ""),
+    }
+
+
 def _body(panel: dict[str, Any]) -> tuple[str, int]:
     from .renderers import _normalized
 
     kind = panel["type"]
+    if kind == "pipeline":
+        pieces = []
+        nodes = {n["id"]: n for n in panel["nodes"]}
+        for edge in panel["edges"]:
+            a, b = nodes[edge["source"]], nodes[edge["target"]]
+            ax, ay = 50 + a["depth"] * 65, 35 + a["id"] * 60
+            bx, by = 50 + b["depth"] * 65, 35 + b["id"] * 60
+            pieces.append(
+                f'<path d="M {ax} {ay + 20} L {ax} {by} L {bx} {by}" stroke="#52657d" fill="none" stroke-dasharray="{"4 3" if edge["relation"] == "parallel column branch" else "none"}"><title>{_s(edge["relation"])}</title></path>'
+            )
+        for node in panel["nodes"]:
+            x, y = 40 + node["depth"] * 65, 15 + node["id"] * 60
+            label = node["name"] + " | " + str(node["estimator"])
+            node_width = max(200, 800 - node["depth"] * 65)
+            pieces.append(
+                f'<rect x="{x}" y="{y}" width="{node_width}" height="40" rx="4" fill="#f8fafc" stroke="#dce4ed"/><text x="{x + 12}" y="{y + 16}" class="row"><title>{_s(label)}</title>{_short(label, 75)}</text><text x="{x + 12}" y="{y + 32}" class="label">{_short(node["role"], 40)} | columns: {_short(node["columns"], 40)}</text>'
+            )
+        return "".join(pieces), 60 * len(nodes) + 35
     if kind in {"scatter", "line"}:
         return _scatter_svg(panel), 340
     if kind == "table":
@@ -216,7 +247,13 @@ def html_ml(view: Visualization) -> str:
     """Semantic plot cards inside the shared offline document shell."""
     cards = []
     for panel in view.data.get("panels", {}).values():
-        if panel["type"] == "table":
+        if panel["type"] == "pipeline":
+            content, height = _body(panel)
+            body = (
+                f'<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Pipeline diagram" viewBox="0 0 920 {height}" width="100%"><style>text{{font-family:{FONT};fill:#172b4d}}.row{{font-size:13px}}.label{{font-size:12px}}</style>{content}</svg>'
+                + _table_html(_pipeline_table(panel))
+            )
+        elif panel["type"] == "table":
             body = _table_html(panel)
         elif panel["type"] == "matrix":
             table = {
@@ -262,7 +299,10 @@ def html_ml(view: Visualization) -> str:
 def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) -> Any:
     if backend == "svg":
         return svg_ml(view, chart_only=chart_only)
-    panels = list(view.data.get("panels", {}).values())
+    panels = [
+        _pipeline_table(p) if p["type"] == "pipeline" else p
+        for p in view.data.get("panels", {}).values()
+    ]
     if backend == "plotly":
         import plotly.graph_objects as go
         from plotly.subplots import make_subplots
@@ -350,6 +390,11 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
                         y=p["values"],
                         name=html.escape(p["title"]),
                         marker_color=COLORS[0],
+                        error_y={
+                            "type": "data",
+                            "array": p.get("errors", []),
+                            "visible": bool(p.get("errors")),
+                        },
                         showlegend=False,
                     ),
                     row=row,
@@ -411,7 +456,7 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
                 if len(p.get("series", [])) > 1:
                     axis.legend()
             elif p["type"] == "bar":
-                axis.bar(p["labels"], p["values"], color=COLORS[0])
+                axis.bar(p["labels"], p["values"], yerr=p.get("errors"), color=COLORS[0])
                 axis.tick_params(axis="x", rotation=45)
             elif p["type"] == "histogram":
                 edges = p["edges"]

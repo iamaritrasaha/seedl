@@ -159,7 +159,8 @@ def predict_once(model: Any, X: Any, n: int) -> Any:
     import numpy as np
 
     try:
-        predicted = np.asarray(model.predict(X))
+        protected = X.copy() if hasattr(X, "copy") else copy.deepcopy(X)
+        predicted = np.asarray(model.predict(protected))
     except Exception as exc:
         raise SeeDLError(f"Estimator predict() failed: {exc}") from exc
     if predicted.ndim == 2 and predicted.shape[1] == 1:
@@ -167,3 +168,55 @@ def predict_once(model: Any, X: Any, n: int) -> Any:
     if predicted.ndim != 1 or len(predicted) != n:
         raise SeeDLError("Estimator predictions must be a single aligned output per sample.")
     return predicted
+
+
+def read_only_response(model: Any) -> Any:
+    """Copy each predictor input, protecting sklearn diagnostics from in-place preprocessing.
+
+    scikit-learn PDP reuses a grid working array and permutation scoring reuses
+    reference data. StandardScaler(copy=False) must not change that working data
+    across score calls. This wrapper delegates tags/capabilities without fitting.
+    """
+    from sklearn.base import BaseEstimator, ClassifierMixin, RegressorMixin, is_classifier
+    from sklearn.utils.metaestimators import available_if
+
+    class CopyResponse(BaseEstimator):
+        def __init__(self, estimator: Any):
+            self.estimator = estimator
+
+        def __sklearn_is_fitted__(self) -> bool:
+            return fitted_status(self.estimator)
+
+        def fit(self, *args: Any, **kwargs: Any) -> Any:
+            raise SeeDLError("Read-only diagnostic adapters cannot fit estimators.")
+
+        def predict(self, X: Any) -> Any:
+            return self.estimator.predict(X.copy() if hasattr(X, "copy") else copy.deepcopy(X))
+
+        @available_if(lambda self: hasattr(self.estimator, "predict_proba"))
+        def predict_proba(self, X: Any) -> Any:
+            return self.estimator.predict_proba(
+                X.copy() if hasattr(X, "copy") else copy.deepcopy(X)
+            )
+
+        @available_if(lambda self: hasattr(self.estimator, "decision_function"))
+        def decision_function(self, X: Any) -> Any:
+            return self.estimator.decision_function(
+                X.copy() if hasattr(X, "copy") else copy.deepcopy(X)
+            )
+
+        def score(self, X: Any, y: Any = None) -> Any:
+            return self.estimator.score(X.copy() if hasattr(X, "copy") else copy.deepcopy(X), y)
+
+        def __getattr__(self, name: str) -> Any:
+            if name == "estimator":
+                raise AttributeError(name)
+            return getattr(self.estimator, name)
+
+    class CopyClassifier(ClassifierMixin, CopyResponse):
+        pass
+
+    class CopyRegressor(RegressorMixin, CopyResponse):
+        pass
+
+    return CopyClassifier(model) if is_classifier(model) else CopyRegressor(model)

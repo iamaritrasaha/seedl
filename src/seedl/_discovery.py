@@ -38,7 +38,12 @@ GROUPS = {
         "explain",
         "compare_attributions",
     ),
-    "Classical machine learning": ("evaluate", "inspect_estimator"),
+    "Classical machine learning": (
+        "evaluate",
+        "inspect_estimator",
+        "feature_importance",
+        "partial_dependence",
+    ),
     "Quantum": (
         "bloch",
         "circuit",

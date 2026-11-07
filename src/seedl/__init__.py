@@ -22,12 +22,14 @@ from .api import (
     density_matrix,
     embeddings,
     entanglement,
+    evaluate,
     explain,
     feature_maps,
     features,
     flow,
     gradient_health,
     gradients,
+    inspect_estimator,
     learn,
     load_analysis,
     loss_landscape,
@@ -42,11 +44,13 @@ from .api import (
     vit_attention,
     watch,
 )
+from .evaluation import Evaluation
 from .exceptions import MissingDependencyError, SeeDLError, UnsupportedObjectError
 from .view import Visualization
 
 __all__ = [
     "ExecutionTrace",
+    "Evaluation",
     "MissingDependencyError",
     "SeeDLError",
     "Tracker",
@@ -70,7 +74,9 @@ __all__ = [
     "density_matrix",
     "embeddings",
     "entanglement",
+    "evaluate",
     "explain",
+    "inspect_estimator",
     "feature_maps",
     "features",
     "flow",

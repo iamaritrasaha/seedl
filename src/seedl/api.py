@@ -288,6 +288,7 @@ def see(
 
     Supported objects include PyTorch modules and tensors, NumPy arrays, real
     numbers, numeric sequences, metric-history dictionaries, dataset batches,
+    scikit-learn estimators/pipelines (inspection only; use evaluate for metrics),
     prediction scores, and quantum circuits/states. Returns a :class:`Visualization`.
 
     Parameters:
@@ -333,6 +334,28 @@ def see(
         min_weight=min_weight,
         edge_opacity=edge_opacity,
     )
+
+    from ._sklearn_detect import is_sklearn_estimator
+
+    if is_sklearn_estimator(obj):
+        if (
+            input is not None
+            or slice is not None
+            or layout is not None
+            or dim_names is not None
+            or compare is not None
+            or interactive is not None
+            or select_neuron is not None
+            or simulate
+            or view not in {"auto", "summary", "architecture"}
+            or color_by != "auto"
+            or sample != 0
+        ):
+            raise SeeDLError(
+                "These see() options belong to tensor/PyTorch/quantum workflows. Use sd.see(estimator) for read-only inspection, sd.inspect_estimator() for bounded tree detail, or sd.evaluate(estimator, X, y) for evaluation."
+            )
+        result = inspect_estimator(obj, backend=backend)
+        return result
 
     from ._execution_graph import ExecutionTrace
 
@@ -1582,3 +1605,62 @@ def load_analysis(filepath: Any) -> Any:
     from ._serialization import load_analysis as _load_impl
 
     return _load_impl(filepath)
+
+
+def inspect_estimator(
+    model: Any,
+    *,
+    max_depth: int = 3,
+    max_nodes: int = 63,
+    max_features: int = 50,
+    backend: str = "auto",
+) -> Visualization:
+    """Inspect fitted status, parameters, coefficients, feature importance and bounded tree splits without fitting."""
+    from ._sklearn import inspect_estimator as impl
+
+    result = impl(
+        model, max_depth=max_depth, max_nodes=max_nodes, max_features=max_features, backend=backend
+    )
+    _show_result(result)
+    return result
+
+
+def evaluate(
+    model: Any,
+    X: Any,
+    y: Any = None,
+    *,
+    task: str = "auto",
+    split: str = "unspecified",
+    plots: str | list[str] | None = None,
+    normalize: str | None = None,
+    class_names: Any = None,
+    positive_label: Any = None,
+    max_points: int = 2048,
+    backend: str = "auto",
+) -> Any:
+    """Evaluate a fitted scikit-learn model without fitting; return metrics and captured plots.
+
+    X and y must be row-aligned evaluation data. Specify split='test' for a held-out
+    test set, or 'training'/'validation' as appropriate. Classification includes
+    per-class support and metrics, with binary ROC/PR only when valid scores exist.
+    Use plots='confusion_matrix' or result.plot('roc') to select captured views.
+    Metrics use all supplied rows; display samples are bounded by max_points.
+    """
+    from ._sklearn import evaluate as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        task=task,
+        split=split,
+        plots=plots,
+        normalize=normalize,
+        class_names=class_names,
+        positive_label=positive_label,
+        max_points=max_points,
+        backend=backend,
+    )
+    _show_result(result)
+    return result

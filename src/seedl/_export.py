@@ -52,6 +52,11 @@ def _save_html(view: Visualization, path: Path) -> None:
 
 def _write_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.kind.startswith("ml_") and view.backend == "svg":
+        from ._ml_renderers import html_ml
+
+        path.write_text(html_ml(view), encoding="utf-8")
+        return
     if view.kind == "tensor_explorer":
         from ._tensor_explorer import tensor_explorer_html
 

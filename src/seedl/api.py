@@ -20,6 +20,7 @@ from ._validation import (
     validate_see_options,
     validate_tensor_view_options,
 )
+from .evaluation import Evaluation
 from .exceptions import SeeDLError
 from .renderers import resolve_backend
 from .view import Visualization
@@ -350,6 +351,11 @@ def see(
             or view not in {"auto", "summary", "architecture"}
             or color_by != "auto"
             or sample != 0
+            or max_neurons != 100
+            or max_connections != 1500
+            or min_weight != 0.0
+            or edge_opacity != 0.45
+            or detail != "summary"
         ):
             raise SeeDLError(
                 "These see() options belong to tensor/PyTorch/quantum workflows. Use sd.see(estimator) for read-only inspection, sd.inspect_estimator() for bounded tree detail, or sd.evaluate(estimator, X, y) for evaluation."
@@ -1641,7 +1647,7 @@ def evaluate(
     silhouette_max_samples: int = 1000,
     max_points: int = 2048,
     backend: str = "auto",
-) -> Any:
+) -> Evaluation:
     """Evaluate a fitted scikit-learn model without fitting; return metrics and captured plots.
 
     X and y must be row-aligned evaluation data. Specify split='test' for a held-out
@@ -1685,7 +1691,7 @@ def feature_importance(
     max_features: int = 50,
     random_state: int = 0,
     backend: str = "auto",
-) -> Any:
+) -> Evaluation:
     """Display labeled native importance/coefficients, or explicit held-out permutation importance without refitting.
 
     method='permutation' requires X and supervised target y. Permutation acts on
@@ -1722,7 +1728,7 @@ def partial_dependence(
     max_samples: int = 256,
     max_ice: int = 20,
     backend: str = "auto",
-) -> Any:
+) -> Evaluation:
     """Compute bounded scikit-learn PDP/ICE for numeric original-input features, without fitting.
 
     features selects one to four columns by index/name. kind='both' includes ICE;
@@ -1748,7 +1754,7 @@ def partial_dependence(
 
 def cv_results(
     results: Any, *, metric: str = "score", max_candidates: int = 50, backend: str = "auto"
-) -> Any:
+) -> Evaluation:
     """Visualize existing GridSearchCV/cross_validate results; never run or refit a search."""
     from ._sklearn_selection import cv_results as impl
 
@@ -1769,7 +1775,7 @@ def learning_curve(
     max_samples: int = 2000,
     random_state: int = 0,
     backend: str = "auto",
-) -> Any:
+) -> Evaluation:
     """Compute bounded CV learning curves only with explicit allow_refit=True; fits clones on supplied training data."""
     from ._sklearn_selection import learning_curve as impl
 
@@ -1802,7 +1808,7 @@ def validation_curve(
     max_samples: int = 2000,
     random_state: int = 0,
     backend: str = "auto",
-) -> Any:
+) -> Evaluation:
     """Compute bounded CV validation curves only with allow_refit=True; fits estimator clones, not the original."""
     from ._sklearn_selection import validation_curve as impl
 

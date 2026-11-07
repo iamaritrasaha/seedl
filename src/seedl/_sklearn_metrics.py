@@ -197,18 +197,19 @@ def regression(
         )
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
-        rmse = (
-            metrics.root_mean_squared_error(y, pred)
-            if hasattr(metrics, "root_mean_squared_error")
-            else metrics.mean_squared_error(y, pred, squared=False)
-        )
-        r2 = metrics.r2_score(y, pred, force_finite=False)
-    result = {
-        "mae": float(metrics.mean_absolute_error(y, pred)),
-        "mse": float(metrics.mean_squared_error(y, pred)),
-        "rmse": float(rmse),
-        "r2": native(r2),
-    }
+        with np.errstate(over="warn", invalid="warn", divide="warn"):
+            rmse = (
+                metrics.root_mean_squared_error(y, pred)
+                if hasattr(metrics, "root_mean_squared_error")
+                else metrics.mean_squared_error(y, pred, squared=False)
+            )
+            r2 = metrics.r2_score(y, pred, force_finite=False)
+            result = {
+                "mae": float(metrics.mean_absolute_error(y, pred)),
+                "mse": float(metrics.mean_squared_error(y, pred)),
+                "rmse": float(rmse),
+                "r2": native(r2),
+            }
     notes = [
         f"Metrics use scikit-learn on all {len(y):,} supplied rows. Residual = actual minus predicted; MAE/RMSE use target units, MSE uses squared target units; R2 is dimensionless."
     ]
@@ -225,7 +226,21 @@ def regression(
             "CAUTION: fewer than 20 evaluation samples; metrics may be unstable and should not be generalized without more evidence."
         )
     take = indices(len(y), max_points)
-    residual = y - pred
+    with np.errstate(over="ignore", invalid="ignore"):
+        residual = y - pred
+    nonfinite_metrics = [k for k, v in result.items() if v is not None and not np.isfinite(v)]
+    if nonfinite_metrics:
+        notes.append(
+            f"WARNING: non-finite metrics ({', '.join(nonfinite_metrics)}) from numerical overflow are unavailable, not zero. Consider rescaling target units explicitly."
+        )
+    if result["mse"] == 0 and np.any(residual != 0):
+        notes.append(
+            "WARNING: squared-error calculation underflowed to zero for nonzero residuals in scikit-learn. Rescale target units explicitly before interpreting MSE/RMSE."
+        )
+    if not np.isfinite(residual).all():
+        notes.append(
+            "WARNING: residual subtraction overflowed despite finite inputs; non-finite plotted values are unavailable, not zero."
+        )
     panels: dict[str, Any] = {}
     for name, title, x, yy, xlabel, ylabel in (
         (
@@ -254,14 +269,35 @@ def regression(
             "reference": "identity" if name == "actual_predicted" else "zero",
             "description": f"Showing {len(take):,} of {len(y):,} aligned rows; metrics use all rows.",
         }
-    counts, edges = np.histogram(residual, bins=min(30, max(1, int(np.sqrt(len(y))))))
-    panels["residual_distribution"] = {
-        "type": "histogram",
-        "title": "Residual distribution",
-        "x_label": "Residual (target units)",
-        "y_label": "Sample count",
-        "edges": native(edges),
-        "counts": native(counts),
-        "description": "Histogram uses every supplied evaluation residual; bins are display summaries, not a probability density.",
-    }
-    return result, panels, {}, notes
+    unavailable: dict[str, str] = {}
+    try:
+        if not np.isfinite(residual).all():
+            raise ValueError("residuals contain non-finite values")
+        span = float(np.max(residual)) - float(np.min(residual))
+        if not np.isfinite(span):
+            raise ValueError("residual range overflows floating-point bin coordinates")
+        with warnings.catch_warnings(record=True) as histogram_warnings:
+            warnings.simplefilter("always")
+            counts, edges = np.histogram(residual, bins=min(30, max(1, int(np.sqrt(len(y))))))
+        if not np.isfinite(edges).all():
+            raise ValueError("histogram bin edges overflowed")
+        panels["residual_distribution"] = {
+            "type": "histogram",
+            "title": "Residual distribution",
+            "x_label": "Residual (target units)",
+            "y_label": "Sample count",
+            "edges": native(edges),
+            "counts": native(counts),
+            "description": "Histogram uses every supplied evaluation residual; bins are display summaries, not a probability density.",
+        }
+        notes.extend(f"WARNING: {w.message}" for w in histogram_warnings)
+        if np.all(residual == residual[0]):
+            notes.append(
+                f"Every residual equals {residual[0]!r}. Histogram bin width is a display interval, not observed dispersion or uncertainty."
+            )
+    except (ValueError, OverflowError, IndexError) as exc:
+        unavailable["residual_distribution"] = (
+            f"Residuals cannot be safely binned at the current numeric scale: {exc}. Rescale target units explicitly."
+        )
+        notes.append("WARNING: residual histogram unavailable at this numeric scale.")
+    return native(result), panels, unavailable, notes

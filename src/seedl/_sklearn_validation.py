@@ -155,7 +155,7 @@ def input_data(
 
 
 def input_names(model: Any, X: Any = None, *, limit: int | None = None) -> list[str]:
-    names = list(X.columns) if hasattr(X, "columns") else getattr(model, "feature_names_in_", None)
+    names = X.columns if hasattr(X, "columns") else getattr(model, "feature_names_in_", None)
     count = getattr(model, "n_features_in_", None)
     if names is not None:
         return [str(n) for n in (names if limit is None else names[:limit])]

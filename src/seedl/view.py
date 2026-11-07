@@ -138,7 +138,7 @@ class Visualization:
 
     def _mimebundle(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         del include, exclude
-        if self.kind.startswith("ml_") and self.backend == "svg":
+        if self.kind.startswith("ml_") and self.backend in {"svg", "plotly"}:
             from ._ml_renderers import html_ml
 
             return {"text/html": html_ml(self), "text/plain": str(self)}

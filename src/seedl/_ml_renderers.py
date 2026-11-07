@@ -284,6 +284,7 @@ def structured_data_html(view: Visualization, markup: str) -> str:
 def html_ml(view: Visualization) -> str:
     """Semantic plot cards inside the shared offline document shell."""
     cards = []
+    plotly_loaded = False
     for panel in view.data.get("panels", {}).values():
         if panel["type"] == "pipeline":
             content, height = _body(panel)
@@ -302,7 +303,34 @@ def html_ml(view: Visualization) -> str:
                     for name, values in zip(panel["y_labels"], panel["values"], strict=True)
                 ],
             }
-            body = _table_html(table)
+            largest = max((float(v) for row in panel["values"] for v in row), default=0) or 1.0
+            headers = "".join(f'<th scope="col">{_s(v)}</th>' for v in table["columns"])
+            rows = []
+            for label, row in zip(panel["y_labels"], panel["values"], strict=True):
+                cells = "".join(
+                    f'<td style="background:{color_at(float(v) / largest)};color:{contrast_text(color_at(float(v) / largest))}">{_s(v)}</td>'
+                    for v in row
+                )
+                rows.append(f'<tr><th scope="row">{_s(label)}</th>{cells}</tr>')
+            body = f'<p>Color scale: 0 to {_s(largest)} (Viridis); all values are printed.</p><div class="ml-table-wrap" tabindex="0" role="region" aria-label="Confusion matrix values"><table><thead><tr>{headers}</tr></thead><tbody>{"".join(rows)}</tbody></table></div>'
+        elif view.backend == "plotly":
+            panel_view = Visualization(
+                "ml_panel",
+                panel["title"],
+                panel.get("description", ""),
+                {"panels": {"panel": panel}},
+                backend="plotly",
+            )
+            figure = render_ml(panel_view, "plotly")
+            figure.update_layout(
+                title=None, height=360, margin={"l": 65, "r": 30, "t": 35, "b": 60}
+            )
+            body = figure.to_html(
+                full_html=False,
+                include_plotlyjs=not plotly_loaded,
+                config={"responsive": True, "displaylogo": False},
+            )
+            plotly_loaded = True
         else:
             content, height = _body(panel)
             body = f'<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{_s(panel["title"])}" viewBox="0 0 920 {height}" width="100%"><title>{_s(panel["title"])}</title><style>text{{font-family:{FONT};fill:#172b4d}}.row{{font-size:13px;font-family:JetBrains Mono,monospace}}.label{{font-size:12px;fill:#52657d}}.head{{font-size:12px;font-weight:600}}.grid{{stroke:#dce4ed;stroke-width:1}}</style>{content}</svg>'
@@ -457,8 +485,13 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
             if kind != "table":
                 fig.update_xaxes(title_text=html.escape(p.get("x_label", "")), row=row, col=1)
                 fig.update_yaxes(title_text=html.escape(p.get("y_label", "")), row=row, col=1)
+        metric_text = " | ".join(
+            f"{k.replace('_', ' ')}: {format_value(v)}"
+            for k, v in list(view.data.get("metrics", {}).items())[:3]
+        )
         fig.update_layout(
-            title_text=html.escape(view.title),
+            title_text=html.escape(view.title)
+            + (f"<br><sup>{html.escape(metric_text)}</sup>" if metric_text else ""),
             template="plotly_white",
             font={"family": FONT, "size": 13, "color": "#172b4d"},
             height=max(400, 360 * len(panels)),
@@ -512,7 +545,11 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
                 )
             axis.set_xlabel(p.get("x_label", ""))
             axis.set_ylabel(p.get("y_label", ""))
-        fig.suptitle(view.title)
+        metric_text = " | ".join(
+            f"{k.replace('_', ' ')}: {format_value(v)}"
+            for k, v in list(view.data.get("metrics", {}).items())[:3]
+        )
+        fig.suptitle(view.title + ("\n" + metric_text if metric_text else ""))
         fig.tight_layout()
         return fig
     raise ValueError(f"Unknown backend {backend!r}.")

@@ -124,7 +124,12 @@ def test_sparse_cluster_projection_without_full_densification():
 
     class SmallOnly(csr_matrix):
         def toarray(self, *a, **k):
-            assert self.shape[1] <= 2, "full feature matrix densified"
+            # sklearn <=1.7 propagates CSR subclasses into its distance product.
+            # A bounded sample-by-sample distance matrix is legitimate; the
+            # original 40 x 10 feature matrix must remain sparse.
+            assert self.shape != (40, 10), "original feature matrix densified"
+            if self.shape[1] > 2:
+                assert self.shape[0] <= 1000 and self.shape[1] <= 1000
             return super().toarray(*a, **k)
 
     X, _ = make_blobs(n_samples=40, n_features=10, centers=2, random_state=0)

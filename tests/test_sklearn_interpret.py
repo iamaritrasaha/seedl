@@ -131,7 +131,7 @@ def test_pdp_and_ice_match_sklearn():
     view = sd.partial_dependence(
         model,
         X[:30],
-        [0],
+        [np.int64(0)],
         kind="both",
         max_samples=30,
         grid_resolution=12,

@@ -57,7 +57,7 @@ def _save_html(view: Visualization, path: Path) -> None:
 
 def _write_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    if view.kind.startswith("ml_") and view.backend == "svg":
+    if view.kind.startswith("ml_") and view.backend in {"svg", "plotly"}:
         from ._ml_renderers import html_ml
 
         path.write_text(html_ml(view), encoding="utf-8")

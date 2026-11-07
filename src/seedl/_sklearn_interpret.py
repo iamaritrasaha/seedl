@@ -245,6 +245,8 @@ def partial_dependence(
     max_ice: int = 20,
     backend: str = "auto",
 ) -> Evaluation:
+    from numbers import Integral
+
     np, sklearn = dependencies()
     from sklearn.base import is_classifier, is_regressor
     from sklearn.inspection import partial_dependence as compute
@@ -263,7 +265,7 @@ def partial_dependence(
         )
     X, _, n, p = input_data(model, X)
     names = input_names(model, X)
-    chosen = [features] if isinstance(features, (str, int)) else list(features)
+    chosen = [features] if isinstance(features, (str, Integral)) else list(features)
     if not 1 <= len(chosen) <= 4:
         raise SeeDLError(
             "Select one to four individual numeric input features; interaction surfaces are not supported."
@@ -274,8 +276,12 @@ def partial_dependence(
             if feature not in names:
                 raise SeeDLError(f"Unknown input feature {feature!r}.")
             index = names.index(feature)
-        elif isinstance(feature, int) and not isinstance(feature, bool) and 0 <= feature < p:
-            index = feature
+        elif (
+            isinstance(feature, Integral)
+            and not isinstance(feature, bool)
+            and 0 <= int(feature) < p
+        ):
+            index = int(feature)
         else:
             raise SeeDLError(
                 "Features must be valid original-input column names or integer indices."

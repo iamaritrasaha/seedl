@@ -97,7 +97,15 @@ def inspect_estimator(
             notes.append(f"Input feature-name preview capped at 500 of {count} features.")
     final = final_estimator(model)
     coeff = getattr(final, "coef_", None) if fitted else None
-    importance = getattr(final, "feature_importances_", None) if fitted else None
+    importance = None
+    ensemble_count = len(getattr(final, "estimators_", [])) if fitted else 0
+    fitted_features = int(getattr(final, "n_features_in_", 0))
+    if fitted and (ensemble_count > 1000 or fitted_features > 100000):
+        notes.append(
+            "Native importance calculation omitted beyond 1,000 ensemble members or 100,000 fitted features; inspect explicitly with sklearn for larger computations."
+        )
+    elif fitted:
+        importance = getattr(final, "feature_importances_", None)
     if coeff is not None:
         from scipy import sparse
 
@@ -162,13 +170,24 @@ def inspect_estimator(
             )
     tree = getattr(final, "tree_", None) if fitted else None
     if tree is not None:
-        names, space = feature_names(model, int(final.n_features_in_))
+        if int(final.n_features_in_) > 100000:
+            names, space = [], "estimator features; names omitted beyond the bounded preview"
+        else:
+            names, space = feature_names(model, int(final.n_features_in_))
         records: list[dict[str, Any]] = []
         queue = [(0, 0)]
         while queue and len(records) < max_nodes:
             node, depth = queue.pop(0)
             leaf = int(tree.children_left[node]) == int(tree.children_right[node])
-            feature = "leaf" if leaf else names[int(tree.feature[node])]
+            feature = (
+                "leaf"
+                if leaf
+                else (
+                    names[int(tree.feature[node])]
+                    if names
+                    else f"feature {int(tree.feature[node])}"
+                )
+            )
             records.append(
                 {
                     "node": node,
@@ -230,6 +249,13 @@ def inspect_estimator(
                 from sklearn.pipeline import Pipeline
 
                 prefix = candidate[:-1] if isinstance(candidate, Pipeline) else candidate
+                last_prefix = prefix.steps[-1][1] if isinstance(prefix, Pipeline) else prefix
+                output_indices = getattr(last_prefix, "output_indices_", {})
+                output_width = max(
+                    (v.stop for v in output_indices.values()), default=fitted_features
+                )
+                if output_width > 100000:
+                    raise ValueError("Expanded names exceed bounded preview.")
                 expanded = prefix.get_feature_names_out()
                 data[key] = [str(v) for v in expanded[:500]]
                 if len(expanded) > 500:

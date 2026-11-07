@@ -335,3 +335,28 @@ def test_missing_dependency_and_lazy_discovery(monkeypatch):
         check=False,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_regression_numeric_overflow_underflow_are_disclosed():
+    X = np.array([[0.0], [1.0]])
+    model = DummyRegressor(strategy="constant", constant=0.0).fit(X, [0.0, 0.0])
+    tiny = sd.evaluate(model, X, [1e-200, -1e-200], backend="svg")
+    assert tiny.metrics["mse"] == 0  # exact sklearn result, with explicit underflow warning
+    assert any("underflow" in n for n in tiny.notes)
+    assert "WARNING:" in tiny.to_text()
+    large = sd.evaluate(model, X, [1e308, -1e308], backend="svg")
+    assert large.metrics["mse"] is None
+    assert any("overflow" in n for n in large.notes)
+    assert "residual_distribution" in large.unavailable_plots
+    json.dumps(large.data, allow_nan=False)
+    ET.fromstring(large.to_figure())
+
+
+def test_expanded_features_are_bounded_before_prediction():
+    model = make_pipeline(PolynomialFeatures(2), LinearRegression()).fit(
+        [[0.0, 1.0], [1.0, 2.0], [2.0, 3.0]], [0.0, 1.0, 2.0]
+    )
+    # Simulate known fitted output width without allocating a massive matrix.
+    model[-1].n_features_in_ = 1_000_000
+    with pytest.raises(SeeDLError, match="transformed feature matrix"):
+        sd.evaluate(model, np.zeros((20, 2)), np.zeros(20))

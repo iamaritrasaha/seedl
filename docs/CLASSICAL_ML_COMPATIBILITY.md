@@ -1,7 +1,7 @@
 # Classical ML implementation and compatibility report
 
-Validated on 2026-11-07. This work is unreleased; the package version remains
-0.6.0. It builds directly on main `c9b59ba`, which contains the developer
+Validated on 2026-11-07 for SeeDL 0.7.0. It builds directly on main `c9b59ba`,
+ which contains the developer
 experience overhaul from PR #24.
 
 ## Baseline and implementation decisions

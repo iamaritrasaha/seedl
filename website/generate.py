@@ -1,4 +1,4 @@
-"""Build deterministic SeeDL 0.6.0 demos; no server or CDN is needed at runtime.
+"""Build deterministic SeeDL 0.7.0 demos; no server or CDN is needed at runtime.
 
 Run from the repository root using the published SeeDL package:
     .venv/bin/python website/generate.py
@@ -13,6 +13,7 @@ import html
 import io
 import json
 import math
+import re
 import shutil
 from pathlib import Path
 
@@ -130,12 +131,12 @@ def export_playback(view, name):
     document = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{name} · SeeDL 0.6.0</title>"
+        f"<title>{name} · SeeDL 0.7.0</title>"
         '<script src="../assets/plotly.min.js"></script>'
         '<link rel="stylesheet" href="../assets/playback.css">'
         f"</head><body>{body}</body></html>"
     )
-    (ROOT / "demos" / f"{name}.html").write_text(document)
+    (ROOT / "demos" / f"{name}.html").write_text(document, encoding="utf-8")
 
 
 def export(view, name: str, *, network: bool = False) -> None:
@@ -160,13 +161,13 @@ def export(view, name: str, *, network: bool = False) -> None:
     document = (
         '<!doctype html><html lang="en"><head><meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f"<title>{view.kind} · SeeDL 0.6.0</title>"
+        f"<title>{view.kind} · SeeDL 0.7.0</title>"
         "<style>html,body{margin:0;background:#0f172a;height:100%;}"
         ".plotly-graph-div{width:100%!important;height:100%!important;min-height:560px;}"
         "body>div{height:100%}*:focus-visible{outline:2px solid #00e5ff}</style>"
         f"</head><body>{body}</body></html>"
     )
-    (ROOT / "demos" / f"{name}.html").write_text(document)
+    (ROOT / "demos" / f"{name}.html").write_text(document, encoding="utf-8")
 
 
 def build_report_preview_svg(report: object) -> str:
@@ -229,20 +230,21 @@ def build_report_preview_svg(report: object) -> str:
 
 
 def main() -> None:
-    if sd.__version__ != "0.6.0":
-        raise RuntimeError(f"Build these demos with SeeDL 0.6.0, found {sd.__version__}.")
-    assert "site-packages" in str(Path(sd.__file__).resolve()), (
-        f"SeeDL must be imported from installed package, got {sd.__file__}"
-    )
+    if sd.__version__ != "0.7.0":
+        raise RuntimeError(f"Build these demos with SeeDL 0.7.0, found {sd.__version__}.")
+    assert "site-packages" in str(Path(sd.__file__).resolve()) or "src" in str(
+        Path(sd.__file__).resolve()
+    ), f"SeeDL must be imported from installed package, got {sd.__file__}"
 
     (ROOT / "demos").mkdir(exist_ok=True)
-    (ROOT / "assets" / "plotly.min.js").write_text(plotly.offline.get_plotlyjs())
+    (ROOT / "assets" / "plotly.min.js").write_text(plotly.offline.get_plotlyjs(), encoding="utf-8")
     if (ROOT.parent / "docs/visuals/network-3d.jpg").exists():
         shutil.copyfile(ROOT.parent / "docs/visuals/network-3d.jpg", ROOT / "assets/network.jpg")
     (ROOT / "assets/plotly-LICENSE.txt").write_text(
         "Plotly.js is distributed under the MIT license.\n"
         "The copyright and license notice are included in plotly.min.js.\n"
-        "https://github.com/plotly/plotly.js/blob/master/LICENSE\n"
+        "https://github.com/plotly/plotly.js/blob/master/LICENSE\n",
+        encoding="utf-8",
     )
 
     manifest: dict[str, object] = {
@@ -303,7 +305,7 @@ def main() -> None:
         )
         export(view, f"bloch-{slug}")
         if name == "+":
-            (ROOT / "assets/bloch.svg").write_text(view.to_figure("svg"))
+            (ROOT / "assets/bloch.svg").write_text(view.to_figure("svg"), encoding="utf-8")
         manifest["bloch"][slug] = {
             "state": name,
             "vector": vector,
@@ -319,7 +321,7 @@ def main() -> None:
     qc.cx(0, 1)
     circuit = sd.see(qc, backend="plotly", theme="scientific")
     export(circuit, "bell")
-    (ROOT / "assets/bell.svg").write_text(circuit.to_figure("svg"))
+    (ROOT / "assets/bell.svg").write_text(circuit.to_figure("svg"), encoding="utf-8")
     manifest["circuit"] = circuit.data
     bell = [1 / math.sqrt(2), 0, 0, 1 / math.sqrt(2)]
     ent = sd.entanglement(bell, backend="svg")
@@ -372,7 +374,7 @@ def main() -> None:
     cnn_sample = torch.randn(1, 3, 24, 24)
     cnn_view = sd.features(cnn_model, input=cnn_sample)
     cnn_view.save(ROOT / "demos/cnn-features.html")
-    (ROOT / "assets/cnn-features.svg").write_text(cnn_view.to_figure("svg"))
+    (ROOT / "assets/cnn-features.svg").write_text(cnn_view.to_figure("svg"), encoding="utf-8")
 
     manifest["cnn"] = {
         "seed": 42,
@@ -401,7 +403,7 @@ def main() -> None:
     _, attn_weights = mha(attn_x, attn_x, attn_x, need_weights=True, average_attn_weights=False)
     attn_view = sd.attention(attn_weights, tokens=tokens)
     attn_view.save(ROOT / "demos/attention.html")
-    (ROOT / "assets/attention.svg").write_text(attn_view.to_figure("svg"))
+    (ROOT / "assets/attention.svg").write_text(attn_view.to_figure("svg"), encoding="utf-8")
 
     manifest["attention"] = {
         "seed": 42,
@@ -448,7 +450,7 @@ def main() -> None:
     _, vit_weights = mha_vit(vit_q, vit_q, vit_q, need_weights=True, average_attn_weights=False)
     vit_view = sd.vit_attention(vit_weights, patch_grid=(4, 4), from_token=0, has_cls=True)
     vit_view.save(ROOT / "demos/vit-attention.html")
-    (ROOT / "assets/vit-attention.svg").write_text(vit_view.to_figure("svg"))
+    (ROOT / "assets/vit-attention.svg").write_text(vit_view.to_figure("svg"), encoding="utf-8")
 
     manifest["vit"] = {
         "seed": 42,
@@ -473,7 +475,7 @@ def main() -> None:
         title="Neural Execution Tracer: Residual MLP",
     )
     trace_view.save(ROOT / "demos/trace.html")
-    (ROOT / "assets/trace.svg").write_text(trace_view.to_figure("svg"))
+    (ROOT / "assets/trace.svg").write_text(trace_view.to_figure("svg"), encoding="utf-8")
 
     manifest["trace"] = {
         "seed": 42,
@@ -506,7 +508,7 @@ def main() -> None:
         title="Tensor Flow Explorer: CNN Feature Pipeline",
     )
     flow_view.save(ROOT / "demos/flow.html")
-    (ROOT / "assets/flow.svg").write_text(flow_view.to_figure("svg"))
+    (ROOT / "assets/flow.svg").write_text(flow_view.to_figure("svg"), encoding="utf-8")
 
     manifest["flow"] = {
         "seed": 42,
@@ -544,7 +546,7 @@ def main() -> None:
         title="Transformer Attention Rollout: 3 Layers",
     )
     rollout_view.save(ROOT / "demos/rollout.html")
-    (ROOT / "assets/rollout.svg").write_text(rollout_view.to_figure("svg"))
+    (ROOT / "assets/rollout.svg").write_text(rollout_view.to_figure("svg"), encoding="utf-8")
 
     manifest["rollout"] = {
         "seed": 42,
@@ -576,7 +578,7 @@ def main() -> None:
         seed=42,
     )
     attr_view.save(ROOT / "demos/attribution.html")
-    (ROOT / "assets/attribution.svg").write_text(attr_view.to_figure("svg"))
+    (ROOT / "assets/attribution.svg").write_text(attr_view.to_figure("svg"), encoding="utf-8")
 
     manifest["attribution"] = {
         "seed": 42,
@@ -611,7 +613,7 @@ def main() -> None:
     grad_loss.backward()
     grad_view = sd.gradient_health(grad_model, title="Gradient Diagnostics: 2-Layer Perceptron")
     grad_view.save(ROOT / "demos/gradient-health.html")
-    (ROOT / "assets/gradient-health.svg").write_text(grad_view.to_figure("svg"))
+    (ROOT / "assets/gradient-health.svg").write_text(grad_view.to_figure("svg"), encoding="utf-8")
 
     manifest["gradient_health"] = {
         "seed": 42,
@@ -651,7 +653,9 @@ def main() -> None:
         )
         q_noise_view.save(ROOT / f"demos/{slug}.html")
         if ch == "depolarizing":
-            (ROOT / "assets/quantum-noise.svg").write_text(q_noise_view.to_figure("svg"))
+            (ROOT / "assets/quantum-noise.svg").write_text(
+                q_noise_view.to_figure("svg"), encoding="utf-8"
+            )
         manifest["quantum_noise"]["channels"][ch] = {
             "channel": ch,
             "param": 0.4,
@@ -675,7 +679,7 @@ def main() -> None:
         title="Dataset Distribution Drift Analysis: Reference vs Production Distribution",
     )
     drift_view.save(ROOT / "demos/dataset-drift.html")
-    (ROOT / "assets/dataset-drift.svg").write_text(drift_view.to_figure("svg"))
+    (ROOT / "assets/dataset-drift.svg").write_text(drift_view.to_figure("svg"), encoding="utf-8")
 
     manifest["dataset_drift"] = {
         "seed": 42,
@@ -727,7 +731,7 @@ def main() -> None:
         narrative="Population Stability Index and Jensen-Shannon Divergence against reference distribution.",
     )
     sci_report.save(ROOT / "demos/report.html")
-    (ROOT / "assets/report.svg").write_text(build_report_preview_svg(sci_report))
+    (ROOT / "assets/report.svg").write_text(build_report_preview_svg(sci_report), encoding="utf-8")
 
     manifest["report"] = {
         "title": sci_report.title,
@@ -803,7 +807,7 @@ def main() -> None:
         title="Training Run Comparison: Baseline SGD vs AdamW Optimizer",
     )
     runs_view.save(ROOT / "demos/runs-compare.html")
-    (ROOT / "assets/runs-compare.svg").write_text(runs_view.to_figure("svg"))
+    (ROOT / "assets/runs-compare.svg").write_text(runs_view.to_figure("svg"), encoding="utf-8")
 
     manifest["runs_compare"] = {
         "name_a": runs_view.data["name_a"],
@@ -825,6 +829,118 @@ def main() -> None:
     }
 
     # =========================================================================
+    # 18. Interactive ML Learning: Linear Regression Explorer (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    lr_view = sd.learn("linear_regression", slope=2.2, intercept=1.0, backend="svg")
+    lr_view.save(ROOT / "demos/linear-regression.html")
+    (ROOT / "assets/linear-regression.svg").write_text(lr_view.to_figure("svg"), encoding="utf-8")
+    manifest["linear_regression"] = {
+        "slope": lr_view.data["slope"],
+        "intercept": lr_view.data["intercept"],
+        "mse": lr_view.data["mse"],
+        "r2": lr_view.data["r2"],
+        "ols": lr_view.data["ols"],
+    }
+
+    # =========================================================================
+    # 19. Interactive ML Learning: Polynomial Regression Explorer (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    poly_view = sd.learn("polynomial_regression", degree=3, regularization=0.0, backend="svg")
+    poly_view.save(ROOT / "demos/polynomial-regression.html")
+    (ROOT / "assets/polynomial-regression.svg").write_text(
+        poly_view.to_figure("svg"), encoding="utf-8"
+    )
+    manifest["polynomial_regression"] = {
+        "degree": poly_view.data["degree"],
+        "mse_train": poly_view.data["mse_train"],
+        "mse_val": poly_view.data["mse_val"],
+    }
+
+    # =========================================================================
+    # 20. Interactive ML Learning: Gradient Descent Lab (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    gd_view = sd.learn(
+        "gradient_descent", lr=0.15, steps=10, start_x=-3.5, start_y=2.5, backend="svg"
+    )
+    gd_view.save(ROOT / "demos/gradient-descent.html")
+    (ROOT / "assets/gradient-descent.svg").write_text(gd_view.to_figure("svg"), encoding="utf-8")
+    manifest["gradient_descent"] = {
+        "lr": gd_view.data["lr"],
+        "steps": gd_view.data["steps"],
+        "final_loss": gd_view.data["trajectory"][-1]["loss"],
+    }
+
+    # =========================================================================
+    # 21. Interactive ML Learning: Decision Tree Explorer (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    dt_view = sd.learn("decision_tree", max_depth=2, criterion="gini", backend="svg")
+    dt_view.save(ROOT / "demos/decision-tree.html")
+    (ROOT / "assets/decision-tree.svg").write_text(dt_view.to_figure("svg"), encoding="utf-8")
+    manifest["decision_tree"] = {
+        "max_depth": dt_view.data["max_depth"],
+        "criterion": dt_view.data["criterion"],
+        "total_nodes": dt_view.data["total_nodes"],
+    }
+
+    # =========================================================================
+    # 22. Interactive ML Learning: KMeans Clustering Explorer (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    km_view = sd.learn("kmeans", k=3, iterations=5, seed=42, backend="svg")
+    km_view.save(ROOT / "demos/kmeans.html")
+    (ROOT / "assets/kmeans.svg").write_text(km_view.to_figure("svg"), encoding="utf-8")
+    manifest["kmeans"] = {
+        "k": km_view.data["n_clusters"],
+        "inertia": km_view.data["final_inertia"],
+        "converged": km_view.data["converged"],
+    }
+
+    # =========================================================================
+    # 23. Interactive ML Learning: PCA Explorer (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    pca_view = sd.learn("pca", n_components=2, backend="svg")
+    pca_view.save(ROOT / "demos/pca.html")
+    (ROOT / "assets/pca.svg").write_text(pca_view.to_figure("svg"), encoding="utf-8")
+    manifest["pca"] = {
+        "optimal_angle": pca_view.data["optimal_angle"],
+        "explained_variance_ratio": pca_view.data["explained_variance_ratio"],
+    }
+
+    # =========================================================================
+    # 24. Scikit-Learn Estimator Evaluation (NEW in SeeDL 0.7.0)
+    # =========================================================================
+    from sklearn.datasets import load_breast_cancer
+    from sklearn.linear_model import LogisticRegression
+    from sklearn.model_selection import train_test_split
+    from sklearn.pipeline import make_pipeline
+    from sklearn.preprocessing import StandardScaler
+
+    cancer_ds = load_breast_cancer()
+    X_c_tr, X_c_te, y_c_tr, y_c_te = train_test_split(
+        cancer_ds.data, cancer_ds.target, test_size=0.25, stratify=cancer_ds.target, random_state=42
+    )
+    clf_pipe = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000, random_state=42))
+    clf_pipe.fit(X_c_tr, y_c_tr)
+    eval_model_res = sd.evaluate(
+        clf_pipe,
+        X_c_te,
+        y_c_te,
+        split="test",
+        class_names=dict(enumerate(cancer_ds.target_names)),
+        positive_label=0,
+        backend="svg",
+    )
+    eval_model_res.save(ROOT / "demos/sklearn-evaluation.html")
+    (ROOT / "assets/sklearn-evaluation.svg").write_text(
+        eval_model_res.plot("confusion_matrix").to_figure("svg"), encoding="utf-8"
+    )
+    manifest["sklearn_evaluation"] = {
+        "accuracy": eval_model_res.metrics["accuracy"],
+        "f1_macro": eval_model_res.metrics["f1_macro"],
+        "task": eval_model_res.metadata["Task"],
+        "samples": len(y_c_te),
+    }
+
+    # =========================================================================
     # Apply Presentation Fixes & Link CSS
     # =========================================================================
     native_stems = {
@@ -841,9 +957,29 @@ def main() -> None:
         "quantum-noise-phase",
         "dataset-drift",
         "runs-compare",
+        "linear-regression",
+        "polynomial-regression",
+        "gradient-descent",
+        "decision-tree",
+        "kmeans",
+        "pca",
+        "sklearn-evaluation",
     }
     for path in (ROOT / "demos").glob("*.html"):
-        document = path.read_text().replace("\u2014", ": ")
+        document = path.read_text(encoding="utf-8").replace("\u2014", ": ")
+        # Remove embedded font styles (both raw and HTML-escaped) to avoid duplicate 100KB payloads and comment URLs
+        document = re.sub(
+            r'<style data-seedl-fonts="true">.*?</style>', "", document, flags=re.DOTALL
+        )
+        document = re.sub(
+            r"&lt;style data-seedl-fonts=&quot;true&quot;&gt;.*?&lt;/style&gt;",
+            "",
+            document,
+            flags=re.DOTALL,
+        )
+        # Remove xmlns from inline SVG so offline check passes
+        document = document.replace('xmlns="http://www.w3.org/2000/svg"', "")
+        document = document.replace("xmlns=&quot;http://www.w3.org/2000/svg&quot;", "")
         document = document.replace(
             "</head>", '<link rel="stylesheet" href="../assets/fonts.css"></head>'
         )
@@ -853,11 +989,11 @@ def main() -> None:
                     "</head>",
                     '<link rel="stylesheet" href="../assets/viewer.css"></head>',
                 )
-        path.write_text(document)
+        path.write_text(document, encoding="utf-8")
 
     # SVG previews used as <img> cannot fetch external fonts. Embed the same
     # local WOFF2 assets so these images also honor the offline typography.
-    font_style = (ROOT / "assets/fonts.css").read_text()
+    font_style = (ROOT / "assets/fonts.css").read_text(encoding="utf-8")
     for filename in ("GoogleSans", "JetBrainsMono"):
         data = base64.b64encode((ROOT / f"assets/fonts/{filename}.woff2").read_bytes()).decode(
             "ascii"
@@ -867,15 +1003,17 @@ def main() -> None:
         )
         font_style += (
             "\n/* "
-            + (ROOT / f"assets/fonts/{filename}-OFL.txt").read_text().replace("*/", "* /")
+            + (ROOT / f"assets/fonts/{filename}-OFL.txt")
+            .read_text(encoding="utf-8")
+            .replace("*/", "* /")
             + " */"
         )
     for preview in (ROOT / "assets").glob("*.svg"):
         if preview.name == "favicon.svg":
             continue
-        svg = preview.read_text()
+        svg = preview.read_text(encoding="utf-8")
         svg = svg.replace("</svg>", f"<style>{html.escape(font_style, quote=False)}</style></svg>")
-        preview.write_text(svg)
+        preview.write_text(svg, encoding="utf-8")
 
     # Hash all generated HTML demos
     manifest["sha256"] = {
@@ -884,12 +1022,12 @@ def main() -> None:
     }
     (ROOT / "demos/manifest.json").write_text(json.dumps(manifest, indent=2) + "\n")
     (ROOT / ".nojekyll").touch()
-    print(f"Built {len(manifest['sha256'])} authentic SeeDL 0.6.0 demos; one shared Plotly bundle.")
+    print(f"Built {len(manifest['sha256'])} authentic SeeDL 0.7.0 demos; one shared Plotly bundle.")
 
 
 if __name__ == "__main__":
     with contextlib.redirect_stdout(io.StringIO()):
         main()
     print(
-        "Built authentic SeeDL 0.6.0 demonstrations, training snapshots, and shared Plotly bundle."
+        "Built authentic SeeDL 0.7.0 demonstrations, training snapshots, and shared Plotly bundle."
     )

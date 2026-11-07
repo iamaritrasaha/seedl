@@ -742,8 +742,43 @@ def learn(
     backend: str = "auto",
     **kwargs: Any,
 ) -> Visualization:
-    """Interactive, mathematically verified educational demonstration of a core deep learning concept."""
-    selected_backend = resolve_backend(backend)
+    """Interactive lessons for classical ML and deep learning concepts.
+
+    Generate self-contained, mathematically verified interactive simulations and
+    visualizations for core machine learning concepts.
+
+    Supported educational concepts:
+      Classical Machine Learning:
+        linear_regression      Ordinary least squares regression with analytical fit
+        polynomial_regression  Non-linear curve fitting via polynomial basis expansion
+        gradient_descent       First-order optimization on quadratic loss surface
+        logistic_regression    Binary classification and sigmoid probability mapping
+        knn                    K-nearest neighbors instance-based classification
+        decision_tree          Recursive binary splitting via impurity reduction
+        kmeans                 Iterative centroid assignment and cluster variance
+        pca                    Orthogonal variance-maximizing dimensionality reduction
+
+      Deep Learning:
+        backpropagation        Analytical chain rule gradients across MLP graph
+        activation_functions   Curves and derivatives (ReLU, Sigmoid, Tanh, GELU)
+        loss_functions         Regression and classification losses (MSE, MAE, Huber)
+        attention              Scaled dot-product attention step-by-step
+        dropout                Inverted dropout masking and activation scaling
+        batch_norm             Mini-batch standardization and affine transformation
+        convolution            2D spatial convolution kernel and feature map
+
+    CLI usage:
+      seedl learn list                  List all available educational concepts
+      seedl learn <concept>             Export interactive lesson to <concept>.html
+      seedl learn <concept> --output F  Export lesson to custom .html or .svg file
+
+    Python usage:
+      import seedl as sd
+      lesson = sd.learn("linear_regression")
+      lesson.show()                     # Display in terminal / notebook / browser
+      lesson.save("lesson.html")        # Export offline interactive HTML
+    """
+    selected_backend = "svg" if backend == "auto" else resolve_backend(backend)
     from ._educational import learn_concept
 
     kind, data, summary, notes = learn_concept(concept, **kwargs)

@@ -69,6 +69,7 @@ EXAMPLES = {
     "bloch": 'import seedl as sd\n\nview = sd.bloch("+", backend="svg")  # analytic single-qubit |+> state\nview.save("bloch.html")',
     "statevector": 'import seedl as sd\n\nview = sd.statevector([2**-0.5, 0, 0, 2**-0.5], backend="svg")\nview.save("bell-state.html")',
     "circuit": 'from qiskit import QuantumCircuit\nimport seedl as sd\n\nqc = QuantumCircuit(2)\nqc.h(0)\nqc.cx(0, 1)\nview = sd.circuit(qc, backend="svg")\nview.save("circuit.html")',
+    "learn": 'import seedl as sd\n\nlesson = sd.learn("linear_regression")\nlesson.show()\nlesson.save("linear_regression.html")',
 }
 
 
@@ -90,7 +91,13 @@ def capabilities(*, width: int = 88) -> str:
                 )
             )
         lines.append("")
-    lines.extend(("Learn more: seedl help see", f"Examples: {DOCS}/GETTING_STARTED.md"))
+    lines.extend(
+        (
+            "Learn more: seedl help see",
+            "Educational lessons: seedl learn list",
+            f"Examples: {DOCS}/GETTING_STARTED.md",
+        )
+    )
     return "\n".join(lines)
 
 

@@ -69,18 +69,18 @@ sd.entanglement(bell_state)
 ```
 
 > [!NOTE]
-> **SeeDL 0.6.0 — Neural Observatory & Multidimensional Tensor Explorer**: Advanced open-source scientific visualization, client-side multidimensional tensor slicing, layer-level activation diagnostics, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
+> **SeeDL 0.7.0 — Classical Machine Learning, Interactive Learning & Neural Observatory**: Advanced open-source scientific visualization, client-side multidimensional tensor slicing, layer-level activation diagnostics, non-destructive execution graph tracing, multi-layer Transformer attention rollout, gradient diagnostics, and quantum information visualization in a single lightweight library.
 >
 > Install SeeDL:
-> `pip install seedl==0.6.0` or `pip install "seedl[all]==0.6.0"`
+> `pip install seedl==0.7.0` or `pip install "seedl[all]==0.7.0"`
 
 ---
 
-## 🌌 SeeDL 0.6.0: The Neural Observatory & Tensor Explorer
+## 🌌 SeeDL 0.7.0: Classical Machine Learning, Interactive Learning & Neural Observatory
 
-SeeDL 0.6.0 introduces the **Interactive Multidimensional Tensor Explorer** and comprehensive **Model Observability & Activation Diagnostics**, alongside the laboratory-grade Neural Observatory for execution graph tracing, Transformer attention rollout, attribution benchmarking, gradient health diagnostics, and quantum noise simulation.
+SeeDL 0.7.0 introduces **Classical Machine Learning Evaluation & Interpretation**, 15 **Interactive Learning Simulations**, and the **Interactive Multidimensional Tensor Explorer** and comprehensive **Model Observability & Activation Diagnostics**, alongside the laboratory-grade Neural Observatory for execution graph tracing, Transformer attention rollout, attribution benchmarking, gradient health diagnostics, and quantum noise simulation.
 
-### Key Capabilities in 0.6.0:
+### Key Capabilities in 0.7.0:
 
 - **Interactive Multidimensional Tensor Explorer (`sd.see(tensor, interactive=True)`)**:
   - Interactive client-side slice scrubber and multidimensional visualizer for 3D, 4D, 5D, and higher-order tensors.
@@ -159,7 +159,7 @@ report = sd.report(
 report.save("diagnostic_report.html")
 ```
 
-See the [Official Release Notes](RELEASE_NOTES_0.6.0.md) and runnable examples in `examples/`.
+See the [Official Release Notes](RELEASE_NOTES_0.7.0.md) and runnable examples in `examples/`.
 
 ---
 

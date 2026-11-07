@@ -59,7 +59,7 @@ def test_column_transformer_diagram_and_expanded_names(mixed_pipeline, tmp_path)
     assert pickle.dumps(model) == before
     result.save(tmp_path / "pipeline.html")
     result.save(tmp_path / "pipeline.svg")
-    ET.fromstring((tmp_path / "pipeline.svg").read_text())
+    ET.fromstring((tmp_path / "pipeline.svg").read_text(encoding="utf-8"))
     evaluation = sd.evaluate(model, X, y, split="test", backend="svg")
     assert evaluation.metrics["accuracy"] > 0.8
     assert pickle.dumps(model) == before

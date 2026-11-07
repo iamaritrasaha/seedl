@@ -3,11 +3,11 @@
 SeeDL inspects and evaluates scikit-learn models. Train models in your own
 scikit-learn code; inspection/evaluation never calls `fit()`.
 
-These APIs and the `sklearn` extra are new in this branch and are not in the
-published 0.6.0 artifacts. From a checkout containing this work:
+These APIs and the `sklearn` extra are available in SeeDL 0.7.0:
+
 
 ```bash
-python -m pip install -e ".[sklearn]"
+python -m pip install "seedl[sklearn]"
 seedl help evaluate
 seedl examples evaluate
 seedl doctor

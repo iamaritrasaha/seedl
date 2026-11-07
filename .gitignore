@@ -33,4 +33,12 @@ website/assets/runs-compare.svg
 website/assets/quantum-noise.svg
 website/assets/dataset-drift.svg
 website/assets/report.svg
+website/assets/linear-regression.svg
+website/assets/polynomial-regression.svg
+website/assets/gradient-descent.svg
+website/assets/decision-tree.svg
+website/assets/kmeans.svg
+website/assets/pca.svg
+website/assets/sklearn-evaluation.svg
 graphify-out/
+.idea/

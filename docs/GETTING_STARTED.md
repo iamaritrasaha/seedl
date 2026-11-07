@@ -2,8 +2,8 @@
 
 ## Beginner: inspect, understand, save
 
-Install the core with `python -m pip install seedl`. For the unreleased CLI and
-presentation changes, install this checkout with `python -m pip install -e .`.
+Install the core with `python -m pip install seedl`, or install all optional integrations with `python -m pip install "seedl[all]"`.
+
 Run `seedl`, then `seedl help see` to discover the Python interface.
 
 ```python
@@ -117,6 +117,25 @@ The new optional sklearn adapter adds `sd.evaluate(model, X, y)` and extends
 `sd.see(model)` to fitted/unfitted sklearn estimators. Training remains in your
 own sklearn code. See the [classical ML quickstart](CLASSICAL_ML.md) for labeled
 metrics, pipelines, importance, clusters and notebooks.
+
+## Interactive machine learning lessons
+
+SeeDL provides interactive, dependency-free visual learning modules for classical and deep learning algorithms:
+
+```python
+import seedl as sd
+
+# Explore ordinary least squares regression
+lesson = sd.learn("linear_regression")
+lesson.show()
+lesson.save("linear_regression.html")
+
+# Explore gradient descent optimization steps
+gd = sd.learn("gradient_descent", lr=0.15, steps=10)
+gd.save("gradient_descent.html")
+```
+
+Browse all 15 educational simulations with `seedl learn list`, or read the [Interactive ML Learning Guide](INTERACTIVE_ML_LEARNING.md).
 
 ## Advanced: targeted inspection and scientific reports
 

@@ -1,6 +1,6 @@
 # Command reference
 
-Install this checkout with `python -m pip install -e .`. Both `seedl` and
+Install with pip install seedl. Both seedl and
 `python -m seedl` run the same standard-library CLI. No extras are needed.
 
 | Command | Result |
@@ -14,8 +14,14 @@ Install this checkout with `python -m pip install -e .`. Both `seedl` and
 | `seedl doctor` | Python support range, package version, platform and optional package presence |
 | `seedl examples` | Short complete examples to paste into Python |
 | `seedl examples evaluate` | Complete scikit-learn training/evaluation example (printed, not executed) |
+| seedl examples learn | Complete interactive learning simulation example |
 | `seedl help evaluate` | New ML API, split provenance, metrics and captured plots |
+| seedl help learn | Documentation for interactive educational simulations |
 | `seedl examples attention` | One focused example; `--help` lists topics |
+| seedl learn | Browse available interactive ML/DL learning lessons (same as seedl learn list) |
+| seedl learn list | List all 15 classical ML and deep learning interactive lessons |
+| seedl learn <concept> | Export interactive lesson offline (default: <concept>.html) |
+| seedl learn <concept> --output <file> | Export lesson to a specified .html or .svg file |
 | `seedl demo` | Create `seedl-demo.html` using authentic labeled example data |
 | `seedl demo --output iris.svg` | Create a new SVG instead |
 
@@ -64,3 +70,13 @@ sepal length, sepal width, petal length, petal width.
 Values were checked against UCI's `iris.data` during the audit. This is a small
 example excerpt, not a representative statistical sample. Source, subset,
 column meanings and units are included in the generated output.
+
+## Learn command and simulations
+
+seedl learn generates self-contained, offline interactive visualizations of fundamental machine learning and deep learning concepts.
+
+- seedl learn list: Prints all supported classical ML and deep learning concepts grouped by domain.
+- seedl learn <concept>: Generates an offline HTML lesson (e.g. seedl learn linear_regression -> linear_regression.html).
+- seedl learn <concept> --output path/to/file.svg: Exports as standalone SVG with embedded typography.
+
+Like seedl demo, seedl learn never overwrites existing files, makes zero network requests, and requires zero third-party dependencies (pure standard library and mathematical generation).

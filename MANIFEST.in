@@ -1,5 +1,5 @@
 include LICENSE README.md pyproject.toml uv.lock
-recursive-include src *.py *.typed
+recursive-include src *.py *.typed *.ttf *.woff2 *.txt *.md
 recursive-include tests *.py
 recursive-include scripts *.py
 global-exclude __pycache__ *.py[cod]

@@ -277,7 +277,7 @@ class ScientificReport:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
@@ -473,7 +473,10 @@ class ScientificReport:
 </body>
 </html>
 """
-        # Validate size bounds
+        from ._typography import embed_fonts
+
+        doc = embed_fonts(doc)
+        # Validate size bounds, including embedded font assets.
         size_bytes = len(doc.encode("utf-8"))
         size_mb = size_bytes / (1024 * 1024)
         if size_mb > self.max_size_mb:

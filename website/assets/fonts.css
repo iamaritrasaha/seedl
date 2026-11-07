@@ -1,0 +1,8 @@
+/* Bundled OFL fonts; license texts are in fonts/. No third-party requests. */
+@font-face{font-family:"Google Sans";font-style:normal;font-weight:400 700;font-display:swap;src:url("fonts/GoogleSans.woff2") format("woff2")}
+@font-face{font-family:"JetBrains Mono";font-style:normal;font-weight:100 800;font-display:swap;src:url("fonts/JetBrainsMono.woff2") format("woff2")}
+body,button,input,select,textarea{font-family:"Google Sans",sans-serif}
+pre,code,kbd,samp,.mono{font-family:"JetBrains Mono",monospace}
+/* Covers scientific demos generated using the published library as well. */
+.plotly-graph-div text,svg text{font-family:"Google Sans",sans-serif!important}
+svg [font-family*="monospace"],.xtick text,.ytick text{font-family:"JetBrains Mono",monospace!important}

@@ -461,7 +461,7 @@ def attention_rollout_html(view: Visualization) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -626,9 +626,9 @@ def svg_attention_rollout(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / ATTENTION ROLLOUT</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / ATTENTION ROLLOUT</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
     ]
 
     cell_size = min(36, int(500 / max(n, 1)))
@@ -639,13 +639,13 @@ def svg_attention_rollout(view: Visualization) -> str:
     for c in range(min(n, 14)):
         t_label = html.escape(tokens[c])
         lines.append(
-            f'<text x="{gx + c * cell_size + cell_size // 2}" y="{gy - 8}" font-family="monospace" font-size="11" fill="#38bdf8" text-anchor="middle">{t_label}</text>'
+            f'<text x="{gx + c * cell_size + cell_size // 2}" y="{gy - 8}" font-family="JetBrains Mono, monospace" font-size="11" fill="#38bdf8" text-anchor="middle">{t_label}</text>'
         )
 
     for r in range(min(n, 14)):
         t_label = html.escape(tokens[r])
         lines.append(
-            f'<text x="{gx - 10}" y="{gy + r * cell_size + cell_size // 2 + 4}" font-family="monospace" font-size="11" fill="#38bdf8" text-anchor="end">{t_label}</text>'
+            f'<text x="{gx - 10}" y="{gy + r * cell_size + cell_size // 2 + 4}" font-family="JetBrains Mono, monospace" font-size="11" fill="#38bdf8" text-anchor="end">{t_label}</text>'
         )
         for c in range(min(n, 14)):
             w = matrix[r][c] if r < len(matrix) and c < len(matrix[r]) else 0.0

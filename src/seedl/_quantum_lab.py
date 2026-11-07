@@ -408,7 +408,7 @@ def quantum_noise_html(view: Visualization) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -466,7 +466,7 @@ def quantum_noise_html(view: Visualization) -> str:
       border-bottom: 1px dashed rgba(255,255,255,0.08);
     }}
     .metric-label {{ color: var(--muted); }}
-    .metric-value {{ font-family: monospace; font-weight: 600; }}
+    .metric-value {{ font-family: JetBrains Mono, monospace; font-weight: 600; }}
   </style>
 </head>
 <body>
@@ -479,7 +479,7 @@ def quantum_noise_html(view: Visualization) -> str:
   <div class="slider-box">
     <div style="display:flex; justify-content:space-between;">
       <label style="font-size: 14px; font-weight: 600;">Noise Parameter (p / γ):</label>
-      <span id="slider-val" style="font-family:monospace; color:var(--accent); font-weight:700;">{data.get("param", 0.3):.2f}</span>
+      <span id="slider-val" style="font-family:JetBrains Mono, monospace; color:var(--accent); font-weight:700;">{data.get("param", 0.3):.2f}</span>
     </div>
     <input type="range" id="noise-slider" min="0" max="1" step="0.05" value="{data.get("param", 0.3):.2f}" oninput="updateNoise(this.value)"/>
   </div>
@@ -563,24 +563,24 @@ def svg_quantum_noise(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / QUANTUM NOISE EXPLORER</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / QUANTUM NOISE EXPLORER</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
         # Card 1
         '<g transform="translate(60, 130)">',
         '<rect width="300" height="180" rx="8" fill="#1e293b" stroke="#334155"/>',
-        '<text x="20" y="30" font-family="system-ui, sans-serif" font-size="15" font-weight="700" fill="#38bdf8">Initial Quantum State</text>',
-        f'<text x="20" y="70" font-family="monospace" font-size="12" fill="#94a3b8">Bloch: [{b_init[0]:.2f}, {b_init[1]:.2f}, {b_init[2]:.2f}]</text>',
-        f'<text x="20" y="105" font-family="monospace" font-size="12" fill="#94a3b8">Purity: {p_init:.3f}</text>',
-        f'<text x="20" y="140" font-family="monospace" font-size="12" fill="#94a3b8">Entropy: {init.get("entropy", 0.0):.3f} bits</text>',
+        '<text x="20" y="30" font-family="Google Sans, sans-serif" font-size="15" font-weight="700" fill="#38bdf8">Initial Quantum State</text>',
+        f'<text x="20" y="70" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Bloch: [{b_init[0]:.2f}, {b_init[1]:.2f}, {b_init[2]:.2f}]</text>',
+        f'<text x="20" y="105" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Purity: {p_init:.3f}</text>',
+        f'<text x="20" y="140" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Entropy: {init.get("entropy", 0.0):.3f} bits</text>',
         "</g>",
         # Card 2
         '<g transform="translate(390, 130)">',
         '<rect width="300" height="180" rx="8" fill="#1e293b" stroke="#334155"/>',
-        '<text x="20" y="30" font-family="system-ui, sans-serif" font-size="15" font-weight="700" fill="#38bdf8">Decohered State</text>',
-        f'<text x="20" y="70" font-family="monospace" font-size="12" fill="#94a3b8">Bloch: [{b_final[0]:.2f}, {b_final[1]:.2f}, {b_final[2]:.2f}]</text>',
-        f'<text x="20" y="105" font-family="monospace" font-size="12" fill="#94a3b8">Purity: {p_final:.3f}</text>',
-        f'<text x="20" y="140" font-family="monospace" font-size="12" fill="#94a3b8">Entropy: {final.get("entropy", 0.0):.3f} bits</text>',
+        '<text x="20" y="30" font-family="Google Sans, sans-serif" font-size="15" font-weight="700" fill="#38bdf8">Decohered State</text>',
+        f'<text x="20" y="70" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Bloch: [{b_final[0]:.2f}, {b_final[1]:.2f}, {b_final[2]:.2f}]</text>',
+        f'<text x="20" y="105" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Purity: {p_final:.3f}</text>',
+        f'<text x="20" y="140" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Entropy: {final.get("entropy", 0.0):.3f} bits</text>',
         "</g>",
         "</svg>",
     ]

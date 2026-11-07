@@ -6,6 +6,7 @@ Run from the repository root using the published SeeDL package:
 
 from __future__ import annotations
 
+import base64
 import contextlib
 import hashlib
 import html
@@ -201,10 +202,10 @@ def build_report_preview_svg(report: object) -> str:
         cards_svg.append(f"""  <g transform="translate(40, {y})">
     <rect width="700" height="{card_h}" rx="8" fill="#1e293b" stroke="#334155" stroke-width="1"/>
     <rect x="0" y="0" width="6" height="{card_h}" rx="3" fill="{color}"/>
-    <text x="24" y="23" font-family="system-ui, -apple-system, sans-serif" font-size="11" font-weight="700" fill="{color}" letter-spacing="0.5">{tag}</text>
-    <text x="24" y="43" font-family="system-ui, -apple-system, sans-serif" font-size="14" font-weight="600" fill="#f8fafc">{idx + 1}. {sec_title}</text>
+    <text x="24" y="23" font-family="Google Sans, sans-serif" font-size="11" font-weight="700" fill="{color}" letter-spacing="0.5">{tag}</text>
+    <text x="24" y="43" font-family="Google Sans, sans-serif" font-size="14" font-weight="600" fill="#f8fafc">{idx + 1}. {sec_title}</text>
     <rect x="580" y="15" width="96" height="26" rx="5" fill="#0f172a" stroke="#334155" stroke-width="1"/>
-    <text x="628" y="32" font-family="monospace" font-size="11" font-weight="700" fill="{color}" text-anchor="middle">{badge}</text>
+    <text x="628" y="32" font-family="JetBrains Mono, monospace" font-size="11" font-weight="700" fill="{color}" text-anchor="middle">{badge}</text>
   </g>""")
 
     sections_rendered = "\n".join(cards_svg)
@@ -214,15 +215,15 @@ def build_report_preview_svg(report: object) -> str:
   <rect x="20" y="20" width="740" height="480" rx="12" fill="#0b1120" stroke="#334155" stroke-width="1.5"/>
 
   <!-- Dossier Header -->
-  <text x="40" y="55" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#38bdf8" font-weight="700" letter-spacing="1">SeeDL / MULTI-COMPONENT SCIENTIFIC DOSSIER</text>
-  <text x="40" y="85" font-family="system-ui, -apple-system, sans-serif" font-size="18" fill="#f8fafc" font-weight="700">{title}</text>
-  <text x="40" y="110" font-family="system-ui, -apple-system, sans-serif" font-size="12" fill="#94a3b8">{len(sections)} Report Sections · {author} · Self-Contained Offline Report</text>
+  <text x="40" y="55" font-family="Google Sans, sans-serif" font-size="11" fill="#38bdf8" font-weight="700" letter-spacing="1">SeeDL / MULTI-COMPONENT SCIENTIFIC DOSSIER</text>
+  <text x="40" y="85" font-family="Google Sans, sans-serif" font-size="18" fill="#f8fafc" font-weight="700">{title}</text>
+  <text x="40" y="110" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8">{len(sections)} Report Sections · {author} · Self-Contained Offline Report</text>
 
   <!-- Report Section Cards -->
 {sections_rendered}
 
   <!-- Footer dossier metadata -->
-  <text x="40" y="475" font-family="system-ui, -apple-system, sans-serif" font-size="11" fill="#64748b">Structure: Standalone HTML with sidebar TOC navigation, embedded interactive figures, and telemetry dossiers.</text>
+  <text x="40" y="475" font-family="Google Sans, sans-serif" font-size="11" fill="#64748b">Structure: Standalone HTML with sidebar TOC navigation, embedded interactive figures, and telemetry dossiers.</text>
 </svg>
 """
 
@@ -843,6 +844,9 @@ def main() -> None:
     }
     for path in (ROOT / "demos").glob("*.html"):
         document = path.read_text().replace("\u2014", ": ")
+        document = document.replace(
+            "</head>", '<link rel="stylesheet" href="../assets/fonts.css"></head>'
+        )
         if path.stem in native_stems:
             if '<link rel="stylesheet" href="../assets/viewer.css">' not in document:
                 document = document.replace(
@@ -850,6 +854,28 @@ def main() -> None:
                     '<link rel="stylesheet" href="../assets/viewer.css"></head>',
                 )
         path.write_text(document)
+
+    # SVG previews used as <img> cannot fetch external fonts. Embed the same
+    # local WOFF2 assets so these images also honor the offline typography.
+    font_style = (ROOT / "assets/fonts.css").read_text()
+    for filename in ("GoogleSans", "JetBrainsMono"):
+        data = base64.b64encode((ROOT / f"assets/fonts/{filename}.woff2").read_bytes()).decode(
+            "ascii"
+        )
+        font_style = font_style.replace(
+            f'url("fonts/{filename}.woff2")', f'url("data:font/woff2;base64,{data}")'
+        )
+        font_style += (
+            "\n/* "
+            + (ROOT / f"assets/fonts/{filename}-OFL.txt").read_text().replace("*/", "* /")
+            + " */"
+        )
+    for preview in (ROOT / "assets").glob("*.svg"):
+        if preview.name == "favicon.svg":
+            continue
+        svg = preview.read_text()
+        svg = svg.replace("</svg>", f"<style>{html.escape(font_style, quote=False)}</style></svg>")
+        preview.write_text(svg)
 
     # Hash all generated HTML demos
     manifest["sha256"] = {

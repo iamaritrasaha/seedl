@@ -25,6 +25,7 @@ from ._inspect import (
     is_numpy_array,
     is_torch_tensor,
 )
+from ._presentation import VIRIDIS
 from ._tensor_utils import complex_components, tensor_layout, to_native
 from ._tensors import (
     format_sparsity,
@@ -524,6 +525,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
         json.dumps(data).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
     )
 
+    palette_json = json.dumps(VIRIDIS)
+
     widget_body = f"""
 <div id="{container_id}" class="seedl-tensor-explorer-widget" tabindex="0" role="region" aria-label="Interactive Tensor Explorer">
   <div class="ste-header">
@@ -543,9 +546,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
     <div class="ste-slider-row">
       <div class="ste-playback-buttons">
-        <button type="button" class="ste-btn" id="{container_id}-prev-btn" title="Previous slice" aria-label="Previous slice">◀</button>
-        <button type="button" class="ste-btn ste-btn-primary" id="{container_id}-play-btn" title="Play/Pause playback" aria-label="Play slice playback">▶ Play</button>
-        <button type="button" class="ste-btn" id="{container_id}-next-btn" title="Next slice" aria-label="Next slice">▶</button>
+        <button type="button" class="ste-btn" id="{container_id}-prev-btn" title="Previous slice" aria-label="Previous slice">Previous</button>
+        <button type="button" class="ste-btn ste-btn-primary" id="{container_id}-play-btn" title="Play/Pause playback" aria-label="Play slice playback">Play</button>
+        <button type="button" class="ste-btn" id="{container_id}-next-btn" title="Next slice" aria-label="Next slice">Next</button>
       </div>
       <input type="range" class="ste-range" id="{container_id}-slider" min="0" max="0" value="0" aria-label="Tensor slice slider" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0" />
       <span class="ste-index-badge" id="{container_id}-index-badge" aria-live="polite">Slice: 0 / 0</span>
@@ -554,7 +557,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 
   <div class="ste-viewport">
     <div class="ste-canvas-container">
-      <canvas id="{container_id}-canvas" class="ste-canvas" width="256" height="256" aria-label="Tensor slice visualization"></canvas>
+      <canvas id="{container_id}-canvas" class="ste-canvas" width="256" height="256" tabindex="0" role="img" aria-label="Tensor slice. Focus and use arrow keys to inspect cell values." aria-describedby="{container_id}-value-readout"></canvas>
       <div id="{container_id}-tooltip" class="ste-tooltip" style="display:none;" role="tooltip"></div>
     </div>
     <div class="ste-slice-meta" id="{container_id}-slice-meta">
@@ -562,6 +565,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
         <div class="ste-card-title">Slice Information</div>
         <div id="{container_id}-slice-stats" class="ste-slice-stats-content">Loading...</div>
       </div>
+      <div id="{container_id}-legend" class="ste-legend" aria-label="Color scale"></div>
+      <output id="{container_id}-value-readout" class="ste-value-readout" aria-live="polite">Focus the canvas and use arrow keys to inspect values.</output>
       <div class="ste-palette-selector">
         <span class="ste-sublabel">Colormap:</span>
         <select id="{container_id}-colormap-select" class="ste-select" aria-label="Select colormap">
@@ -583,6 +588,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 <script>
 (function() {{
   const payload = {payload_json};
+  const viridis = {palette_json};
   const root = document.getElementById("{container_id}");
   if (!root) return;
 
@@ -617,11 +623,47 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   }}
 
   function colormapViridis(t) {{
-    const r = Math.max(0, Math.min(255, Math.round(255 * (0.2 + 0.8 * Math.pow(t, 2)))));
-    const g = Math.max(0, Math.min(255, Math.round(255 * Math.sin(t * Math.PI))));
-    const b = Math.max(0, Math.min(255, Math.round(255 * (0.6 - 0.4 * t))));
-    return [r, g, b];
+    const scaled = Math.max(0, Math.min(1, t)) * (viridis.length - 1);
+    const lo = Math.floor(scaled), hi = Math.min(lo + 1, viridis.length - 1);
+    return [1, 3, 5].map(i => Math.round(
+      parseInt(viridis[lo].slice(i, i + 2), 16) * (1 - scaled + lo) +
+      parseInt(viridis[hi].slice(i, i + 2), 16) * (scaled - lo)));
   }}
+
+  function formatNumber(value) {{
+    if (value == null) return 'unavailable';
+    if (Number.isNaN(value)) return 'NaN';
+    if (!Number.isFinite(value)) return value < 0 ? '-Inf' : '+Inf';
+    return Number(value).toPrecision(6);
+  }}
+
+  let inspectRow = 0, inspectCol = 0;
+  const valueReadout = document.getElementById("{container_id}-value-readout");
+  function inspectCell() {{
+    const axis = payload.axes[currentAxisIdx];
+    const frame = axis && axis.frames[currentFrameIdx];
+    const values = frame && (frame.values || frame.pixels);
+    if (!values || !values.length || !values[0].length) {{
+      valueReadout.textContent = 'No cell values available.';
+      return;
+    }}
+    inspectRow = Math.max(0, Math.min(values.length - 1, inspectRow));
+    inspectCol = Math.max(0, Math.min(values[inspectRow].length - 1, inspectCol));
+    const value = values[inspectRow][inspectCol];
+    const formatted = Array.isArray(value) ? value.map(formatNumber).join(', ') : formatNumber(value);
+    valueReadout.textContent = `Slice ${{axis.name}}=${{frame.index}}, row ${{inspectRow}}, column ${{inspectCol}}: ${{formatted}}`;
+  }}
+  canvas.addEventListener('focus', inspectCell);
+  canvas.addEventListener('keydown', e => {{
+    if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (e.key === 'ArrowUp') inspectRow--;
+    if (e.key === 'ArrowDown') inspectRow++;
+    if (e.key === 'ArrowLeft') inspectCol--;
+    if (e.key === 'ArrowRight') inspectCol++;
+    inspectCell();
+  }});
 
   function colormapCoolwarm(t) {{
     const r = Math.round(255 * Math.min(1, Math.max(0, 2 * t)));
@@ -672,7 +714,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       if (ctx) {{
         ctx.clearRect(0, 0, canvas.width, canvas.height);
         ctx.fillStyle = "#64748b";
-        ctx.font = "14px -apple-system, BlinkMacSystemFont, sans-serif";
+        ctx.font = "14px Google Sans, sans-serif";
         ctx.textAlign = "center";
         ctx.fillText("Empty Dimension", canvas.width / 2, canvas.height / 2);
       }}
@@ -685,9 +727,13 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     slider.setAttribute("aria-valuenow", currentFrameIdx);
     indexBadge.textContent = `${{axisData.name}} = ${{frame.index}} (${{currentFrameIdx + 1}}/${{axisData.frames.length}})`;
 
-    const minStr = frame.min != null && !isNaN(frame.min) && isFinite(frame.min) ? frame.min.toFixed(4) : (frame.min != null && isNaN(frame.min) ? 'NaN' : 'n/a');
-    const maxStr = frame.max != null && !isNaN(frame.max) && isFinite(frame.max) ? frame.max.toFixed(4) : (frame.max != null && isNaN(frame.max) ? 'NaN' : 'n/a');
-    const meanStr = frame.mean != null && !isNaN(frame.mean) && isFinite(frame.mean) ? frame.mean.toFixed(4) : (frame.mean != null && isNaN(frame.mean) ? 'NaN' : 'n/a');
+    const minStr = formatNumber(frame.min);
+    const maxStr = formatNumber(frame.max);
+    const meanStr = formatNumber(frame.mean);
+    const legend = document.getElementById("{container_id}-legend");
+    legend.textContent = frame.type === 'image' ? 'Image channels scaled to [0, 1]; see provenance notes.' :
+      `${{activeColormap === 'viridis' ? 'Viridis (interpolated)' : activeColormap}}: ${{minStr}} to ${{maxStr}}. Range rescales per slice; gray = NaN/Inf.`;
+    inspectCell();
 
     sliceStats.innerHTML = `
       <div class="ste-stat-row"><span>Dimension:</span> <strong>${{escapeHtml(axisData.name)}} (Axis ${{axisData.axis}})</strong></div>
@@ -791,11 +837,11 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       clearInterval(playInterval);
       playInterval = null;
       isPlaying = false;
-      playBtn.textContent = "▶ Play";
+      playBtn.textContent = "Play";
       playBtn.setAttribute("aria-label", "Play slice playback");
     }} else {{
       isPlaying = true;
-      playBtn.textContent = "⏸ Pause";
+      playBtn.textContent = "Pause";
       playBtn.setAttribute("aria-label", "Pause slice playback");
       playInterval = setInterval(() => {{
         const curAxis = payload.axes[currentAxisIdx];
@@ -870,9 +916,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       const p = frame.pixels[row][col];
       if (Array.isArray(p)) {{
         const rgb = p.map(v => typeof v === 'number' ? v.toFixed(3) : v).join(", ");
-        tipText = `[${{row}}, ${{col}}] RGB: (${{rgb}})`;
+        tipText = `[${{row}}, ${{col}}] RGB: (${{rgb}}); values: (${{p.map(formatNumber).join(', ')}})`;
       }} else {{
-        tipText = `[${{row}}, ${{col}}]: ${{Number(p).toFixed(4)}}`;
+        tipText = `[${{row}}, ${{col}}]: ${{formatNumber(p)}}`;
       }}
     }} else if (frame.values && frame.values[row] && frame.values[row][col] !== undefined) {{
       const v = frame.values[row][col];
@@ -881,7 +927,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
       }} else if (!isFinite(v)) {{
         tipText = `[${{row}}, ${{col}}]: ${{v > 0 ? '+Inf' : '-Inf'}}`;
       }} else {{
-        tipText = `[${{row}}, ${{col}}]: ${{Number(v).toFixed(4)}}`;
+        tipText = `[${{row}}, ${{col}}]: ${{formatNumber(v)}}`;
       }}
     }}
 
@@ -902,6 +948,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   }});
 
   root.addEventListener("keydown", (e) => {{
+    if (e.target !== root) return;
     if (e.key === "ArrowLeft") {{
       e.preventDefault();
       prevBtn.click();
@@ -924,7 +971,15 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
     css = """
 <style>
 .seedl-tensor-explorer-widget {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --ste-bg: #ffffff;
+  --ste-text: #172b4d;
+  --ste-border: #dce4ed;
+  --ste-muted: #52657d;
+  --ste-accent: #31688e;
+  --ste-chip-bg: #f8fafc;
+  --ste-card-bg: #f8fafc;
+  --ste-btn-bg: #e6edf5;
+  font-family: Google Sans, sans-serif;
   background: var(--ste-bg, #0f172a);
   color: var(--ste-text, #f8fafc);
   border: 1px solid var(--ste-border, #334155);
@@ -932,7 +987,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   padding: 20px;
   max-width: 960px;
   margin: 12px auto;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  line-height: 1.5;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
   box-sizing: border-box;
   outline: none;
 }
@@ -987,8 +1044,8 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   font-size: 12px;
 }
 .ste-chip-warn {
-  border-color: #f59e0b;
-  color: #fbbf24;
+  border-color: #855000;
+  color: #855000;
 }
 .ste-controls {
   background: var(--ste-card-bg, #1e293b);
@@ -1025,7 +1082,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   transition: all 0.15s ease;
 }
 .ste-btn:hover {
-  background: #475569;
+  background: #dce4ed;
 }
 .ste-btn-active {
   background: #0284c7;
@@ -1052,20 +1109,25 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
 .ste-index-badge {
   font-size: 12px;
   font-weight: 600;
-  min-width: 140px;
+  min-width: 0;
   text-align: right;
   color: var(--ste-accent, #38bdf8);
 }
 .ste-viewport {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: minmax(0, 280px) minmax(0, 1fr);
   gap: 16px;
   align-items: start;
 }
 @media (max-width: 640px) {
   .ste-viewport {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
+  .ste-slider-row { flex-wrap: wrap; }
+  .ste-range { min-width: 0; flex-basis: 120px; }
+  .ste-index-badge { min-width: 0; flex-basis: 100%; text-align: left; }
+  .ste-title-row { align-items: start; gap: 8px; flex-wrap: wrap; }
+  .seedl-tensor-explorer-widget { padding: 14px; }
 }
 .ste-canvas-container {
   position: relative;
@@ -1095,7 +1157,9 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   font-size: 11px;
   pointer-events: none;
   z-index: 10;
-  white-space: nowrap;
+  white-space: normal;
+  max-width: 256px;
+  overflow-wrap: anywhere;
 }
 .ste-slice-meta {
   display: flex;
@@ -1122,9 +1186,11 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   gap: 4px;
   font-size: 12px;
 }
+.ste-stat-row strong, .ste-value-readout { font-family: JetBrains Mono, monospace; }
 .ste-stat-row {
   display: flex;
   justify-content: space-between;
+  gap: 12px;
 }
 .ste-palette-selector {
   display: flex;
@@ -1166,6 +1232,10 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   text-align: right;
   flex: 1;
 }
+.ste-legend, .ste-value-readout { font-size: 12px; color: var(--ste-muted); }
+.ste-btn:focus-visible, .ste-range:focus-visible, .ste-select:focus-visible, .ste-canvas:focus-visible {
+  outline: 3px solid #2563eb; outline-offset: 3px;
+}
 </style>
 """
 
@@ -1180,7 +1250,7 @@ def tensor_explorer_html(view: Any, *, full_html: bool = True) -> str:
   <title>{title_escaped} — SeeDL Interactive Tensor Explorer</title>
   {css}
 </head>
-<body style="margin: 0; padding: 24px; background: #020617;">
+<body style="margin: 0; padding: clamp(8px, 3vw, 24px); background: #f8fafc;">
   {widget_body}
 </body>
 </html>"""
@@ -1205,25 +1275,25 @@ def svg_tensor_explorer(data: dict[str, Any], metadata: dict[str, Any], notes: l
   <rect width="100%" height="100%" fill="#0f172a" rx="10"/>
   <rect x="20" y="20" width="720" height="340" fill="#1e293b" rx="8" stroke="#334155" stroke-width="1"/>
   
-  <text x="40" y="55" fill="#38bdf8" font-family="-apple-system, sans-serif" font-size="18" font-weight="bold">{title}</text>
-  <text x="40" y="80" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="13">Shape: {shape_str} | Rank: {rank_str} | Dtype: {dtype_str}</text>
-  <text x="40" y="102" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="13">Dimensions: {dim_names_str}</text>
+  <text x="40" y="55" fill="#38bdf8" font-family="Google Sans, sans-serif" font-size="18" font-weight="bold">{title}</text>
+  <text x="40" y="80" fill="#94a3b8" font-family="Google Sans, sans-serif" font-size="13">Shape: {shape_str} | Rank: {rank_str} | Dtype: {dtype_str}</text>
+  <text x="40" y="102" fill="#94a3b8" font-family="Google Sans, sans-serif" font-size="13">Dimensions: {dim_names_str}</text>
   
   <!-- Slice viewport representation -->
   <rect x="40" y="125" width="200" height="200" fill="#000000" rx="6" stroke="#38bdf8" stroke-width="1.5"/>
-  <text x="140" y="225" fill="#38bdf8" font-family="-apple-system, sans-serif" font-size="13" text-anchor="middle">Interactive Slice Canvas</text>
-  <text x="140" y="245" fill="#64748b" font-family="-apple-system, sans-serif" font-size="11" text-anchor="middle">(Export to HTML to explore)</text>
+  <text x="140" y="225" fill="#38bdf8" font-family="Google Sans, sans-serif" font-size="13" text-anchor="middle">Interactive Slice Canvas</text>
+  <text x="140" y="245" fill="#64748b" font-family="Google Sans, sans-serif" font-size="11" text-anchor="middle">(Export to HTML to explore)</text>
   
   <!-- Controls representation -->
   <rect x="260" y="125" width="460" height="200" fill="#0f172a" rx="6" stroke="#334155" stroke-width="1"/>
-  <text x="280" y="160" fill="#f8fafc" font-family="-apple-system, sans-serif" font-size="14" font-weight="bold">Slice Navigation Controls</text>
-  <text x="280" y="190" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="12">Primary Axis: {html.escape(str(primary_axis.get("name", "dim_0")))} (Axis {html.escape(str(primary_axis.get("axis", 0)))})</text>
-  <text x="280" y="215" fill="#94a3b8" font-family="-apple-system, sans-serif" font-size="12">Total Slices: {primary_axis.get("total_slices", "n/a")} | Sampled Frames: {slice_count}</text>
+  <text x="280" y="160" fill="#f8fafc" font-family="Google Sans, sans-serif" font-size="14" font-weight="bold">Slice Navigation Controls</text>
+  <text x="280" y="190" fill="#94a3b8" font-family="Google Sans, sans-serif" font-size="12">Primary Axis: {html.escape(str(primary_axis.get("name", "dim_0")))} (Axis {html.escape(str(primary_axis.get("axis", 0)))})</text>
+  <text x="280" y="215" fill="#94a3b8" font-family="Google Sans, sans-serif" font-size="12">Total Slices: {primary_axis.get("total_slices", "n/a")} | Sampled Frames: {slice_count}</text>
   
   <!-- Slider graphic -->
   <line x1="280" y1="260" x2="680" y2="260" stroke="#475569" stroke-width="6" stroke-linecap="round"/>
   <circle cx="340" cy="260" r="10" fill="#38bdf8" stroke="#ffffff" stroke-width="2"/>
-  <text x="280" y="295" fill="#64748b" font-family="-apple-system, sans-serif" font-size="11">Index 0</text>
-  <text x="680" y="295" fill="#64748b" font-family="-apple-system, sans-serif" font-size="11" text-anchor="end">Index {primary_axis.get("total_slices", 1) - 1}</text>
+  <text x="280" y="295" fill="#64748b" font-family="Google Sans, sans-serif" font-size="11">Index 0</text>
+  <text x="680" y="295" fill="#64748b" font-family="Google Sans, sans-serif" font-size="11" text-anchor="end">Index {primary_axis.get("total_slices", 1) - 1}</text>
 </svg>"""
     return svg

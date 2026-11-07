@@ -213,7 +213,7 @@ def attribution_comparison_html(view: Visualization) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -261,7 +261,7 @@ def attribution_comparison_html(view: Visualization) -> str:
       border-bottom: 1px dashed rgba(255,255,255,0.08);
     }}
     .metric-label {{ color: var(--muted); }}
-    .metric-value {{ font-family: monospace; font-weight: 600; }}
+    .metric-value {{ font-family: JetBrains Mono, monospace; font-weight: 600; }}
     table.sim-table {{
       width: 100%;
       border-collapse: collapse;
@@ -361,9 +361,9 @@ def svg_attribution_comparison(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / ATTRIBUTION COMPARISON</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / ATTRIBUTION COMPARISON</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
     ]
 
     y = 130
@@ -376,9 +376,9 @@ def svg_attribution_comparison(view: Visualization) -> str:
             [
                 f'<g transform="translate(60, {y})">',
                 '<rect width="680" height="42" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>',
-                f'<text x="20" y="26" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#38bdf8">{name}</text>',
-                f'<text x="320" y="26" font-family="monospace" font-size="12" fill="#94a3b8">Shape {shape_str}</text>',
-                f'<text x="660" y="26" font-family="monospace" font-size="12" fill="#34d399" text-anchor="end">Mean: {mean_v:.4e}</text>',
+                f'<text x="20" y="26" font-family="Google Sans, sans-serif" font-size="14" font-weight="600" fill="#38bdf8">{name}</text>',
+                f'<text x="320" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">Shape {shape_str}</text>',
+                f'<text x="660" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#34d399" text-anchor="end">Mean: {mean_v:.4e}</text>',
                 "</g>",
             ]
         )

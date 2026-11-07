@@ -179,7 +179,7 @@ def run_comparison_html(view: Visualization) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -278,9 +278,9 @@ def svg_run_comparison(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / RUN COMPARISON</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / RUN COMPARISON</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
     ]
 
     y = 130
@@ -292,9 +292,9 @@ def svg_run_comparison(view: Visualization) -> str:
             [
                 f'<g transform="translate(60, {y})">',
                 '<rect width="630" height="40" rx="6" fill="#1e293b" stroke="#334155"/>',
-                f'<text x="20" y="25" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#38bdf8">{m_name}</text>',
-                f'<text x="260" y="25" font-family="monospace" font-size="12" fill="#94a3b8">{name_a}: {f_a:.4g}</text>',
-                f'<text x="450" y="25" font-family="monospace" font-size="12" fill="#34d399">{name_b}: {f_b:.4g}</text>',
+                f'<text x="20" y="25" font-family="Google Sans, sans-serif" font-size="13" font-weight="600" fill="#38bdf8">{m_name}</text>',
+                f'<text x="260" y="25" font-family="JetBrains Mono, monospace" font-size="12" fill="#94a3b8">{name_a}: {f_a:.4g}</text>',
+                f'<text x="450" y="25" font-family="JetBrains Mono, monospace" font-size="12" fill="#34d399">{name_b}: {f_b:.4g}</text>',
                 "</g>",
             ]
         )

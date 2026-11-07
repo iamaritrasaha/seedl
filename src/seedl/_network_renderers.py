@@ -703,7 +703,7 @@ def plotly_network(view: Any) -> Any:
         template="plotly_dark" if graph["theme"] == "dark" else "plotly_white",
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=720,
         margin=dict(
             l=45,
@@ -1119,7 +1119,7 @@ def _svg_open(width: int, height: int, bg: str, fg: str, title: str) -> str:
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{html.escape(title, quote=True)}" width="100%" viewBox="0 0 {width} {height}">'
         f'<title>{html.escape(title)}</title><rect width="100%" height="100%" rx="18" fill="{bg}"/>'
-        "<style>text{font-family:Inter,system-ui,sans-serif}</style>"
+        "<style>text{font-family:Google Sans, sans-serif}</style>"
     )
 
 

@@ -657,7 +657,7 @@ def plotly_attention(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=540,
         margin=dict(l=60, r=40, t=110, b=60),
         updatemenus=updatemenus,
@@ -752,7 +752,7 @@ def plotly_attention_comparison(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=480,
         margin=dict(l=50, r=40, t=100, b=50),
     )
@@ -787,7 +787,7 @@ def svg_attention(view: Any) -> str:
         # Query token label on left
         q_label = html.escape(q_toks[i] if i < len(q_toks) else str(i))
         labels_q.append(
-            f'<text x="{gx0 - 10}" y="{gy0 + i * cell + cell * 0.7:.1f}" text-anchor="end" font-family="monospace" font-size="11" fill="{fg}">{q_label}</text>'
+            f'<text x="{gx0 - 10}" y="{gy0 + i * cell + cell * 0.7:.1f}" text-anchor="end" font-family="JetBrains Mono, monospace" font-size="11" fill="{fg}">{q_label}</text>'
         )
 
         for j in range(kw):
@@ -812,7 +812,7 @@ def svg_attention(view: Any) -> str:
     for j in range(kw):
         k_label = html.escape(k_toks[j] if j < len(k_toks) else str(j))
         labels_k.append(
-            f'<text x="{gx0 + j * cell + cell * 0.5:.1f}" y="{gy0 - 10}" text-anchor="middle" font-family="monospace" font-size="11" fill="{fg}">{k_label}</text>'
+            f'<text x="{gx0 + j * cell + cell * 0.5:.1f}" y="{gy0 - 10}" text-anchor="middle" font-family="JetBrains Mono, monospace" font-size="11" fill="{fg}">{k_label}</text>'
         )
 
     width = max(680, int(gx0 + kw * cell + 60))
@@ -821,9 +821,9 @@ def svg_attention(view: Any) -> str:
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
-        f'<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / TRANSFORMER ATTENTION</text>',
-        f'<text x="40" y="70" font-family="system-ui, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{html.escape(view.summary)}</text>',
+        f'<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / TRANSFORMER ATTENTION</text>',
+        f'<text x="40" y="70" font-family="Google Sans, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">{html.escape(view.summary)}</text>',
         "".join(labels_k),
         "".join(labels_q),
         "".join(rects),
@@ -921,7 +921,7 @@ def attention_html(view: Any) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -1011,7 +1011,7 @@ def attention_html(view: Any) -> str:
       text-align: center;
       border-radius: 2px;
       cursor: pointer;
-      font-family: monospace;
+      font-family: JetBrains Mono, monospace;
       font-size: 10px;
       transition: transform 0.1s;
     }}
@@ -1021,7 +1021,7 @@ def attention_html(view: Any) -> str:
       z-index: 10;
     }}
     .row-hdr, .col-hdr {{
-      font-family: monospace;
+      font-family: JetBrains Mono, monospace;
       font-size: 11px;
       color: var(--muted);
       padding: 4px;
@@ -1054,14 +1054,14 @@ def attention_html(view: Any) -> str:
       gap: 8px;
       font-size: 12px;
     }}
-    .bar-lbl {{ width: 80px; font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }}
+    .bar-lbl {{ width: 80px; font-family: JetBrains Mono, monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text); }}
     .bar-track {{ flex: 1; height: 14px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; }}
     .bar-fill {{ height: 100%; background: var(--accent); border-radius: 3px; }}
-    .bar-val {{ width: 45px; text-align: right; font-family: monospace; color: var(--muted); }}
+    .bar-val {{ width: 45px; text-align: right; font-family: JetBrains Mono, monospace; color: var(--muted); }}
     .hud {{
       margin-top: 12px;
       font-size: 13px;
-      font-family: monospace;
+      font-family: JetBrains Mono, monospace;
       color: var(--accent);
       min-height: 20px;
     }}

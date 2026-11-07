@@ -24,6 +24,8 @@ class Visualization:
     backend: str = "svg"
     _cached_figure: Any = field(default=None, init=False, repr=False)
 
+    _last_terminal_text: str | None = field(default=None, init=False, repr=False, compare=False)
+
     @property
     def figure(self) -> Any:
         """Return the Plotly or Matplotlib figure, or SVG text for the SVG backend."""
@@ -41,24 +43,37 @@ class Visualization:
 
     def show(self) -> None:
         """Display the visualization or print its concise summary in a terminal."""
-        try:
-            from IPython import get_ipython  # type: ignore[import-not-found]
+        from ._presentation import in_notebook
 
-            if get_ipython() is not None:
-                from IPython.display import display  # type: ignore[import-not-found]
+        if in_notebook():
+            from IPython.display import display
 
-                display(self)
-                return
-        except ImportError:
-            pass
-
-        figure = self.figure
-        if self.backend == "matplotlib":
-            figure.show()
-        elif self.backend == "plotly":
-            figure.show()
+            display(self)
+        elif self.backend in {"matplotlib", "plotly"}:
+            self.figure.show()
         else:
-            print(self)
+            self._show_terminal()
+
+    def _show_terminal(self) -> None:
+        import shutil
+
+        from ._presentation import write_terminal
+
+        text = self.to_text(width=max(24, shutil.get_terminal_size(fallback=(88, 24)).columns))
+        if text != self._last_terminal_text:
+            write_terminal(text)
+            self._last_terminal_text = text
+
+    def to_text(self, *, detail: str = "summary", width: int = 88, plain: bool = False) -> str:
+        """Return readable diagnostics without rendering or loading a plotting library.
+
+        ``detail='full'`` includes all metadata/layer rows with full float precision.
+        All sampling/provenance notes and warnings remain visible in summary mode.
+        Original values remain in ``data`` and ``metadata``. ``plain=True`` uses ASCII.
+        """
+        from ._presentation import to_text
+
+        return to_text(self, detail=detail, width=width, plain=plain)
 
     def save(self, filepath: str | Any, *, format: str | None = None) -> Any:
         """Export the visualization to an HTML, SVG, or PNG file.
@@ -108,14 +123,20 @@ class Visualization:
         return f"Visualization(kind={self.kind!r}, title={self.title!r}, summary={self.summary!r})"
 
     def __str__(self) -> str:
-        details = [f"{self.title}: {self.summary}"]
-        if self.metadata:
-            details.extend(f"  {key}: {value}" for key, value in self.metadata.items())
-        details.extend(f"  Note: {note}" for note in self.notes)
-        return "\n".join(details)
+        return self.to_text()
 
     def _repr_mimebundle_(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         """Let IPython display the selected backend without an extra server."""
+        from ._typography import embed_fonts
+
+        bundle = self._mimebundle(include, exclude)
+        if "text/html" in bundle:
+            bundle["text/html"] = embed_fonts(bundle["text/html"])
+        if "image/svg+xml" in bundle:
+            bundle["image/svg+xml"] = embed_fonts(bundle["image/svg+xml"])
+        return bundle
+
+    def _mimebundle(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         del include, exclude
         if self.kind == "tensor_explorer":
             from ._tensor_explorer import tensor_explorer_html
@@ -157,10 +178,12 @@ class Visualization:
         """Expose HTML for SVG and interactive widgets; do not override the selected backend MIME type."""
         if self.kind == "tensor_explorer":
             from ._tensor_explorer import tensor_explorer_html
+            from ._typography import embed_fonts
 
-            return tensor_explorer_html(self, full_html=False)
+            return embed_fonts(tensor_explorer_html(self, full_html=False))
         if self.backend != "svg":
             return None
+        from ._typography import embed_fonts
         from .renderers import render
 
-        return render(self, "svg")
+        return embed_fonts(render(self, "svg"))

@@ -131,6 +131,15 @@ def input_data(
     expected = getattr(model, "n_features_in_", None)
     if expected is not None and int(expected) != p:
         raise SeeDLError(f"X has {p} features; estimator expects {expected} input features.")
+    from sklearn.pipeline import Pipeline
+
+    fitted_model = getattr(model, "best_estimator_", model)
+    if isinstance(fitted_model, Pipeline):
+        final_count = getattr(fitted_model.steps[-1][1], "n_features_in_", p)
+        if final_count != p and n * int(final_count) > MAX_DENSE_CELLS:
+            raise SeeDLError(
+                "Potential transformed feature matrix exceeds the 10,000,000-cell safety bound. Supply an explicit row subset; preprocessing/prediction has not been run."
+            )
     # Copy preserves callers' data for pipelines with in-place transformers (copy=False).
     X = X.copy() if hasattr(X, "copy") else copy.deepcopy(X)
     if y is not None:
@@ -145,14 +154,15 @@ def input_data(
     return X, y, n, p
 
 
-def input_names(model: Any, X: Any = None) -> list[str]:
+def input_names(model: Any, X: Any = None, *, limit: int | None = None) -> list[str]:
     names = list(X.columns) if hasattr(X, "columns") else getattr(model, "feature_names_in_", None)
     count = getattr(model, "n_features_in_", None)
     if names is not None:
-        return [str(n) for n in names]
+        return [str(n) for n in (names if limit is None else names[:limit])]
     if count is None and X is not None:
         count = X.shape[1]
-    return [f"feature {i}" for i in range(int(count or 0))]
+    count = int(count or 0)
+    return [f"feature {i}" for i in range(count if limit is None else min(count, limit))]
 
 
 def predict_once(model: Any, X: Any, n: int) -> Any:

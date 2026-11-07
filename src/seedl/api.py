@@ -1636,6 +1636,9 @@ def evaluate(
     normalize: str | None = None,
     class_names: Any = None,
     positive_label: Any = None,
+    labels: Any = None,
+    projection: Any = None,
+    silhouette_max_samples: int = 1000,
     max_points: int = 2048,
     backend: str = "auto",
 ) -> Any:
@@ -1659,6 +1662,9 @@ def evaluate(
         normalize=normalize,
         class_names=class_names,
         positive_label=positive_label,
+        labels=labels,
+        projection=projection,
+        silhouette_max_samples=silhouette_max_samples,
         max_points=max_points,
         backend=backend,
     )
@@ -1734,6 +1740,83 @@ def partial_dependence(
         grid_resolution=grid_resolution,
         max_samples=max_samples,
         max_ice=max_ice,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def cv_results(
+    results: Any, *, metric: str = "score", max_candidates: int = 50, backend: str = "auto"
+) -> Any:
+    """Visualize existing GridSearchCV/cross_validate results; never run or refit a search."""
+    from ._sklearn_selection import cv_results as impl
+
+    result = impl(results, metric=metric, max_candidates=max_candidates, backend=backend)
+    _show_result(result)
+    return result
+
+
+def learning_curve(
+    model: Any,
+    X: Any,
+    y: Any,
+    *,
+    allow_refit: bool = False,
+    cv: int = 3,
+    train_sizes: Any = None,
+    scoring: Any = None,
+    max_samples: int = 2000,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Any:
+    """Compute bounded CV learning curves only with explicit allow_refit=True; fits clones on supplied training data."""
+    from ._sklearn_selection import learning_curve as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        allow_refit=allow_refit,
+        cv=cv,
+        train_sizes=train_sizes,
+        scoring=scoring,
+        max_samples=max_samples,
+        random_state=random_state,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def validation_curve(
+    model: Any,
+    X: Any,
+    y: Any,
+    *,
+    param_name: str,
+    param_range: Any,
+    allow_refit: bool = False,
+    cv: int = 3,
+    scoring: Any = None,
+    max_samples: int = 2000,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Any:
+    """Compute bounded CV validation curves only with allow_refit=True; fits estimator clones, not the original."""
+    from ._sklearn_selection import validation_curve as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        param_name=param_name,
+        param_range=param_range,
+        allow_refit=allow_refit,
+        cv=cv,
+        scoring=scoring,
+        max_samples=max_samples,
+        random_state=random_state,
         backend=backend,
     )
     _show_result(result)

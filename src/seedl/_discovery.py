@@ -43,6 +43,9 @@ GROUPS = {
         "inspect_estimator",
         "feature_importance",
         "partial_dependence",
+        "cv_results",
+        "learning_curve",
+        "validation_curve",
     ),
     "Quantum": (
         "bloch",

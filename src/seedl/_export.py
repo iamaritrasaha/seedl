@@ -47,7 +47,12 @@ def _save_html(view: Visualization, path: Path) -> None:
     from ._typography import embed_fonts
 
     _write_html(view, path)
-    path.write_text(embed_fonts(path.read_text(encoding="utf-8")), encoding="utf-8")
+    markup = path.read_text(encoding="utf-8")
+    if view.kind.startswith("ml_"):
+        from ._ml_renderers import structured_data_html
+
+        markup = structured_data_html(view, markup)
+    path.write_text(embed_fonts(markup), encoding="utf-8")
 
 
 def _write_html(view: Visualization, path: Path) -> None:

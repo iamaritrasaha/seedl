@@ -92,6 +92,11 @@ def _scatter_svg(panel: dict[str, Any], width: int = 920) -> str:
     for j, (s, pairs) in enumerate(points):
         color = COLORS[j % len(COLORS)]
         if panel["type"] == "line":
+            if panel.get("line_shape") == "hv" and pairs:
+                stepped = [pairs[0]]
+                for previous, current in zip(pairs[:-1], pairs[1:], strict=True):
+                    stepped.extend([(current[0], previous[1]), current])
+                pairs = stepped
             xy = " ".join(f"{coord(x, y)[0]:.3f},{coord(x, y)[1]:.3f}" for x, y in pairs)
             parts.append(
                 f'<polyline points="{xy}" fill="none" stroke="{color}" stroke-width="2"><title>{_s(s["name"])}</title></polyline>'
@@ -206,6 +211,9 @@ def _body(panel: dict[str, Any]) -> tuple[str, int]:
             labels, values = panel["labels"], panel["values"]
         limit = min(len(values), 50)
         finite = [float(v) for v in values if v is not None and math.isfinite(float(v))]
+        for value, error in zip(values, panel.get("errors", [None] * len(values)), strict=True):
+            if value is not None and error is not None:
+                finite.extend([float(value) - float(error), float(value) + float(error)])
         lo, hi = min([0.0, *finite]), max([0.0, *finite])
         zero = 290 + _normalized(0, lo, hi) * 480
         body = []
@@ -218,6 +226,15 @@ def _body(panel: dict[str, Any]) -> tuple[str, int]:
                 end = 290 + _normalized(float(v), lo, hi) * 480
                 body.append(
                     f'<rect x="{min(zero, end)}" y="{y}" width="{abs(end - zero):.3f}" height="18" fill="{COLORS[0] if float(v) >= 0 else COLORS[4]}"><title>{_s(name)}: {_s(v)}</title></rect><text x="790" y="{y + 14}" class="row">{_number(v)}</text>'
+                )
+        for i, error in enumerate(panel.get("errors", [])[:limit]):
+            value = values[i]
+            if value is not None and error is not None:
+                a = 290 + _normalized(float(value) - float(error), lo, hi) * 480
+                b = 290 + _normalized(float(value) + float(error), lo, hi) * 480
+                y = 29 + i * 24
+                body.append(
+                    f'<path d="M {a} {y} H {b} M {a} {y - 5} V {y + 5} M {b} {y - 5} V {y + 5}" stroke="#172b4d" fill="none"><title>Repeat/fold standard deviation: {_s(error)} (not a confidence interval)</title></path>'
                 )
         body.append(
             f'<text x="290" y="{limit * 24 + 48}" class="label">{_s(panel.get("y_label", "Value"))} · top/displayed {limit} of {len(values)}</text>'
@@ -240,7 +257,28 @@ def svg_ml(view: Visualization, *, chart_only: bool = False) -> str:
         for line in _details(view):
             parts.append(f'<text x="32" y="{y}" class="note">{_s(line)}</text>')
             y += 18
-    return _svg_header(view, y + 20, chart_only=chart_only) + "".join(parts) + "</svg>"
+    import json
+
+    captured = html.escape(json.dumps(view.data, ensure_ascii=False, allow_nan=False))
+    return (
+        _svg_header(view, y + 20, chart_only=chart_only)
+        + "".join(parts)
+        + f'<metadata id="seedl-ml-data">{captured}</metadata></svg>'
+    )
+
+
+def structured_data_html(view: Visualization, markup: str) -> str:
+    """Preserve captured values and provenance at full precision in offline HTML."""
+    import json
+
+    if 'id="seedl-ml-data"' in markup:
+        return markup
+    encoded = html.escape(json.dumps(view.data, ensure_ascii=False, allow_nan=False, indent=2))
+    details = f'<details id="seedl-ml-data"><summary>Captured ML data and provenance (JSON, full precision)</summary><pre>{encoded}</pre></details>'
+    for end in ("</main>", "</body>"):
+        if end in markup:
+            return markup.replace(end, details + end, 1)
+    return markup + details
 
 
 def html_ml(view: Visualization) -> str:
@@ -293,7 +331,7 @@ def html_ml(view: Visualization) -> str:
         else ""
     )
     style = "<style>.ml-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin:16px 0}.ml-metrics div{background:#f8fafc;border:1px solid #dce4ed;border-radius:6px;padding:12px}.ml-metrics dt{font-size:12px;color:#52657d;text-transform:uppercase}.ml-metrics dd{font:600 20px JetBrains Mono,monospace;margin:6px 0 0;overflow-wrap:anywhere}.ml-panel{margin:24px 0;border-top:1px solid #dce4ed;padding-top:16px}.ml-panel h2{font-size:18px}.ml-table-wrap{overflow:auto;max-width:100%}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:8px;text-align:left;border-bottom:1px solid #dce4ed;white-space:nowrap}td{font-family:JetBrains Mono,monospace}th{color:#52657d}.ml-panel svg{max-width:100%;height:auto}</style>"
-    return document_html(view, style + metrics + "".join(cards))
+    return structured_data_html(view, document_html(view, style + metrics + "".join(cards)))
 
 
 def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) -> Any:
@@ -357,7 +395,10 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
                             name=html.escape(s["name"]),
                             mode="lines" if kind == "line" else "markers",
                             marker={"color": COLORS[i % len(COLORS)], "size": 5},
-                            line={"color": COLORS[i % len(COLORS)]},
+                            line={
+                                "color": COLORS[i % len(COLORS)],
+                                "shape": p.get("line_shape", "linear"),
+                            },
                             showlegend=len(p.get("series", [])) > 1,
                             hovertemplate="x %{x:.6g}<br>y %{y:.6g}<extra>%{fullData.name}</extra>",
                         ),
@@ -445,7 +486,10 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
             elif p["type"] in {"line", "scatter"}:
                 for s in p.get("series", []):
                     if p["type"] == "line":
-                        axis.plot(s["x"], s["y"], label=s["name"])
+                        if p.get("line_shape") == "hv":
+                            axis.step(s["x"], s["y"], where="post", label=s["name"])
+                        else:
+                            axis.plot(s["x"], s["y"], label=s["name"])
                     else:
                         axis.scatter(s["x"], s["y"], s=10, alpha=0.7, label=s["name"])
                 if p.get("reference") == "zero":

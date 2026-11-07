@@ -59,50 +59,54 @@ def evaluate(
     normalize: str | None = None,
     class_names: Any = None,
     positive_label: Any = None,
+    labels: Any = None,
+    projection: Any = None,
+    silhouette_max_samples: int = 1000,
     max_points: int = 2048,
     backend: str = "auto",
 ) -> Evaluation:
     np, sklearn = dependencies()
-    from sklearn.base import is_classifier, is_regressor
     from sklearn.utils.multiclass import type_of_target
 
     from ._sklearn_metrics import classification, regression
+    from ._sklearn_unsupervised import clustering, task_for
+    from ._sklearn_unsupervised import projection as pca_projection
 
     bounded_int("max_points", max_points, MAX_POINTS)
     selected_backend = resolve_backend(backend)
     require_estimator(model)
     if split not in {"unspecified", "training", "validation", "test"}:
         raise ValueError("split must be 'unspecified', 'training', 'validation', or 'test'.")
-    inferred = (
-        "classification" if is_classifier(model) else "regression" if is_regressor(model) else None
-    )
-    if task not in {"auto", "classification", "regression"}:
-        raise ValueError("task must be 'auto', 'classification', or 'regression'.")
+    if task not in {"auto", "classification", "regression", "clustering", "projection"}:
+        raise ValueError(
+            "task must be auto, classification, regression, clustering, or projection."
+        )
+    inferred = task_for(model)
     if inferred is None or task not in {"auto", inferred}:
         raise SeeDLError(
-            "Estimator task is not a supported supervised task or conflicts with task=. Use sd.see(model) for inspection."
+            "Estimator task is unsupported or conflicts with task=. Supported: classifiers, regressors, clusterers and fitted PCA. Use sd.see(model) for other estimator inspection."
         )
-    X, y, n, p = input_data(model, X, y, require_y=True)
+    if inferred != "clustering" and (labels is not None or projection is not None):
+        raise SeeDLError(
+            "labels and projection are clustering-only options; labels are explicit aligned cluster IDs, not supervised targets."
+        )
+    if inferred != "classification" and (
+        normalize is not None or class_names is not None or positive_label is not None
+    ):
+        raise SeeDLError("normalize, class_names and positive_label apply to classification only.")
+    supervised = inferred in {"classification", "regression"}
+    if not supervised and y is not None:
+        raise SeeDLError(
+            "Unsupervised evaluation does not treat y as cluster predictions or targets. Use labels= for explicit aligned cluster assignments."
+        )
+    X, y, n, p = input_data(model, X, y, require_y=supervised)
+    extra: dict[str, Any] = {"prediction_calls": 1 if supervised else 0}
     if inferred == "classification":
         if type_of_target(y) not in {"binary", "multiclass"}:
             raise SeeDLError(
                 "Classification requires finite single-output binary or multiclass target labels; multilabel and continuous targets are unsupported."
             )
-    else:
-        try:
-            y = np.asarray(y, dtype=float)
-        except (ValueError, TypeError) as exc:
-            raise SeeDLError("Regression requires numeric target values.") from exc
-        if not np.isfinite(y).all():
-            raise SeeDLError(
-                "Regression targets contain NaN or Inf; align and clean targets explicitly before evaluation."
-            )
-        if normalize is not None or class_names is not None or positive_label is not None:
-            raise SeeDLError(
-                "normalize, class_names and positive_label apply to classification only."
-            )
-    predicted = predict_once(model, X, n)
-    if inferred == "classification":
+        predicted = predict_once(model, X, n)
         metrics, panels, unavailable, notes = classification(
             model,
             X,
@@ -113,10 +117,31 @@ def evaluate(
             class_names=class_names,
             positive_label=positive_label,
         )
-    else:
+    elif inferred == "regression":
+        try:
+            y = np.asarray(y, dtype=float)
+        except (ValueError, TypeError) as exc:
+            raise SeeDLError("Regression requires numeric target values.") from exc
+        if not np.isfinite(y).all():
+            raise SeeDLError(
+                "Regression targets contain NaN or Inf; align and clean targets explicitly before evaluation."
+            )
+        predicted = predict_once(model, X, n)
         metrics, panels, unavailable, notes = regression(
             y, np.asarray(predicted, dtype=float), max_points=max_points
         )
+    elif inferred == "clustering":
+        metrics, panels, unavailable, notes, extra = clustering(
+            model,
+            X,
+            labels=labels,
+            split=split,
+            projection=projection,
+            max_points=max_points,
+            silhouette_max_samples=silhouette_max_samples,
+        )
+    else:
+        metrics, panels, unavailable, notes, extra = pca_projection(model, X, max_points=max_points)
     reasons: dict[str, list[str]] = {}
     for name, reason in unavailable.items():
         reasons.setdefault(reason, []).append(name)
@@ -130,7 +155,7 @@ def evaluate(
         for name in requested:
             if name not in panels:
                 raise SeeDLError(
-                    f"Plot {name!r} unavailable: {unavailable.get(name, 'unknown plot')}. Available: {', '.join(panels)}."
+                    f"Plot {name!r} unavailable: {unavailable.get(name, 'unknown plot for this task')}. Available: {', '.join(panels)}."
                 )
         panels = {name: panels[name] for name in requested}
     metadata = {
@@ -146,12 +171,12 @@ def evaluate(
             0,
             "Evaluation split is unspecified. Set split='training', 'validation' or 'test'; SeeDL cannot infer whether data were used for fitting.",
         )
-    elif split == "training":
+    elif split == "training" and supervised:
         notes.insert(
             0, "CAUTION: training-set performance is not an estimate of unseen/test performance."
         )
     notes.append(
-        "Evaluation calls predict() once and, for valid binary curves, one score method. It never calls fit(); plot selection and export reuse captured results."
+        "Inspection/evaluation never calls fit(). Selecting, displaying or exporting a captured plot never reruns the estimator."
     )
     data = native(
         {
@@ -165,14 +190,14 @@ def evaluate(
                 "samples": n,
                 "input_features": p,
                 "sklearn_version": sklearn.__version__,
-                "prediction_calls": 1,
+                **extra,
             },
         }
     )
     return Evaluation(
         kind="ml_evaluation",
         title=f"{type(model).__name__} {inferred} evaluation",
-        summary=f"{n:,} {split} samples | {len(panels)} captured plots | scikit-learn metrics",
+        summary=f"{n:,} {split} samples | {len(panels)} captured plots | scikit-learn diagnostics",
         data=data,
         metadata=native(metadata),
         notes=notes,

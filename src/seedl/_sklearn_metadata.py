@@ -92,7 +92,7 @@ def inspect_estimator(
     count = getattr(model, "n_features_in_", None)
     if count is not None:
         meta["Input features"] = int(count)
-        data["input_feature_names"] = input_names(model)[:500]
+        data["input_feature_names"] = input_names(model, limit=500)
         if int(count) > 500:
             notes.append(f"Input feature-name preview capped at 500 of {count} features.")
     final = final_estimator(model)
@@ -191,9 +191,30 @@ def inspect_estimator(
         data["tree_nodes"] = records
         panels["tree"] = _table(
             "Decision tree split inspection",
-            ["Node", "Depth", "Feature", "Threshold (<= left)", "Samples", "Impurity"],
             [
-                [r[k] for k in ("node", "depth", "feature", "threshold", "samples", "impurity")]
+                "Node",
+                "Depth",
+                "Feature",
+                "Threshold (<= left)",
+                "Left child",
+                "Right child",
+                "Samples",
+                "Impurity",
+            ],
+            [
+                [
+                    r[k]
+                    for k in (
+                        "node",
+                        "depth",
+                        "feature",
+                        "threshold",
+                        "left",
+                        "right",
+                        "samples",
+                        "impurity",
+                    )
+                ]
                 for r in records
             ],
             f"{space}. Showing {len(records)} of {tree.node_count} nodes, depth <= {max_depth}; children beyond the preview remain in the estimator. Missing-value routing, where supported, follows the estimator.",
@@ -219,4 +240,42 @@ def inspect_estimator(
                 notes.append(
                     "Expanded preprocessing feature names are unavailable; transformed columns are not equated with original inputs."
                 )
+    if fitted and hasattr(final, "labels_"):
+        labels, counts = np.unique(final.labels_, return_counts=True)
+        take = np.argsort(-counts, kind="stable")[:max_features]
+        panels["cluster_sizes"] = _table(
+            "Existing training cluster sizes",
+            ["Cluster ID", "Training samples"],
+            [[int(labels[i]), int(counts[i])] for i in take],
+            f"Existing labels_ only; top {len(take)} of {len(labels)} labels. -1 denotes noise. These labels cannot be aligned to new rows automatically.",
+        )
+    if fitted and hasattr(final, "explained_variance_ratio_"):
+        ratio = np.asarray(final.explained_variance_ratio_)
+        panels["explained_variance"] = {
+            "type": "bar",
+            "title": "Fitted explained variance",
+            "labels": [f"PC {i + 1}" for i in range(min(len(ratio), max_features))],
+            "values": native(ratio[:max_features]),
+            "x_label": "Fitted component",
+            "y_label": "Explained variance ratio (dimensionless)",
+            "description": "Existing explained_variance_ratio_; not re-estimated on evaluation data. See sd.evaluate(pca, X) for a projection without refitting.",
+        }
+        if not np.isfinite(ratio).all():
+            notes.append(
+                "WARNING: fitted explained variance contains undefined/non-finite values; unavailable values are not zero."
+            )
+    if fitted and hasattr(model, "cv_results_"):
+        from ._sklearn_selection import cv_results
+
+        keys = [
+            k.removeprefix("mean_test_") for k in model.cv_results_ if k.startswith("mean_test_")
+        ]
+        chosen_metric = "score" if "score" in keys else (keys[0] if keys else None)
+        if chosen_metric is not None:
+            cv = cv_results(model, metric=chosen_metric, max_candidates=max_features, backend="svg")
+            panels.update(cv.data["panels"])
+            notes.extend(cv.notes)
+            notes.append(
+                f"Search preview metric: {chosen_metric}. Other captured metrics can be selected with sd.cv_results(search, metric=...)."
+            )
     return native(data), native(meta), notes

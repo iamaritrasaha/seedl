@@ -71,6 +71,7 @@ def classification(
         )
     notes = [
         "Classification metrics use scikit-learn on every supplied row. Class names follow the displayed label order.",
+        "Accuracy is the fraction correct. Precision measures correctness among a class's predicted samples; recall measures recovery among its true samples; F1 balances precision and recall. Support is the true sample count. Macro treats classes equally; weighted uses true support.",
         "Precision, recall and F1 with undefined denominators are unavailable (not zero); scikit-learn excludes undefined values from macro/weighted averages.",
     ]
     if any(not np.isfinite(v).all() for v in (precision, recall, f1)):
@@ -116,6 +117,7 @@ def classification(
     if len(match) != 1:
         raise SeeDLError("positive_label must be one of the estimator's two classes_.")
     pos_index = int(match[0])
+    positive_name = names[int(np.flatnonzero(labels == positive)[0])]
     scores = None
     source = ""
     try:
@@ -164,16 +166,21 @@ def classification(
         take = indices(len(x), max_points)
         panels[name] = {
             "type": "line",
+            "line_shape": "hv" if name == "precision_recall" else "linear",
             "title": title,
             "x_label": xlabel,
             "y_label": ylabel,
             "series": [
-                {"name": f"Positive class: {positive}", "x": native(x[take]), "y": native(yy[take])}
+                {
+                    "name": f"Positive class: {positive_name} (label {positive})",
+                    "x": native(x[take]),
+                    "y": native(yy[take]),
+                }
             ],
             "description": f"Positive class {positive!s}; score source: {source}. All metrics use the full curve; displayed curve vertices: {len(take)} of {len(x)}.",
         }
     notes.append(
-        f"Binary positive label: {positive!s}; scores from {source}. ROC-AUC and average precision are computed before display sampling. Average precision is not trapezoidal PR area."
+        f"Binary positive label: {positive!s} ({positive_name}); scores from {source}. ROC-AUC and average precision are computed before display sampling. Average precision is not trapezoidal PR area."
     )
     return result, panels, unavailable, notes
 
@@ -205,6 +212,9 @@ def regression(
     notes = [
         f"Metrics use scikit-learn on all {len(y):,} supplied rows. Residual = actual minus predicted; MAE/RMSE use target units, MSE uses squared target units; R2 is dimensionless."
     ]
+    notes.append(
+        "MAE/RMSE summarize target-sized errors; lower is better. R2=1 is perfect on these rows, R2=0 matches the constant mean-target baseline, and negative R2 is worse than that baseline. These are not confidence estimates."
+    )
     notes.extend(f"WARNING: {w.message}" for w in caught)
     if not np.isfinite(r2):
         notes.append(

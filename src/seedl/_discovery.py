@@ -129,7 +129,10 @@ def function_help(name: str) -> str:
     example = EXAMPLES.get(name)
     if example:
         lines.extend(("", "Runnable Python example", "", example))
-    lines.extend(("", f"Reference: {DOCS}/REFERENCE.md", f"Examples: {DOCS}/GETTING_STARTED.md"))
+    reference = (
+        "CLASSICAL_ML.md" if name in GROUPS["Classical machine learning"] else "REFERENCE.md"
+    )
+    lines.extend(("", f"Reference: {DOCS}/{reference}", f"Examples: {DOCS}/GETTING_STARTED.md"))
     return "\n".join(lines)
 
 

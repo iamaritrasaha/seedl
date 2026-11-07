@@ -5,7 +5,7 @@ from __future__ import annotations
 import copy
 from typing import Any
 
-from ._sklearn_detect import is_sklearn_estimator
+from ._sklearn_detect import is_sklearn_estimator, supported_sklearn_version
 from .exceptions import MissingDependencyError, SeeDLError
 
 MAX_ROWS = 1_000_000
@@ -21,6 +21,10 @@ def dependencies() -> tuple[Any, Any]:
         raise MissingDependencyError(
             'Classical ML requires scikit-learn. Install with python -m pip install "seedl[sklearn]".'
         ) from exc
+    if not supported_sklearn_version(sklearn.__version__):
+        raise MissingDependencyError(
+            f'Classical ML requires scikit-learn>=1.4.2,<2; found {sklearn.__version__}. Install a compatible version with python -m pip install "scikit-learn>=1.4.2,<2".'
+        )
     return np, sklearn
 
 
@@ -98,6 +102,14 @@ def input_data(
     from scipy import sparse
     from sklearn.utils.validation import check_consistent_length
 
+    for value in (X, y):
+        if value is not None and any(
+            cls.__module__.split(".")[0] in {"torch", "tensorflow", "jax", "jaxlib", "cupy"}
+            for cls in type(value).__mro__
+        ):
+            raise SeeDLError(
+                "Classical ML evaluation accepts CPU NumPy/pandas/SciPy data. Convert framework/GPU tensors to CPU arrays explicitly; SeeDL will not copy them automatically."
+            )
     if X is None:
         raise SeeDLError("Supply the evaluation feature matrix X explicitly.")
     if require_y and y is None:

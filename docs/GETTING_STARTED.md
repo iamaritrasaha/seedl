@@ -111,6 +111,13 @@ view = sd.circuit(qc, backend="svg")
 view.save("circuit.html")
 ```
 
+## Classical machine learning
+
+The new optional sklearn adapter adds `sd.evaluate(model, X, y)` and extends
+`sd.see(model)` to fitted/unfitted sklearn estimators. Training remains in your
+own sklearn code. See the [classical ML quickstart](CLASSICAL_ML.md) for labeled
+metrics, pipelines, importance, clusters and notebooks.
+
 ## Advanced: targeted inspection and scientific reports
 
 - Use `slice=`, `max_points=`, `max_frames=` and `dim_names=` for bounded tensor previews.

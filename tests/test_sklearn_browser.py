@@ -92,6 +92,11 @@ def test_responsive_offline_evaluation_with_safe_labels(browser, models, tmp_pat
     page.goto(reg_path.as_uri())
     assert "rmse" in page.locator(".ml-metrics").inner_text().lower()
     assert page.evaluate("document.documentElement.scrollWidth <= innerWidth")
+    if backend == "svg" and width <= 600:
+        chart = page.locator(".ml-chart").first
+        assert chart.get_attribute("tabindex") == "0"
+        assert chart.evaluate("el => el.scrollWidth > el.clientWidth")
+        assert chart.locator("svg").evaluate("el => el.getBoundingClientRect().width") == 920
     assert not errors and not dialogs
     assert not any(url.startswith(("http:", "https:")) for url in requests)
     page.close()

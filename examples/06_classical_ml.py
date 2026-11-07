@@ -25,7 +25,7 @@ def main() -> None:
     parser.add_argument("--output", type=Path, default=Path("artifacts/classical-ml"))
     args = parser.parse_args()
     args.output.mkdir(parents=True, exist_ok=True)
-    ds = load_breast_cancer(as_frame=True)
+    ds = load_breast_cancer()
     X_train, X_test, y_train, y_test = train_test_split(
         ds.data, ds.target, test_size=0.25, stratify=ds.target, random_state=42
     )

@@ -159,6 +159,11 @@ def _doctor() -> str:
             if present
             else f'missing; install: python -m pip install "seedl[{extra}]"'
         )
+        if module == "sklearn" and present:
+            from ._sklearn_detect import supported_sklearn_version
+
+            if not supported_sklearn_version(version):
+                status += "; adapter requires scikit-learn>=1.4.2,<2"
         lines.append(f"  {module:<11} {status}")
     lines.extend(
         (
@@ -243,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.topic
                 else [
                     "see",
+                    "evaluate",
                     "tensor",
                     "network",
                     "activations",

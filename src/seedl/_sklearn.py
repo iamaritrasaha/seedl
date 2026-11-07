@@ -118,6 +118,10 @@ def evaluate(
             positive_label=positive_label,
         )
     elif inferred == "regression":
+        if np.iscomplexobj(y):
+            raise SeeDLError(
+                "Regression requires real numeric targets; complex values are not silently cast to real."
+            )
         try:
             y = np.asarray(y, dtype=float)
         except (ValueError, TypeError) as exc:
@@ -127,6 +131,10 @@ def evaluate(
                 "Regression targets contain NaN or Inf; align and clean targets explicitly before evaluation."
             )
         predicted = predict_once(model, X, n)
+        if np.iscomplexobj(predicted):
+            raise SeeDLError(
+                "Regression predictions are complex; metrics require real predictions."
+            )
         metrics, panels, unavailable, notes = regression(
             y, np.asarray(predicted, dtype=float), max_points=max_points
         )

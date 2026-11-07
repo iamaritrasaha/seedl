@@ -346,6 +346,16 @@ def html_ml(view: Visualization) -> str:
                     "rows": points,
                 }
                 body += f"<details><summary>Accessible plot values (first 20 captured points per series)</summary>{_table_html(table)}</details>"
+        if "<svg " in body:
+            # Keep labels legible on small screens without widening the document.
+            end = body.index("</svg>") + len("</svg>")
+            body = (
+                '<p class="ml-scroll-hint">Chart: scroll horizontally for labels and values.</p>'
+                f'<div class="ml-chart" tabindex="0" role="region" aria-label="{_s(panel["title"])} chart">'
+                + body[:end]
+                + "</div>"
+                + body[end:]
+            )
         cards.append(
             f'<section class="ml-panel"><h2>{_s(panel["title"])}</h2><p>{_s(panel.get("description", ""))}</p>{body}</section>'
         )
@@ -359,6 +369,7 @@ def html_ml(view: Visualization) -> str:
         else ""
     )
     style = "<style>.ml-metrics{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px;margin:16px 0}.ml-metrics div{background:#f8fafc;border:1px solid #dce4ed;border-radius:6px;padding:12px}.ml-metrics dt{font-size:12px;color:#52657d;text-transform:uppercase}.ml-metrics dd{font:600 20px JetBrains Mono,monospace;margin:6px 0 0;overflow-wrap:anywhere}.ml-panel{margin:24px 0;border-top:1px solid #dce4ed;padding-top:16px}.ml-panel h2{font-size:18px}.ml-table-wrap{overflow:auto;max-width:100%}table{border-collapse:collapse;width:100%;font-size:13px}th,td{padding:8px;text-align:left;border-bottom:1px solid #dce4ed;white-space:nowrap}td{font-family:JetBrains Mono,monospace}th{color:#52657d}.ml-panel svg{max-width:100%;height:auto}</style>"
+    style += "<style>.ml-chart{overflow:auto;max-width:100%}.ml-scroll-hint{display:none}@media(max-width:600px){.ml-chart svg{width:920px;max-width:none}.ml-scroll-hint{display:block;font-size:12px;color:#52657d}}</style>"
     return structured_data_html(view, document_html(view, style + metrics + "".join(cards)))
 
 
@@ -385,11 +396,12 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
             if kind == "table":
                 fig.add_trace(
                     go.Table(
-                        header={"values": [_s(c) for c in p["columns"]]},
+                        header={"values": [_s(c) for c in p["columns"]], "font": {"family": FONT}},
                         cells={
+                            "font": {"family": "JetBrains Mono, monospace"},
                             "values": [
                                 [_s(r[i]) for r in p["rows"]] for i in range(len(p["columns"]))
-                            ]
+                            ],
                         },
                     ),
                     row=row,
@@ -483,8 +495,18 @@ def render_ml(view: Visualization, backend: str, *, chart_only: bool = False) ->
                     col=1,
                 )
             if kind != "table":
-                fig.update_xaxes(title_text=html.escape(p.get("x_label", "")), row=row, col=1)
-                fig.update_yaxes(title_text=html.escape(p.get("y_label", "")), row=row, col=1)
+                fig.update_xaxes(
+                    title_text=html.escape(p.get("x_label", "")),
+                    tickfont_family="JetBrains Mono, monospace",
+                    row=row,
+                    col=1,
+                )
+                fig.update_yaxes(
+                    title_text=html.escape(p.get("y_label", "")),
+                    tickfont_family="JetBrains Mono, monospace",
+                    row=row,
+                    col=1,
+                )
         metric_text = " | ".join(
             f"{k.replace('_', ' ')}: {format_value(v)}"
             for k, v in list(view.data.get("metrics", {}).items())[:3]

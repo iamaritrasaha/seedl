@@ -332,6 +332,10 @@ def partial_dependence(
 
         if sparse.issparse(column):
             column = column.toarray()  # bounded single reference column, at most 512 values
+        if np.iscomplexobj(column):
+            raise SeeDLError(
+                "Partial dependence requires a real numeric selected feature, not complex values."
+            )
         try:
             np.asarray(column, dtype=float)
         except (ValueError, TypeError) as exc:

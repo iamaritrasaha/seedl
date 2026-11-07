@@ -71,6 +71,7 @@ def test_binary_metrics_and_scores(factory, binary_data):
         result.data["panels"]["confusion_matrix"]["values"]
         == metrics.confusion_matrix(y, pred).tolist()
     )
+    assert result.plot("roc").data["provenance"] == result.data["provenance"]
     assert set(result.available_plots) == {
         "class_report",
         "confusion_matrix",
@@ -360,3 +361,49 @@ def test_expanded_features_are_bounded_before_prediction():
     model[-1].n_features_in_ = 1_000_000
     with pytest.raises(SeeDLError, match="transformed feature matrix"):
         sd.evaluate(model, np.zeros((20, 2)), np.zeros(20))
+
+
+def test_wrong_predictions_have_zero_f1_not_undefined():
+    from sklearn.base import BaseEstimator, ClassifierMixin
+
+    class Wrong(ClassifierMixin, BaseEstimator):
+        def fit(self, X, y):
+            self.classes_ = np.array([0, 1])
+            self.n_features_in_ = 1
+            return self
+
+        def predict(self, X):
+            return np.array([1, 0])
+
+    result = sd.evaluate(Wrong().fit([[0], [1]], [0, 1]), [[0], [1]], [0, 1], backend="svg")
+    assert result.metrics["f1_macro"] == 0
+    assert all(row[4] == 0 for row in result.data["panels"]["class_report"]["rows"])
+
+
+def test_incompatible_installed_sklearn_fails_actionably(monkeypatch):
+    import sklearn
+
+    from seedl._sklearn_validation import dependencies
+
+    monkeypatch.setattr(sklearn, "__version__", "1.3.2")
+    with pytest.raises(MissingDependencyError, match="scikit-learn>=1.4.2"):
+        dependencies()
+
+
+def test_complex_targets_are_not_silently_cast():
+    model = LinearRegression().fit([[0.0], [1.0]], [0.0, 1.0])
+    with pytest.raises(SeeDLError, match="complex"):
+        sd.evaluate(model, [[0.0], [1.0]], [1 + 2j, 3 + 4j])
+
+
+def test_framework_arrays_rejected_before_copy():
+    class FrameworkArray:
+        __module__ = "torch"
+        shape = (2, 1)
+
+        def __deepcopy__(self, memo):
+            pytest.fail("framework tensor copy")
+
+    model = LinearRegression().fit([[0.0], [1.0]], [0.0, 1.0])
+    with pytest.raises(SeeDLError, match="CPU arrays explicitly"):
+        sd.evaluate(model, FrameworkArray(), [0.0, 1.0])

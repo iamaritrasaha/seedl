@@ -36,7 +36,14 @@ class Evaluation(Visualization):
             kind="ml_panel",
             title=panel["title"],
             summary=panel.get("description", self.summary),
-            data={"panels": {name: panel}, "metrics": self.metrics, "task": self.data.get("task")},
+            data={
+                **{
+                    k: v
+                    for k, v in self.data.items()
+                    if k not in {"panels", "available_at_capture", "unavailable_plots"}
+                },
+                "panels": {name: panel},
+            },
             metadata=self.metadata.copy(),
             notes=self.notes.copy(),
             backend=self.backend,

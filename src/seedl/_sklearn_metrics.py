@@ -198,11 +198,7 @@ def regression(
     with warnings.catch_warnings(record=True) as caught:
         warnings.simplefilter("always")
         with np.errstate(over="warn", invalid="warn", divide="warn"):
-            rmse = (
-                metrics.root_mean_squared_error(y, pred)
-                if hasattr(metrics, "root_mean_squared_error")
-                else metrics.mean_squared_error(y, pred, squared=False)
-            )
+            rmse = metrics.root_mean_squared_error(y, pred)
             r2 = metrics.r2_score(y, pred, force_finite=False)
             result = {
                 "mae": float(metrics.mean_absolute_error(y, pred)),

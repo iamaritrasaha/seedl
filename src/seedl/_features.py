@@ -834,7 +834,7 @@ def plotly_features(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=540,
         margin=dict(l=50, r=40, t=110, b=50),
         updatemenus=updatemenus,
@@ -934,7 +934,7 @@ def plotly_feature_comparison(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=480,
         margin=dict(l=40, r=40, t=100, b=40),
     )
@@ -1029,29 +1029,29 @@ def svg_features(view: Any) -> str:
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
-        f'<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / CNN FEATURE MAP EXPLORER</text>',
-        f'<text x="40" y="70" font-family="system-ui, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(layer["name"])} · Channel {ch["index"]}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">Shape: {layer["original_shape"]} · Spatial: {gh}×{gw} pixels · Total Channels: {layer["total_channels"]}</text>',
+        f'<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / CNN FEATURE MAP EXPLORER</text>',
+        f'<text x="40" y="70" font-family="Google Sans, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(layer["name"])} · Channel {ch["index"]}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">Shape: {layer["original_shape"]} · Spatial: {gh}×{gw} pixels · Total Channels: {layer["total_channels"]}</text>',
         # Heatmap grid container
         f'<g transform="translate(0, 0)">{"".join(rects)}</g>',
         f'<rect x="{gx0}" y="{gy0}" width="{grid_render_w:.1f}" height="{grid_render_h:.1f}" fill="none" stroke="{border}" stroke-width="1.5"/>',
         # Stats panel on right
         f'<g transform="translate({gx0 + grid_render_w + 40}, {gy0})">',
         f'<rect width="320" height="300" rx="8" fill="{card_bg}" stroke="{border}" stroke-width="1"/>',
-        f'<text x="20" y="32" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">Channel Diagnostics</text>',
-        f'<text x="20" y="65" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Minimum Value</text>',
-        f'<text x="200" y="65" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["min"]:.4f}</text>',
-        f'<text x="20" y="95" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Maximum Value</text>',
-        f'<text x="200" y="95" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["max"]:.4f}</text>',
-        f'<text x="20" y="125" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Mean Activation</text>',
-        f'<text x="200" y="125" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["mean"]:.4f}</text>',
-        f'<text x="20" y="155" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Std. Deviation</text>',
-        f'<text x="200" y="155" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["std"]:.4f}</text>',
-        f'<text x="20" y="185" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Zero/Inactive Units</text>',
-        f'<text x="200" y="185" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["sparsity"]:.1%}</text>',
-        f'<text x="20" y="215" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Positive Fraction</text>',
-        f'<text x="200" y="215" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["positive_fraction"]:.1%}</text>',
-        f'<text x="20" y="255" font-family="system-ui, sans-serif" font-size="11" fill="{muted}">Downsampled: {"Yes" if layer["downsampled"] else "No (native resolution)"}</text>',
+        f'<text x="20" y="32" font-family="Google Sans, sans-serif" font-size="14" font-weight="700" fill="{fg}">Channel Diagnostics</text>',
+        f'<text x="20" y="65" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Minimum Value</text>',
+        f'<text x="200" y="65" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["min"]:.4f}</text>',
+        f'<text x="20" y="95" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Maximum Value</text>',
+        f'<text x="200" y="95" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["max"]:.4f}</text>',
+        f'<text x="20" y="125" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Mean Activation</text>',
+        f'<text x="200" y="125" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["mean"]:.4f}</text>',
+        f'<text x="20" y="155" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Std. Deviation</text>',
+        f'<text x="200" y="155" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["std"]:.4f}</text>',
+        f'<text x="20" y="185" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Zero/Inactive Units</text>',
+        f'<text x="200" y="185" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["sparsity"]:.1%}</text>',
+        f'<text x="20" y="215" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Positive Fraction</text>',
+        f'<text x="200" y="215" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{fg}" text-anchor="end">{stats["positive_fraction"]:.1%}</text>',
+        f'<text x="20" y="255" font-family="Google Sans, sans-serif" font-size="11" fill="{muted}">Downsampled: {"Yes" if layer["downsampled"] else "No (native resolution)"}</text>',
         "</g>",
         "</svg>",
     ]
@@ -1074,11 +1074,11 @@ def svg_feature_comparison(view: Any) -> str:
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
-        f'<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / FEATURE MAP COMPARISON</text>',
-        f'<text x="40" y="70" font-family="system-ui, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{html.escape(view.summary)}</text>',
-        f'<text x="140" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[0]))}</text>',
-        f'<text x="440" y="130" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[1]))}</text>',
+        f'<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / FEATURE MAP COMPARISON</text>',
+        f'<text x="40" y="70" font-family="Google Sans, sans-serif" font-size="20" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">{html.escape(view.summary)}</text>',
+        f'<text x="140" y="130" font-family="Google Sans, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[0]))}</text>',
+        f'<text x="440" y="130" font-family="Google Sans, sans-serif" font-size="14" font-weight="700" fill="{fg}">{html.escape(str(names[1]))}</text>',
     ]
 
     # Draw previews of grid A and grid B
@@ -1212,7 +1212,7 @@ def features_html(view: Any) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -1304,7 +1304,7 @@ def features_html(view: Any) -> str:
     .hover-hud {{
       margin-top: 12px;
       font-size: 13px;
-      font-family: monospace;
+      font-family: JetBrains Mono, monospace;
       color: var(--accent);
       min-height: 20px;
     }}
@@ -1330,7 +1330,7 @@ def features_html(view: Any) -> str:
     }}
     .stat-row:last-child {{ border-bottom: none; }}
     .stat-label {{ color: var(--muted); }}
-    .stat-val {{ font-weight: 600; font-family: monospace; }}
+    .stat-val {{ font-weight: 600; font-family: JetBrains Mono, monospace; }}
     .gallery-section {{
       margin-top: 24px;
       border-top: 1px solid var(--border);
@@ -1650,7 +1650,7 @@ def feature_comparison_html(view: Any) -> str:
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>{title} — SeeDL Feature Comparison</title>
   <style>
-    body {{ font-family: -apple-system, system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }}
+    body {{ font-family: Google Sans, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }}
     .card {{ background: #1e293b; border: 1px solid #334155; border-radius: 12px; padding: 24px; max-width: 1000px; margin: 0 auto; }}
     h1 {{ font-size: 20px; margin-bottom: 6px; }}
     .summary {{ color: #94a3b8; font-size: 14px; margin-bottom: 20px; }}

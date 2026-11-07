@@ -386,7 +386,7 @@ def playback_html(
         config={"responsive": True, "scrollZoom": True},
     )
     prefix = (
-        f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(view.title)}</title></head><body style="margin:16px;font-family:system-ui">'
+        f'<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>{html.escape(view.title)}</title></head><body style="margin:16px;font-family:Google Sans, sans-serif">'
         if full_html
         else ""
     )
@@ -413,7 +413,7 @@ _CONTROLLER = r"""
  const circuit = __CIRCUIT__, summary = __SUMMARY__;
  const panel = document.createElement('section');
  panel.className = 'seedl-playback'; panel.setAttribute('aria-label', 'Recorded playback');
- panel.style.cssText = 'padding:12px;border:1px solid #94a3b8;border-radius:8px;font:14px system-ui;color:#0f172a;background:#f8fafc';
+ panel.style.cssText = 'padding:12px;border:1px solid #94a3b8;border-radius:8px;font:14px Google Sans, sans-serif;color:#0f172a;background:#f8fafc';
  panel.innerHTML = '<div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center"><button data-action="rewind">Rewind</button><button data-action="previous">Previous</button><button data-action="play">Play</button><button data-action="pause">Pause</button><button data-action="next">Next</button><label>Speed <select data-control="speed"><option value="0.25">0.25×</option><option value="0.5">0.5×</option><option value="1" selected>1×</option><option value="2">2×</option><option value="4">4×</option></select></label><label>Recorded step <select data-control="step"></select></label><label data-epoch-label>Epoch <select data-control="epoch"></select></label><label data-neuron-label>Neuron <select data-control="neuron"><option value="">Overview</option></select></label></div><input data-control="timeline" type="range" min="0" step="1" value="0" aria-label="Training or gate timeline" style="width:100%;margin:12px 0"><output data-status aria-live="polite"></output><div data-loss style="height:160px"></div><pre data-inspection style="white-space:pre-wrap;max-height:220px;overflow:auto"></pre>';
  const recording = document.createElement('p'); recording.dataset.recording = ''; recording.textContent = summary;
  const coverage = document.createElement('p'); coverage.dataset.coverage = ''; coverage.textContent = frames[0].coverage;

@@ -9,6 +9,7 @@ import textwrap
 from collections.abc import Iterable
 from typing import Any
 
+from ._presentation import FONT, VIRIDIS, color_at, contrast_text, format_value
 from .exceptions import MissingDependencyError, SeeDLError
 from .view import Visualization
 
@@ -32,7 +33,14 @@ def resolve_backend(backend: str) -> str:
     return backend
 
 
-def render(view: Visualization, backend: str) -> Any:
+def render(view: Visualization, backend: str, *, chart_only: bool = False) -> Any:
+    """Render using the shared fonts, without loading font files for text-only output."""
+    from ._typography import style_figure
+
+    return style_figure(_render(view, backend, chart_only=chart_only))
+
+
+def _render(view: Visualization, backend: str, *, chart_only: bool = False) -> Any:
     """Build a backend figure from a ``Visualization`` without changing its data."""
     if view.kind == "tensor_explorer":
         from ._tensor_explorer import svg_tensor_explorer
@@ -199,7 +207,7 @@ def render(view: Visualization, backend: str) -> Any:
             backend
         ](view)
     if backend == "svg":
-        return _svg(view)
+        return _svg(view, chart_only=chart_only)
     if backend == "plotly":
         return _plotly(view)
     if backend == "matplotlib":
@@ -273,11 +281,7 @@ def _normalized(value: float, low: float, high: float) -> float:
 
 
 def _table_value(value: Any) -> str:
-    if value is None:
-        return "n/a"
-    if isinstance(value, float):
-        return f"{value:.5g}" if math.isfinite(value) else "n/a"
-    return str(value)
+    return format_value(value)
 
 
 def _stats_rows(data: dict[str, Any]) -> list[list[str]]:
@@ -299,23 +303,37 @@ def _svg_table_text(x: int, y: int, value: Any, width: int) -> str:
     return f'<text x="{x}" y="{y}" class="row"><title>{_esc(full)}</title>{_esc(short)}</text>'
 
 
-def _svg_header(view: Visualization, height: int) -> str:
+def _svg_header(view: Visualization, height: int, *, chart_only: bool = False) -> str:
     title = _esc(view.title)
     summary = _esc(view.summary)
+    description = "\n".join(
+        [
+            f"{view.title}: {view.summary}",
+            *(f"{k}: {v}" for k, v in view.metadata.items()),
+            *view.notes,
+        ]
+    )
+    origin = 76 if chart_only else 0
+    heading = (
+        ""
+        if chart_only
+        else (
+            f'<text x="32" y="38" class="title">{title}</text>'
+            f'<text x="32" y="61" class="sub"><title>{summary}</title>{_esc(textwrap.shorten(view.summary, width=110))}</text>'
+        )
+    )
     return (
         f'<svg xmlns="http://www.w3.org/2000/svg" role="img" aria-label="{title}" '
-        f'viewBox="0 0 920 {height}" width="100%" height="{height}" '
-        'style="min-width:760px">'
-        f"<title>{title}</title><desc>{_esc(str(view))}</desc>"
-        "<style>text{font-family:Inter,ui-sans-serif,system-ui,sans-serif;fill:#172b4d}"
+        f'data-seedl-chart-only="{str(chart_only).lower()}" viewBox="0 {origin} 920 {height - origin}" width="100%" height="{height - origin}" '
+        'style="max-width:100%;height:auto">'
+        f"<title>{title}</title><desc>{_esc(description)}</desc>"
+        f"<style>text{{font-family:{FONT};fill:#172b4d}}"
         ".title{font-size:23px;font-weight:650}.sub{font-size:13px;fill:#52657d}"
         ".note{font-size:12px;fill:#52657d}.axis{stroke:#b7c4d3;stroke-width:1}"
         ".grid{stroke:#e5ebf1;stroke-width:1}.label{font-size:11px;fill:#52657d}"
         ".value{font-size:44px;font-weight:650}.cell{stroke:white;stroke-width:.6}"
         ".row{font-size:12px}.head{font-size:11px;font-weight:650;fill:#52657d}"
-        ".track{fill:#e6edf5}.bar{fill:#4b78c2}</style>"
-        f'<text x="32" y="38" class="title">{title}</text>'
-        f'<text x="32" y="61" class="sub">{summary}</text>'
+        ".track{fill:#e6edf5}.bar{fill:#4b78c2}</style>" + heading
     )
 
 
@@ -433,7 +451,7 @@ def _svg_line_chart(
     )
 
 
-def _svg(view: Visualization) -> str:
+def _svg(view: Visualization, *, chart_only: bool = False) -> str:
     kind, data = view.kind, view.data
     if kind == "scalar":
         value = _esc(data.get("display_value", data.get("value", "")))
@@ -456,7 +474,7 @@ def _svg(view: Visualization) -> str:
         rows = data.get("values", [])
         row_count, col_count = len(rows), max((len(row) for row in rows), default=0)
         max_dim = max(row_count, col_count, 1)
-        cell = min(20.0, 700.0 / max_dim)
+        cell = min(64.0, 650.0 / max_dim)
         x0, y0 = 110, 98
         values = _finite(value for row in rows for value in row)
         low, high = (min(values), max(values)) if values else (0.0, 1.0)
@@ -471,10 +489,7 @@ def _svg(view: Visualization) -> str:
                     color = "#dce4ed"
                 else:
                     ratio = _normalized(number, low, high)
-                    red = round(49 + 190 * ratio)
-                    green = round(95 + 115 * (1 - abs(ratio - 0.5) * 2))
-                    blue = round(189 - 120 * ratio)
-                    color = f"rgb({red},{green},{blue})"
+                    color = color_at(ratio)
                 rects.append(
                     f'<rect class="cell" x="{x0 + j * cell:.1f}" y="{y0 + i * cell:.1f}" '
                     f'width="{cell:.1f}" height="{cell:.1f}" fill="{color}"><title>'
@@ -482,14 +497,36 @@ def _svg(view: Visualization) -> str:
                     f"column {data.get('column_indices', list(range(col_count)))[j]}: "
                     f"{_esc(value)}</title></rect>"
                 )
-        body = (
-            f'<text x="{x0}" y="87" class="label">columns</text>'
-            f'<text x="42" y="{y0 + 14}" class="label">rows</text>{"".join(rects)}'
-            f'<text x="{x0}" y="{y0 + row_count * cell + 22}" class="label">'
-            f"Color scale: blue {low:.4g} → red {high:.4g}; gray = non-finite. "
-            f"Row/column indices are zero-based; hover cells for values.</text>"
+        labels = []
+        if max_dim <= 12:
+            for i in range(row_count):
+                labels.append(
+                    f'<text x="95" y="{y0 + (i + 0.5) * cell + 4}" text-anchor="end" class="label">{data.get("row_indices", list(range(row_count)))[i]}</text>'
+                )
+                for j, value in enumerate(rows[i]):
+                    number = float(value)
+                    ratio = _normalized(number, low, high) if math.isfinite(number) else 0
+                    ink = contrast_text(color_at(ratio)) if math.isfinite(number) else "#172b4d"
+                    labels.append(
+                        f'<text x="{x0 + (j + 0.5) * cell}" y="{y0 + (i + 0.5) * cell + 4}" text-anchor="middle" style="fill:{ink};font-size:12px">{_esc(format_value(number))}</text>'
+                    )
+            for j in range(col_count):
+                labels.append(
+                    f'<text x="{x0 + (j + 0.5) * cell}" y="88" text-anchor="middle" class="label">{data.get("column_indices", list(range(col_count)))[j]}</text>'
+                )
+        legend_y = y0 + row_count * cell + 28
+        stops = "".join(
+            f'<stop offset="{i / (len(VIRIDIS) - 1):.4f}" stop-color="{color}"/>'
+            for i, color in enumerate(VIRIDIS)
         )
-        height = int(y0 + row_count * cell + 55)
+        body = (
+            f'<text x="32" y="114" class="label">Row</text>{"".join(rects)}{"".join(labels)}'
+            f'<defs><linearGradient id="seedl-value-scale">{stops}</linearGradient></defs>'
+            f'<rect x="{x0}" y="{legend_y}" width="200" height="10" fill="url(#seedl-value-scale)"/>'
+            f'<text x="{x0}" y="{legend_y + 28}" class="label">Color scale: {format_value(low)} → {format_value(high)} · Viridis (interpolated)</text>'
+            f'<text x="{x0}" y="{legend_y + 48}" class="label">Column / row indices are zero-based. Gray = NaN or Inf.</text>'
+        )
+        height = int(legend_y + 72)
     elif kind in {"image", "dataset_images"}:
         pixels = data.get("pixels", [])
         channels = data.get("channels", 1)
@@ -805,13 +842,13 @@ def _svg(view: Visualization) -> str:
     else:
         body = f'<text x="32" y="110" class="label">{_esc(view.summary)}</text>'
         height = 210
-    details = _details(view)
+    details = [] if chart_only else _details(view)
     footer = "".join(
         f'<text x="32" y="{height + 18 * i}" class="note">{_esc(line)}</text>'
         for i, line in enumerate(details)
     )
     height += len(details) * 18 + 20
-    return _svg_header(view, height) + body + footer + "</svg>"
+    return _svg_header(view, height, chart_only=chart_only) + body + footer + "</svg>"
 
 
 def _plotly(view: Visualization) -> Any:
@@ -826,7 +863,14 @@ def _plotly(view: Visualization) -> Any:
 
     data = view.data
     layout: dict[str, Any] = dict(
-        title=view.title, template="plotly_white", margin=dict(l=50, r=25, t=65, b=50)
+        title=_esc(view.title),
+        template="plotly_white",
+        margin=dict(l=50, r=25, t=65, b=50),
+        font=dict(family=FONT, size=13, color="#172b4d"),
+        autosize=True,
+        paper_bgcolor="#ffffff",
+        plot_bgcolor="#ffffff",
+        colorway=["#31688e", "#1f9e89", "#855000"],
     )
     if view.kind == "scalar":
         value = data.get("value", 0)
@@ -866,6 +910,8 @@ def _plotly(view: Visualization) -> Any:
                 x=data.get("column_indices"),
                 y=data.get("row_indices"),
                 colorbar=dict(title="Value"),
+                colorscale="Viridis",
+                hovertemplate="Row %{y}<br>Column %{x}<br>Value %{z:.6g}<extra></extra>",
             )
         )
         figure.update_xaxes(title="Column")

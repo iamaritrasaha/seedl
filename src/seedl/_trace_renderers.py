@@ -43,7 +43,7 @@ def trace_html(view: Any) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 20px;
@@ -187,7 +187,7 @@ def trace_html(view: Any) -> str:
       border-bottom: 1px dashed rgba(255,255,255,0.08);
     }}
     .metric-label {{ color: var(--muted); }}
-    .metric-value {{ font-weight: 600; font-family: monospace; }}
+    .metric-value {{ font-weight: 600; font-family: JetBrains Mono, monospace; }}
     .node-list {{
       display: flex;
       flex-direction: column;
@@ -220,7 +220,7 @@ def trace_html(view: Any) -> str:
     }}
     .node-name {{ font-weight: 600; font-size: 14px; }}
     .node-type {{ font-size: 12px; color: var(--muted); }}
-    .node-shape {{ font-family: monospace; font-size: 12px; color: var(--accent); }}
+    .node-shape {{ font-family: JetBrains Mono, monospace; font-size: 12px; color: var(--accent); }}
     .bar-chart {{
       display: flex;
       align-items: flex-end;
@@ -541,9 +541,9 @@ def svg_trace(view: Any) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / NEURAL EXECUTION TRACER</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / NEURAL EXECUTION TRACER</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
     ]
 
     # Draw nodes
@@ -558,9 +558,9 @@ def svg_trace(view: Any) -> str:
             [
                 f'<g transform="translate(60, {y})">',
                 '<rect width="680" height="42" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>',
-                f'<text x="20" y="26" font-family="system-ui, sans-serif" font-size="14" font-weight="600" fill="#38bdf8">{idx + 1}. {name}</text>',
-                f'<text x="320" y="26" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8">{mtype}</text>',
-                f'<text x="660" y="26" font-family="monospace" font-size="12" fill="#34d399" text-anchor="end">{shape_str}</text>',
+                f'<text x="20" y="26" font-family="Google Sans, sans-serif" font-size="14" font-weight="600" fill="#38bdf8">{idx + 1}. {name}</text>',
+                f'<text x="320" y="26" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8">{mtype}</text>',
+                f'<text x="660" y="26" font-family="JetBrains Mono, monospace" font-size="12" fill="#34d399" text-anchor="end">{shape_str}</text>',
                 "</g>",
             ]
         )
@@ -572,7 +572,7 @@ def svg_trace(view: Any) -> str:
 
     if len(nodes) > 24:
         lines.append(
-            f'<text x="400" y="{y + 20}" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">... and {len(nodes) - 24} more operations</text>'
+            f'<text x="400" y="{y + 20}" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8" text-anchor="middle">... and {len(nodes) - 24} more operations</text>'
         )
 
     lines.append("</svg>")

@@ -164,13 +164,13 @@ def render_comparison(view: Any, backend: str) -> Any:
     if backend != "svg":
         raise SeeDLError(f"Unknown backend {backend}.")
     lines = [
-        f'<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="{130 + 25 * len(rows)}"><rect width="100%" height="100%" fill="#f8fafc"/><text x="25" y="35" font-family="system-ui" font-size="18">{html.escape(view.title)}</text><text x="25" y="70">Parameter · alignment · sampled delta L2 · max |gradient| before / after</text>'
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="1000" height="{130 + 25 * len(rows)}"><rect width="100%" height="100%" fill="#f8fafc"/><text x="25" y="35" font-family="Google Sans, sans-serif" font-size="18">{html.escape(view.title)}</text><text x="25" y="70">Parameter · alignment · sampled delta L2 · max |gradient| before / after</text>'
     ]
     for i, row in enumerate(rows):
         delta = row.get("delta_stats", {}).get("l2")
         ga, gb = row["gradients"]["before"]["max_abs"], row["gradients"]["after"]["max_abs"]
         text = f"{row['name']} · {row['status']} · {delta} · {ga} / {gb}"
         lines.append(
-            f'<text x="25" y="{105 + i * 25}" font-family="system-ui" font-size="12">{html.escape(text)}</text>'
+            f'<text x="25" y="{105 + i * 25}" font-family="Google Sans, sans-serif" font-size="12">{html.escape(text)}</text>'
         )
     return "".join(lines) + "</svg>"

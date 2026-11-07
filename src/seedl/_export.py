@@ -44,6 +44,13 @@ def save_visualization(
 
 
 def _save_html(view: Visualization, path: Path) -> None:
+    from ._typography import embed_fonts
+
+    _write_html(view, path)
+    path.write_text(embed_fonts(path.read_text(encoding="utf-8")), encoding="utf-8")
+
+
+def _write_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if view.kind == "tensor_explorer":
         from ._tensor_explorer import tensor_explorer_html
@@ -120,72 +127,50 @@ def _save_html(view: Visualization, path: Path) -> None:
 
                 spatial = view.data["neuron_graph"].get("dimensions") == 3
                 post_script = build_network_interactive_js(view.data["neuron_graph"], spatial)
-            fig.write_html(
-                str(path),
+            if view.data.get("neuron_graph"):
+                # Preserve the full-viewport WebGL scene and its pointer/camera geometry.
+                fig.write_html(
+                    str(path),
+                    include_plotlyjs=True,
+                    config={"responsive": True, "scrollZoom": True},
+                    post_script=post_script,
+                )
+                return
+            from ._presentation import document_html
+
+            chart = fig.to_html(
+                full_html=False,
                 include_plotlyjs=True,
                 config={"responsive": True, "scrollZoom": True},
                 post_script=post_script,
             )
+            # Figure title already supplies the heading visually; HTML provides its accessible name.
+            path.write_text(document_html(view, chart, heading=False), encoding="utf-8")
             return
 
-    # Self-contained HTML with embedded SVG or PNG
-    title = html.escape(view.title)
-    summary = html.escape(view.summary)
+    from ._presentation import document_html
+    from .renderers import render
 
     if view.backend == "matplotlib":
-        fig = view.figure
         buf = BytesIO()
-        fig.savefig(buf, format="png", bbox_inches="tight")
+        view.figure.savefig(buf, format="png", bbox_inches="tight")
         b64 = base64.b64encode(buf.getvalue()).decode("ascii")
-        chart_html = f'<img src="data:image/png;base64,{b64}" alt="{title}" style="max-width:100%; height:auto;" />'
+        chart = f'<img src="data:image/png;base64,{b64}" alt="{html.escape(view.title, quote=True)}" style="max-width:100%;height:auto">'
     else:
-        # SVG backend
-        svg_content = view.to_figure("svg")
-        chart_html = f'<div style="overflow-x:auto;">{svg_content}</div>'
-
-    meta_items = "".join(
-        f'<span style="background:#eef2f7; padding:4px 8px; border-radius:4px; font-size:12px; margin-right:8px; display:inline-block; margin-bottom:4px;"><strong>{html.escape(k)}:</strong> {html.escape(str(v))}</span>'
-        for k, v in view.metadata.items()
+        chart = render(view, "svg", chart_only=True)
+    generic_svg = 'data-seedl-chart-only="true"' in chart
+    path.write_text(
+        document_html(view, chart, heading=generic_svg or view.backend == "matplotlib"),
+        encoding="utf-8",
     )
-    notes_items = "".join(
-        f'<li style="color:#52657d; font-size:13px; margin-bottom:4px;">{html.escape(n)}</li>'
-        for n in view.notes
-    )
-
-    doc = f"""<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>{title} — SeeDL</title>
-  <style>
-    body {{ font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; background: #f8fafc; color: #1e293b; margin: 0; padding: 24px; }}
-    .card {{ background: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); max-width: 960px; margin: 0 auto; padding: 24px; }}
-    h1 {{ font-size: 22px; margin-top: 0; margin-bottom: 6px; color: #0f172a; }}
-    .summary {{ color: #64748b; font-size: 14px; margin-bottom: 16px; }}
-    .meta {{ margin-bottom: 20px; }}
-    .notes {{ margin-top: 20px; padding-left: 20px; }}
-    footer {{ margin-top: 24px; font-size: 11px; color: #94a3b8; text-align: right; }}
-  </style>
-</head>
-<body>
-  <div class="card">
-    <h1>{title}</h1>
-    <div class="summary">{summary}</div>
-    {f'<div class="meta">{meta_items}</div>' if meta_items else ""}
-    <div class="chart">{chart_html}</div>
-    {f'<ul class="notes">{notes_items}</ul>' if notes_items else ""}
-    <footer>Exported by SeeDL</footer>
-  </div>
-</body>
-</html>"""
-    path.write_text(doc, encoding="utf-8")
 
 
 def _save_svg(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    from ._typography import embed_fonts
+
     svg_str = view.to_figure("svg")
-    path.write_text(svg_str, encoding="utf-8")
+    path.write_text(embed_fonts(svg_str), encoding="utf-8")
 
 
 def _save_image(view: Visualization, path: Path, ext: str) -> None:

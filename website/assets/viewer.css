@@ -1,3 +1,4 @@
+@import url("fonts.css");
 /* Native exported viewers: fit controls and canvases to the available width. */
 body{padding:16px}
 .container{padding:20px;box-shadow:none;border-radius:6px}

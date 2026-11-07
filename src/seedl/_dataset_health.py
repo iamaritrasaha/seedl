@@ -313,7 +313,7 @@ def dataset_drift_html(view: Visualization) -> str:
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
       padding: 24px;
@@ -348,7 +348,7 @@ def dataset_drift_html(view: Visualization) -> str:
       padding: 16px;
     }}
     .stat-label {{ font-size: 12px; color: var(--muted); text-transform: uppercase; }}
-    .stat-val {{ font-size: 22px; font-weight: 700; margin-top: 4px; font-family: monospace; }}
+    .stat-val {{ font-size: 22px; font-weight: 700; margin-top: 4px; font-family: JetBrains Mono, monospace; }}
   </style>
 </head>
 <body>
@@ -402,17 +402,17 @@ def svg_dataset_drift(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / DATASET DRIFT INTELLIGENCE</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / DATASET DRIFT INTELLIGENCE</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
         # Card
         '<g transform="translate(60, 130)">',
         '<rect width="630" height="150" rx="8" fill="#1e293b" stroke="#334155"/>',
-        '<text x="30" y="40" font-family="system-ui, sans-serif" font-size="14" fill="#94a3b8">Population Stability Index (PSI):</text>',
-        f'<text x="320" y="40" font-family="monospace" font-size="18" font-weight="700" fill="{color}">{psi:.4f} ({level})</text>',
-        '<text x="30" y="85" font-family="system-ui, sans-serif" font-size="14" fill="#94a3b8">Jensen-Shannon Divergence:</text>',
-        f'<text x="320" y="85" font-family="monospace" font-size="16" font-weight="700" fill="#38bdf8">{jsd:.4f} bits</text>',
-        '<text x="30" y="125" font-family="system-ui, sans-serif" font-size="12" fill="#64748b">Benchmark: PSI &lt; 0.10: Stable · 0.10 - 0.25: Moderate · &gt; 0.25: Significant</text>',
+        '<text x="30" y="40" font-family="Google Sans, sans-serif" font-size="14" fill="#94a3b8">Population Stability Index (PSI):</text>',
+        f'<text x="320" y="40" font-family="JetBrains Mono, monospace" font-size="18" font-weight="700" fill="{color}">{psi:.4f} ({level})</text>',
+        '<text x="30" y="85" font-family="Google Sans, sans-serif" font-size="14" fill="#94a3b8">Jensen-Shannon Divergence:</text>',
+        f'<text x="320" y="85" font-family="JetBrains Mono, monospace" font-size="16" font-weight="700" fill="#38bdf8">{jsd:.4f} bits</text>',
+        '<text x="30" y="125" font-family="Google Sans, sans-serif" font-size="12" fill="#64748b">Benchmark: PSI &lt; 0.10: Stable · 0.10 - 0.25: Moderate · &gt; 0.25: Significant</text>',
         "</g>",
         "</svg>",
     ]

@@ -310,7 +310,7 @@ def plotly_cnn_3d(view: Any) -> Any:
             font=dict(size=22, color=fg),
         ),
         paper_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=720,
         margin=dict(l=30, r=30, t=100, b=80),
         scene=dict(
@@ -348,9 +348,9 @@ def svg_cnn_3d(view: Any) -> str:
     svg_lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
-        f'<text x="35" y="45" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / CNN 3D ARCHITECTURE</text>',
-        f'<text x="35" y="80" font-family="system-ui, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="35" y="105" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{len(layers)} Convolutional Layer(s) · Spatial Feature Planes</text>',
+        f'<text x="35" y="45" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / CNN 3D ARCHITECTURE</text>',
+        f'<text x="35" y="80" font-family="Google Sans, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="35" y="105" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">{len(layers)} Convolutional Layer(s) · Spatial Feature Planes</text>',
     ]
 
     for i, layer in enumerate(layers):
@@ -360,8 +360,8 @@ def svg_cnn_3d(view: Any) -> str:
         h_box = 100
         svg_lines += [
             f'<rect x="{lx}" y="{ly - h_box / 2}" width="{w_box}" height="{h_box}" rx="6" fill="{border}" stroke="#38bdf8" stroke-width="2" opacity="0.6"><title>{html.escape(layer["name"])}</title></rect>',
-            f'<text x="{lx + w_box / 2}" y="{ly - 10}" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="{fg}" text-anchor="middle">{html.escape(layer["name"])}</text>',
-            f'<text x="{lx + w_box / 2}" y="{ly + 12}" font-family="system-ui, sans-serif" font-size="11" fill="{muted}" text-anchor="middle">{layer["type"]}</text>',
+            f'<text x="{lx + w_box / 2}" y="{ly - 10}" font-family="Google Sans, sans-serif" font-size="13" font-weight="700" fill="{fg}" text-anchor="middle">{html.escape(layer["name"])}</text>',
+            f'<text x="{lx + w_box / 2}" y="{ly + 12}" font-family="Google Sans, sans-serif" font-size="11" fill="{muted}" text-anchor="middle">{layer["type"]}</text>',
         ]
         if i < len(layers) - 1:
             svg_lines.append(

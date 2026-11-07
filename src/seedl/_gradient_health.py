@@ -7,6 +7,7 @@ import json
 import math
 from typing import Any
 
+from ._presentation import findings_html
 from .exceptions import MissingDependencyError
 from .renderers import resolve_backend
 from .view import Visualization
@@ -345,23 +346,25 @@ def gradient_health_html(view: Visualization) -> str:
   <title>{title} — SeeDL Gradient Health</title>
   <style>
     :root {{
-      --bg: #0f172a;
-      --card: #1e293b;
-      --card-alt: #334155;
-      --border: #475569;
-      --text: #f8fafc;
-      --muted: #94a3b8;
-      --accent: #38bdf8;
-      --warning: #fbbf24;
-      --danger: #f87171;
+      --bg: #f8fafc;
+      --card: #ffffff;
+      --card-alt: #e6edf5;
+      --border: #dce4ed;
+      --text: #172b4d;
+      --muted: #52657d;
+      --accent: #31688e;
+      --warning: #855000;
+      --danger: #9f2424;
     }}
     * {{ box-sizing: border-box; margin: 0; padding: 0; }}
     body {{
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      font-family: Google Sans, sans-serif;
       background: var(--bg);
       color: var(--text);
-      padding: 24px;
+      padding: clamp(12px, 3vw, 24px);
       line-height: 1.5;
+      font-variant-numeric: tabular-nums;
+      overflow-wrap: anywhere;
     }}
     .container {{
       max-width: 1200px;
@@ -369,8 +372,8 @@ def gradient_health_html(view: Visualization) -> str:
       background: var(--card);
       border: 1px solid var(--border);
       border-radius: 12px;
-      padding: 24px;
-      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      padding: clamp(12px, 3vw, 24px);
+      min-width: 0;
     }}
     header {{
       border-bottom: 1px solid var(--border);
@@ -381,7 +384,7 @@ def gradient_health_html(view: Visualization) -> str:
     header p {{ color: var(--muted); font-size: 14px; margin-top: 4px; }}
     .stats-grid {{
       display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
       gap: 16px;
       margin-bottom: 24px;
     }}
@@ -392,7 +395,7 @@ def gradient_health_html(view: Visualization) -> str:
       padding: 14px;
     }}
     .stat-title {{ font-size: 12px; color: var(--muted); text-transform: uppercase; }}
-    .stat-val {{ font-size: 20px; font-weight: 700; margin-top: 4px; font-family: monospace; }}
+    .stat-val {{ font-size: 20px; font-weight: 700; margin-top: 4px; font-family: JetBrains Mono, monospace; }}
     table.data-table {{
       width: 100%;
       border-collapse: collapse;
@@ -404,15 +407,23 @@ def gradient_health_html(view: Visualization) -> str:
       border-bottom: 1px solid var(--border);
     }}
     table.data-table th {{ background: var(--card-alt); color: var(--text); }}
+    .findings {{ padding-left: 22px; margin-bottom: 20px; }}
+    .finding {{ margin: 8px 0; }}
+    .warning {{ color: var(--danger); }} .caution {{ color: var(--warning); }}
+    .info {{ color: var(--muted); }}
+    :focus-visible {{ outline: 3px solid #2563eb; outline-offset: 3px; }}
+    .data-table td:not(:first-child) {{ font-variant-numeric: tabular-nums; text-align: right; }}
   </style>
 </head>
 <body>
-<div class="container">
+<main class="container">
   <header>
     <h1>{title}</h1>
     <p>{summary}</p>
   </header>
 
+  {findings_html(view, levels=("WARNING", "CAUTION"))}
+  <p style="margin-bottom:16px;color:var(--muted);">L2 summarizes existing gradient magnitude; ratios compare gradient and weight norms. Alerts are observations, not a diagnosis. Missing gradients are unavailable, not zero.</p>
   <div class="stats-grid">
     <div class="stat-card">
       <div class="stat-title">Global L2 Norm</div>
@@ -463,10 +474,14 @@ def gradient_health_html(view: Visualization) -> str:
       <tbody id="params-body"></tbody>
     </table>
   </div>
-</div>
+  {findings_html(view, levels=("INFO",))}
+</main>
 
 <script>
   const payload = {payload_json};
+  function escapeText(value) {{
+    return String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  }}
   document.getElementById('stat-l2').textContent = payload.global_l2 != null ? payload.global_l2.toExponential(3) : 'NaN';
   document.getElementById('stat-zeros').textContent = (payload.global_zero_fraction * 100).toFixed(1) + '%';
   document.getElementById('stat-nonfinite').textContent = payload.total_nonfinite;
@@ -476,10 +491,10 @@ def gradient_health_html(view: Visualization) -> str:
   (payload.layers || []).forEach(l => {{
     const row = document.createElement('tr');
     row.innerHTML = `
-      <td><strong>${{l.layer}}</strong></td>
+      <td><strong>${{escapeText(l.layer)}}</strong></td>
       <td>${{l.num_tensors}}</td>
       <td>${{l.num_elements.toLocaleString()}}</td>
-      <td><code>${{l.l2_norm.toExponential(3)}}</code></td>
+      <td><code>${{l.l2_norm != null ? l.l2_norm.toExponential(3) : 'unavailable'}}</code></td>
     `;
     lBody.appendChild(row);
   }});
@@ -491,9 +506,9 @@ def gradient_health_html(view: Visualization) -> str:
     const l2Str = p.l2_norm != null ? p.l2_norm.toExponential(2) : (p.has_grad ? 'NaN' : 'None');
     const zeroStr = p.zero_fraction != null ? (p.zero_fraction * 100).toFixed(1) + '%' : '-';
     row.innerHTML = `
-      <td>${{p.name}} ${{p.is_tied ? '<span style="color:var(--warning); font-size:11px;">(Tied)</span>' : ''}}</td>
+      <td>${{escapeText(p.name)}} ${{p.is_tied ? '<span style="color:var(--warning); font-size:11px;">(Tied)</span>' : ''}}</td>
       <td><code>${{JSON.stringify(p.shape)}}</code></td>
-      <td>${{p.weight_norm.toFixed(2)}}</td>
+      <td>${{p.weight_norm != null ? p.weight_norm.toExponential(3) : 'unavailable'}}</td>
       <td><code>${{l2Str}}</code></td>
       <td>${{ratioStr}}</td>
       <td>${{zeroStr}}</td>
@@ -521,9 +536,9 @@ def svg_gradient_health(view: Visualization) -> str:
     lines = [
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="#0f172a"/>',
-        '<text x="40" y="38" font-family="system-ui, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / GRADIENT HEALTH</text>',
-        f'<text x="40" y="68" font-family="system-ui, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
-        f'<text x="40" y="92" font-family="system-ui, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
+        '<text x="40" y="38" font-family="Google Sans, sans-serif" font-size="12" fill="#94a3b8" font-weight="600">SeeDL / GRADIENT HEALTH</text>',
+        f'<text x="40" y="68" font-family="Google Sans, sans-serif" font-size="20" fill="#f8fafc" font-weight="700">{title}</text>',
+        f'<text x="40" y="92" font-family="Google Sans, sans-serif" font-size="13" fill="#94a3b8">{summary}</text>',
     ]
 
     y = 130
@@ -534,8 +549,8 @@ def svg_gradient_health(view: Visualization) -> str:
             [
                 f'<g transform="translate(60, {y})">',
                 '<rect width="680" height="36" rx="6" fill="#1e293b" stroke="#334155" stroke-width="1"/>',
-                f'<text x="20" y="23" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="#38bdf8">{name}</text>',
-                f'<text x="660" y="23" font-family="monospace" font-size="12" fill="#34d399" text-anchor="end">||∇||₂ = {l2:.4e}</text>',
+                f'<text x="20" y="23" font-family="Google Sans, sans-serif" font-size="13" font-weight="600" fill="#38bdf8">{name}</text>',
+                f'<text x="660" y="23" font-family="JetBrains Mono, monospace" font-size="12" fill="#34d399" text-anchor="end">||∇||₂ = {l2:.4e}</text>',
                 "</g>",
             ]
         )

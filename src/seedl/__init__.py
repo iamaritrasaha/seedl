@@ -1,5 +1,6 @@
 """SeeDL: simple, deep-learning-aware visualizations."""
 
+from ._discovery import guide
 from ._execution_graph import ExecutionTrace
 from ._recording import TrainingSnapshot
 from ._training import Tracker
@@ -75,6 +76,7 @@ __all__ = [
     "flow",
     "gradient_health",
     "gradients",
+    "guide",
     "learn",
     "load_analysis",
     "loss_landscape",

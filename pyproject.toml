@@ -27,6 +27,9 @@ license-files = ["LICENSE"]
 requires-python = ">=3.10"
 dependencies = []
 
+[project.scripts]
+seedl = "seedl.cli:main"
+
 [project.urls]
 Repository = "https://github.com/iamaritrasaha/seedl"
 Issues = "https://github.com/iamaritrasaha/seedl/issues"
@@ -66,7 +69,7 @@ include-package-data = true
 where = ["src"]
 
 [tool.setuptools.package-data]
-seedl = ["py.typed"]
+seedl = ["py.typed", "assets/fonts/*.ttf", "assets/fonts/*.woff2", "assets/fonts/*.txt", "assets/fonts/*.md"]
 
 [build-system]
 requires = ["setuptools>=68", "wheel"]

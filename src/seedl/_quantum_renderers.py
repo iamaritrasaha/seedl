@@ -255,7 +255,7 @@ def plotly_bloch(view: Any) -> Any:
             font=dict(size=22, color=fg),
         ),
         paper_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=720,
         margin=dict(l=30, r=30, t=90, b=110),
         annotations=[
@@ -399,9 +399,9 @@ def svg_bloch(view: Any) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
         # Header
-        f'<text x="35" y="45" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / QUANTUM COMPUTING</text>',
-        f'<text x="35" y="80" font-family="system-ui, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="35" y="105" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">Interactive 3D Bloch Sphere · |r| = {data["r"]:.4f} · Purity = {data["purity"]:.4f}</text>',
+        f'<text x="35" y="45" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / QUANTUM COMPUTING</text>',
+        f'<text x="35" y="80" font-family="Google Sans, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="35" y="105" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">Interactive 3D Bloch Sphere · |r| = {data["r"]:.4f} · Purity = {data["purity"]:.4f}</text>',
         # Main Sphere Circle
         f'<circle cx="{cx}" cy="{cy}" r="{radius}" fill="none" stroke="{border}" stroke-width="2"/>',
         # Equator Ellipse
@@ -413,10 +413,10 @@ def svg_bloch(view: Any) -> str:
         # Y-axis
         f'<line x1="{cx + radius * cos30 * 1.2}" y1="{cy - radius * sin30 * 0.4 * 1.2}" x2="{ay_x}" y2="{ay_y}" stroke="{muted}" stroke-width="1.5"/>',
         # Axis Labels
-        f'<text x="{az_x + 8}" y="{az_y + 4}" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="{fg}">+Z (|0⟩)</text>',
-        f'<text x="{cx + 8}" y="{cy + radius + 18}" font-family="system-ui, sans-serif" font-size="13" font-weight="700" fill="{fg}">-Z (|1⟩)</text>',
-        f'<text x="{ax_x + 6}" y="{ax_y + 4}" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{muted}">+X (|+⟩)</text>',
-        f'<text x="{ay_x + 6}" y="{ay_y + 4}" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{muted}">+Y (|+i⟩)</text>',
+        f'<text x="{az_x + 8}" y="{az_y + 4}" font-family="Google Sans, sans-serif" font-size="13" font-weight="700" fill="{fg}">+Z (|0⟩)</text>',
+        f'<text x="{cx + 8}" y="{cy + radius + 18}" font-family="Google Sans, sans-serif" font-size="13" font-weight="700" fill="{fg}">-Z (|1⟩)</text>',
+        f'<text x="{ax_x + 6}" y="{ax_y + 4}" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{muted}">+X (|+⟩)</text>',
+        f'<text x="{ay_x + 6}" y="{ay_y + 4}" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{muted}">+Y (|+i⟩)</text>',
         # Poles
         f'<circle cx="{north_x}" cy="{north_y}" r="3.5" fill="{muted}"/>',
         f'<circle cx="{south_x}" cy="{south_y}" r="3.5" fill="{muted}"/>',
@@ -429,15 +429,15 @@ def svg_bloch(view: Any) -> str:
         f'<circle cx="{tip_x}" cy="{tip_y}" r="7" fill="{Q_AMBER}" stroke="#ffffff" stroke-width="2"/>',
         # Stats Card Sidebar (right side)
         f'<rect x="560" y="140" width="190" height="260" rx="8" fill="{border}" opacity="0.4"/>',
-        f'<text x="575" y="170" font-family="system-ui, sans-serif" font-size="14" font-weight="700" fill="{fg}">State Data</text>',
-        f'<text x="575" y="200" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">x: <tspan fill="{fg}" font-weight="600">{bx:+.4f}</tspan></text>',
-        f'<text x="575" y="224" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">y: <tspan fill="{fg}" font-weight="600">{by:+.4f}</tspan></text>',
-        f'<text x="575" y="248" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">z: <tspan fill="{fg}" font-weight="600">{bz:+.4f}</tspan></text>',
-        f'<text x="575" y="278" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">|r|: <tspan fill="{fg}" font-weight="600">{data["r"]:.4f}</tspan></text>',
-        f'<text x="575" y="302" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">Purity: <tspan fill="{fg}" font-weight="600">{data["purity"]:.4f}</tspan></text>',
-        f'<text x="575" y="332" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">P(|0⟩): <tspan fill="{fg}" font-weight="600">{data["prob_0"]:.1%}</tspan></text>',
-        f'<text x="575" y="356" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">P(|1⟩): <tspan fill="{fg}" font-weight="600">{data["prob_1"]:.1%}</tspan></text>',
-        f'<text x="575" y="386" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">θ: <tspan fill="{fg}">{math.degrees(data["theta"]):.1f}°</tspan>, φ: <tspan fill="{fg}">{math.degrees(data["phi"]):.1f}°</tspan></text>',
+        f'<text x="575" y="170" font-family="Google Sans, sans-serif" font-size="14" font-weight="700" fill="{fg}">State Data</text>',
+        f'<text x="575" y="200" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">x: <tspan fill="{fg}" font-weight="600">{bx:+.4f}</tspan></text>',
+        f'<text x="575" y="224" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">y: <tspan fill="{fg}" font-weight="600">{by:+.4f}</tspan></text>',
+        f'<text x="575" y="248" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">z: <tspan fill="{fg}" font-weight="600">{bz:+.4f}</tspan></text>',
+        f'<text x="575" y="278" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">|r|: <tspan fill="{fg}" font-weight="600">{data["r"]:.4f}</tspan></text>',
+        f'<text x="575" y="302" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">Purity: <tspan fill="{fg}" font-weight="600">{data["purity"]:.4f}</tspan></text>',
+        f'<text x="575" y="332" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">P(|0⟩): <tspan fill="{fg}" font-weight="600">{data["prob_0"]:.1%}</tspan></text>',
+        f'<text x="575" y="356" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">P(|1⟩): <tspan fill="{fg}" font-weight="600">{data["prob_1"]:.1%}</tspan></text>',
+        f'<text x="575" y="386" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">θ: <tspan fill="{fg}">{math.degrees(data["theta"]):.1f}°</tspan>, φ: <tspan fill="{fg}">{math.degrees(data["phi"]):.1f}°</tspan></text>',
         "</svg>",
     ]
     return "\n".join(svg_lines)
@@ -616,7 +616,7 @@ def plotly_circuit(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=max(360, num_qubits * 90 + 180),
         xaxis=dict(
             visible=False,
@@ -659,16 +659,16 @@ def svg_circuit(view: Any) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
         # Header
-        f'<text x="35" y="45" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / QUANTUM CIRCUIT</text>',
-        f'<text x="35" y="80" font-family="system-ui, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="35" y="105" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{num_qubits} Qubits · Depth {data["depth"]} · {data["num_ops"]} Operations</text>',
+        f'<text x="35" y="45" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / QUANTUM CIRCUIT</text>',
+        f'<text x="35" y="80" font-family="Google Sans, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="35" y="105" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">{num_qubits} Qubits · Depth {data["depth"]} · {data["num_ops"]} Operations</text>',
     ]
 
     # Draw horizontal wires
     for q in range(num_qubits):
         y = wire_y[q]
         svg_lines.append(
-            f'<text x="{left_margin - 15}" y="{y + 5}" font-family="system-ui, monospace" font-size="14" font-weight="700" fill="{fg}" text-anchor="end">q_{q}</text>'
+            f'<text x="{left_margin - 15}" y="{y + 5}" font-family="JetBrains Mono, monospace" font-size="14" font-weight="700" fill="{fg}" text-anchor="end">q_{q}</text>'
         )
         svg_lines.append(
             f'<line x1="{left_margin}" y1="{y}" x2="{width - 40}" y2="{y}" stroke="{border}" stroke-width="2.5"/>'
@@ -717,7 +717,7 @@ def svg_circuit(view: Any) -> str:
             )
             txt_color = "#0f172a" if name in {"H", "Z"} else "#ffffff"
             svg_lines.append(
-                f'<text x="{x}" y="{y + 5}" font-family="system-ui, sans-serif" font-size="12" font-weight="700" fill="{txt_color}" text-anchor="middle">{html.escape(name)}</text>'
+                f'<text x="{x}" y="{y + 5}" font-family="Google Sans, sans-serif" font-size="12" font-weight="700" fill="{txt_color}" text-anchor="middle">{html.escape(name)}</text>'
             )
 
     svg_lines.append("</svg>")
@@ -791,7 +791,7 @@ def plotly_statevector(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=520,
         xaxis=dict(title="Computational Basis State", color=fg, gridcolor=border),
         yaxis=dict(
@@ -827,9 +827,9 @@ def svg_statevector(view: Any) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
         # Header
-        f'<text x="35" y="45" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / STATEVECTOR</text>',
-        f'<text x="35" y="80" font-family="system-ui, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="35" y="105" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">{n} Computational Basis States · Normalized</text>',
+        f'<text x="35" y="45" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / STATEVECTOR</text>',
+        f'<text x="35" y="80" font-family="Google Sans, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="35" y="105" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">{n} Computational Basis States · Normalized</text>',
         # Axis lines
         f'<line x1="{left}" y1="{top}" x2="{left}" y2="{top + chart_h}" stroke="{border}" stroke-width="2"/>',
         f'<line x1="{left}" y1="{top + chart_h}" x2="{left + chart_w}" y2="{top + chart_h}" stroke="{border}" stroke-width="2"/>',
@@ -845,11 +845,11 @@ def svg_statevector(view: Any) -> str:
         )
         if p >= 0.03 and bar_gap >= 24:
             svg_lines.append(
-                f'<text x="{bx + bar_w / 2}" y="{by - 6}" font-family="system-ui, sans-serif" font-size="11" font-weight="600" fill="{fg}" text-anchor="middle">{p:.1%}</text>'
+                f'<text x="{bx + bar_w / 2}" y="{by - 6}" font-family="Google Sans, sans-serif" font-size="11" font-weight="600" fill="{fg}" text-anchor="middle">{p:.1%}</text>'
             )
         if bar_gap >= 18 or p >= 0.05:
             svg_lines.append(
-                f'<text x="{bx + bar_w / 2}" y="{top + chart_h + 20}" font-family="system-ui, monospace" font-size="{min(12, int(bar_gap * 0.6))}" font-weight="600" fill="{muted}" text-anchor="middle">|{bs}⟩</text>'
+                f'<text x="{bx + bar_w / 2}" y="{top + chart_h + 20}" font-family="JetBrains Mono, monospace" font-size="{min(12, int(bar_gap * 0.6))}" font-weight="600" fill="{muted}" text-anchor="middle">|{bs}⟩</text>'
             )
 
     svg_lines.append("</svg>")
@@ -932,7 +932,7 @@ def plotly_entanglement(view: Any) -> Any:
         ),
         paper_bgcolor=bg,
         plot_bgcolor=bg,
-        font=dict(family="Inter, system-ui, sans-serif", color=fg),
+        font=dict(family="Google Sans, sans-serif", color=fg),
         height=540,
         showlegend=False,
         annotations=list(fig.layout.annotations or [])
@@ -970,42 +970,42 @@ def svg_entanglement(view: Any) -> str:
         f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="100%" height="100%">',
         f'<rect width="{width}" height="{height}" fill="{bg}"/>',
         # Header
-        f'<text x="35" y="45" font-family="system-ui, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / ENTANGLEMENT</text>',
-        f'<text x="35" y="80" font-family="system-ui, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
-        f'<text x="35" y="105" font-family="system-ui, sans-serif" font-size="13" fill="{muted}">Reduced von Neumann Entropy S(ρ_A) = {entropy_A:.3f} bit · S(ρ_B) = {entropy_B:.3f} bit</text>',
+        f'<text x="35" y="45" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}" font-weight="600">SeeDL / ENTANGLEMENT</text>',
+        f'<text x="35" y="80" font-family="Google Sans, sans-serif" font-size="24" fill="{fg}" font-weight="700">{html.escape(view.title)}</text>',
+        f'<text x="35" y="105" font-family="Google Sans, sans-serif" font-size="13" fill="{muted}">Reduced von Neumann Entropy S(ρ_A) = {entropy_A:.3f} bit · S(ρ_B) = {entropy_B:.3f} bit</text>',
         # Card 1: Probabilities
         f'<rect x="35" y="130" width="360" height="280" rx="8" fill="{border}" opacity="0.3"/>',
-        f'<text x="55" y="160" font-family="system-ui, sans-serif" font-size="15" font-weight="700" fill="{fg}">Joint Probabilities</text>',
+        f'<text x="55" y="160" font-family="Google Sans, sans-serif" font-size="15" font-weight="700" fill="{fg}">Joint Probabilities</text>',
     ]
 
     for i, (bs, p) in enumerate(zip(data["basis_states"], data["probabilities"], strict=True)):
         py = 195 + i * 48
         svg_lines.append(
-            f'<text x="55" y="{py + 14}" font-family="system-ui, monospace" font-size="13" font-weight="600" fill="{fg}">|{bs}⟩</text>'
+            f'<text x="55" y="{py + 14}" font-family="JetBrains Mono, monospace" font-size="13" font-weight="600" fill="{fg}">|{bs}⟩</text>'
         )
         bar_len = 220 * p
         svg_lines.append(
             f'<rect x="110" y="{py}" width="{bar_len}" height="20" rx="3" fill="{Q_CYAN}"/>'
         )
         svg_lines.append(
-            f'<text x="{120 + bar_len}" y="{py + 15}" font-family="system-ui, sans-serif" font-size="12" font-weight="600" fill="{muted}">{p:.1%}</text>'
+            f'<text x="{120 + bar_len}" y="{py + 15}" font-family="Google Sans, sans-serif" font-size="12" font-weight="600" fill="{muted}">{p:.1%}</text>'
         )
 
     # Card 2: Entanglement Entropy Gauges
     svg_lines += [
         f'<rect x="420" y="130" width="325" height="280" rx="8" fill="{border}" opacity="0.3"/>',
-        f'<text x="440" y="160" font-family="system-ui, sans-serif" font-size="15" font-weight="700" fill="{fg}">Entanglement Entropy</text>',
-        f'<text x="440" y="185" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">S(ρ) = -Tr(ρ log₂ ρ) in bits (Max = 1.0 bit)</text>',
+        f'<text x="440" y="160" font-family="Google Sans, sans-serif" font-size="15" font-weight="700" fill="{fg}">Entanglement Entropy</text>',
+        f'<text x="440" y="185" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">S(ρ) = -Tr(ρ log₂ ρ) in bits (Max = 1.0 bit)</text>',
         # Gauge Qubit 0
-        f'<text x="440" y="225" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="{fg}">Qubit 0 Subsystem: {entropy_A:.3f} bit</text>',
+        f'<text x="440" y="225" font-family="Google Sans, sans-serif" font-size="13" font-weight="600" fill="{fg}">Qubit 0 Subsystem: {entropy_A:.3f} bit</text>',
         f'<rect x="440" y="235" width="260" height="18" rx="4" fill="{border}"/>',
         f'<rect x="440" y="235" width="{260 * min(1.0, entropy_A)}" height="18" rx="4" fill="{Q_AMBER}"/>',
         # Gauge Qubit 1
-        f'<text x="440" y="295" font-family="system-ui, sans-serif" font-size="13" font-weight="600" fill="{fg}">Qubit 1 Subsystem: {entropy_B:.3f} bit</text>',
+        f'<text x="440" y="295" font-family="Google Sans, sans-serif" font-size="13" font-weight="600" fill="{fg}">Qubit 1 Subsystem: {entropy_B:.3f} bit</text>',
         f'<rect x="440" y="305" width="260" height="18" rx="4" fill="{border}"/>',
         f'<rect x="440" y="305" width="{260 * min(1.0, entropy_B)}" height="18" rx="4" fill="{Q_PURPLE}"/>',
         # Summary
-        f'<text x="440" y="365" font-family="system-ui, sans-serif" font-size="12" fill="{muted}">{"Maximally Entangled Bell Pair (1.0 bit)" if abs(entropy_A - 1.0) < 1e-4 else "Separable / Product State (0.0 bit)" if entropy_A < 1e-4 else "Partially Entangled State"}</text>',
+        f'<text x="440" y="365" font-family="Google Sans, sans-serif" font-size="12" fill="{muted}">{"Maximally Entangled Bell Pair (1.0 bit)" if abs(entropy_A - 1.0) < 1e-4 else "Separable / Product State (0.0 bit)" if entropy_A < 1e-4 else "Partially Entangled State"}</text>',
         "</svg>",
     ]
     return "\n".join(svg_lines)

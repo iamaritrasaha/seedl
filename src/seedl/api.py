@@ -28,23 +28,11 @@ _validate_max_points = validate_max_points
 
 
 def _show_result(view: Visualization) -> None:
-    """Display in a terminal fallback; in notebooks, the return value renders automatically."""
-    try:
-        from IPython import get_ipython  # type: ignore[import-not-found]
+    """Preserve implicit summaries; notebook display is driven by the returned object."""
+    from ._presentation import in_notebook
 
-        if get_ipython() is not None:
-            # In IPython/Jupyter, Visualization instances render automatically when returned
-            # as the final expression in a cell. Suppress explicit display() to avoid duplicates.
-            return
-    except ImportError:
-        pass
-    try:
-        print(view)
-    except UnicodeEncodeError:
-        import sys
-
-        enc = sys.stdout.encoding or "ascii"
-        print(str(view).encode(enc, errors="replace").decode(enc))
+    if not in_notebook():
+        view._show_terminal()
 
 
 def _see_quantum(

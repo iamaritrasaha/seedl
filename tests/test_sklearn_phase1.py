@@ -273,7 +273,7 @@ def test_backends_and_safe_export(backend, regression_data, tmp_path):
     result.title = '<script>alert("user")</script>'
     result.notes.append('<img src=x onerror="alert(1)">')
     result.save(tmp_path / f"{backend}.html")
-    doc = (tmp_path / f"{backend}.html").read_text()
+    doc = (tmp_path / f"{backend}.html").read_text(encoding="utf-8")
     assert "&lt;script&gt;" in doc
     assert "<img src=x" not in doc
     assert "Google Sans" in doc and "JetBrains Mono" in doc

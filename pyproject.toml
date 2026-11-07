@@ -1,6 +1,6 @@
 [project]
 name = "seedl"
-version = "0.6.0"
+version = "0.7.0"
 description = "Scientific visualization and diagnostics for tensors, neural networks, scikit-learn models, and quantum computing"
 keywords = ["deep-learning", "tensor", "rank", "slicing", "memory-layout", "visualization", "quantum-computing", "pytorch", "numpy", "scikit-learn"]
 classifiers = [

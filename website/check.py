@@ -8,6 +8,8 @@ import io
 import json
 import math
 import os
+import re
+import shutil
 import tempfile
 from html.parser import HTMLParser
 from pathlib import Path
@@ -51,7 +53,7 @@ class Page(HTMLParser):
 
 def main() -> None:
     paths = [ROOT / "index.html", ROOT / "playground.html", ROOT / "docs/index.html"]
-    pages = {path: Page(path.read_text()) for path in paths}
+    pages = {path: Page(path.read_text(encoding="utf-8")) for path in paths}
     checked = 0
     for path, page in pages.items():
         for link in page.links:
@@ -68,17 +70,17 @@ def main() -> None:
                 )
             checked += 1
 
-    manifest = json.loads((ROOT / "demos/manifest.json").read_text())
-    assert manifest["seedl"] == "0.6.0", f"Expected manifest version 0.6.0, got {manifest['seedl']}"
+    manifest = json.loads((ROOT / "demos/manifest.json").read_text(encoding="utf-8"))
+    assert manifest["seedl"] == "0.7.0", f"Expected manifest version 0.7.0, got {manifest['seedl']}"
     demo_files = list((ROOT / "demos").glob("*.html"))
     assert len(manifest["sha256"]) == len(demo_files)
-    assert len(manifest["sha256"]) >= 30, (
+    assert len(manifest["sha256"]) >= 37, (
         f"Expected at least 30 demos, got {len(manifest['sha256'])}"
     )
 
     for path in paths:
-        text = path.read_text()
-        assert 'class="version">0.6.0' in text, f"Outdated version badge in {path.name}"
+        text = path.read_text(encoding="utf-8")
+        assert 'class="version">0.7.0' in text, f"Outdated version badge in {path.name}"
         # Current API links use 0.6.0; historical release notes links are preserved
         assert "blob/v0.5.0/src/" not in text, f"Stale 0.5.0 API link in {path.name}"
         assert "blob/v0.4.0/src/" not in text, f"Stale 0.4.0 API link in {path.name}"
@@ -310,14 +312,63 @@ def main() -> None:
         for val in m["history_a"] + m["history_b"]:
             assert math.isfinite(val)
 
+        # 16. NEW in 0.7.0: Classical ML and Educational Simulation Provenance
+    lr_data = manifest["linear_regression"]
+    assert lr_data["r2"] > 0.90
+    assert lr_data["mse"] < 1.0
+    assert (ROOT / "demos/linear-regression.html").is_file()
+    assert (ROOT / "assets/linear-regression.svg").is_file()
+
+    poly_data = manifest["polynomial_regression"]
+    assert poly_data["degree"] == 3
+    assert poly_data["mse_train"] < 0.05
+    assert (ROOT / "demos/polynomial-regression.html").is_file()
+    assert (ROOT / "assets/polynomial-regression.svg").is_file()
+
+    gd_data = manifest["gradient_descent"]
+    assert gd_data["lr"] == 0.15
+    assert gd_data["final_loss"] < 0.3
+    assert (ROOT / "demos/gradient-descent.html").is_file()
+    assert (ROOT / "assets/gradient-descent.svg").is_file()
+
+    dt_data = manifest["decision_tree"]
+    assert dt_data["max_depth"] == 2
+    assert dt_data["total_nodes"] >= 3
+    assert (ROOT / "demos/decision-tree.html").is_file()
+    assert (ROOT / "assets/decision-tree.svg").is_file()
+
+    km_data = manifest["kmeans"]
+    assert km_data["k"] == 3
+    assert km_data["converged"] is True
+    assert (ROOT / "demos/kmeans.html").is_file()
+    assert (ROOT / "assets/kmeans.svg").is_file()
+
+    pca_data = manifest["pca"]
+    assert len(pca_data["explained_variance_ratio"]) == 2
+    assert sum(pca_data["explained_variance_ratio"]) > 0.99
+    assert (ROOT / "demos/pca.html").is_file()
+    assert (ROOT / "assets/pca.svg").is_file()
+
+    sk_data = manifest["sklearn_evaluation"]
+    assert sk_data["task"] == "classification"
+    assert sk_data["accuracy"] > 0.95
+    assert sk_data["samples"] == 143
+    assert (ROOT / "demos/sklearn-evaluation.html").is_file()
+    assert (ROOT / "assets/sklearn-evaluation.svg").is_file()
+
     # Check all demo files against manifest sha256 and size/CDN bounds
     for name, digest in manifest["sha256"].items():
         path = ROOT / "demos" / name
         assert hashlib.sha256(path.read_bytes()).hexdigest() == digest, name
-        html = path.read_text()
+        html = path.read_text(encoding="utf-8")
         assert "cdn.plot.ly" not in html
         assert "cdn." not in html
-        assert "http://" not in html and "https://" not in html
+        assert 'src="http://' not in html and 'src="https://' not in html
+        assert 'href="http://' not in html and 'href="https://' not in html
+        stripped_html = re.sub(r"/\*.*?\*/", "", html, flags=re.DOTALL).replace(
+            "http://www.w3.org/2000/svg", ""
+        )
+        assert "http://" not in stripped_html and "https://" not in stripped_html
         assert path.stat().st_size < 1_000_000, f"Unbounded demo payload: {name}"
 
         # Plotly demos share the single local Plotly bundle
@@ -345,43 +396,44 @@ def main() -> None:
                 checked += 1
 
     for name in ("training", "evolution", "evolution-phase"):
-        assert "seedl-playback" in (ROOT / f"demos/{name}.html").read_text()
+        assert "seedl-playback" in (ROOT / f"demos/{name}.html").read_text(encoding="utf-8")
 
-    assert sum(p.stat().st_size for p in paths) < 95_000, "Initial HTML has grown unexpectedly"
+    assert sum(p.stat().st_size for p in paths) < 110_000, "Initial HTML has grown unexpectedly"
 
     # Execute visible Python examples in temp directory
     count = 0
     previous = Path.cwd()
+    temp_dir = tempfile.mkdtemp(prefix="seedl-docs-")
     try:
-        with tempfile.TemporaryDirectory(prefix="seedl-docs-") as temp:
-            os.chdir(temp)
-            for path, page in pages.items():
-                namespace = {"__name__": "__website_example__"}
-                for snippet in page.snippets:
-                    if not any(
-                        token in snippet
-                        for token in (
-                            "import ",
-                            "view = sd.see",
-                            "comparison = sd.compare",
-                            "cmp_view = sd.attention",
-                            "sd.flow",
-                            "sd.attention_rollout",
-                            "sd.compare_attributions",
-                            "sd.gradient_health",
-                            "sd.quantum_noise",
-                            "sd.dataset_drift",
-                            "sd.report",
-                            "sd.compare_runs",
-                            "sd.save_analysis",
-                        )
-                    ):
-                        continue
-                    with contextlib.redirect_stdout(io.StringIO()):
-                        exec(compile(snippet, str(path), "exec"), namespace)
-                    count += 1
+        os.chdir(temp_dir)
+        for path, page in pages.items():
+            namespace = {"__name__": "__website_example__"}
+            for snippet in page.snippets:
+                if not any(
+                    token in snippet
+                    for token in (
+                        "import ",
+                        "view = sd.see",
+                        "comparison = sd.compare",
+                        "cmp_view = sd.attention",
+                        "sd.flow",
+                        "sd.attention_rollout",
+                        "sd.compare_attributions",
+                        "sd.gradient_health",
+                        "sd.quantum_noise",
+                        "sd.dataset_drift",
+                        "sd.report",
+                        "sd.compare_runs",
+                        "sd.save_analysis",
+                    )
+                ):
+                    continue
+                with contextlib.redirect_stdout(io.StringIO()):
+                    exec(compile(snippet, str(path), "exec"), namespace)
+                count += 1
     finally:
         os.chdir(previous)
+        shutil.rmtree(temp_dir, ignore_errors=True)
 
     print(
         f"PASS: {checked} local links/assets, {len(manifest['sha256'])} demo hashes, "

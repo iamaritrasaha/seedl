@@ -138,6 +138,10 @@ class Visualization:
 
     def _mimebundle(self, include: Any = None, exclude: Any = None) -> dict[str, Any]:
         del include, exclude
+        if self.kind.startswith("educational_"):
+            from ._educational_renderers import educational_html
+
+            return {"text/html": educational_html(self), "text/plain": str(self)}
         if self.kind.startswith("ml_") and self.backend in {"svg", "plotly"}:
             from ._ml_renderers import html_ml
 
@@ -180,6 +184,11 @@ class Visualization:
 
     def _repr_html_(self) -> str | None:
         """Expose HTML for SVG and interactive widgets; do not override the selected backend MIME type."""
+        if self.kind.startswith("educational_"):
+            from ._educational_renderers import educational_html
+            from ._typography import embed_fonts
+
+            return embed_fonts(educational_html(self))
         if self.kind == "tensor_explorer":
             from ._tensor_explorer import tensor_explorer_html
             from ._typography import embed_fonts

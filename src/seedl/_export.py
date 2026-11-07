@@ -57,6 +57,11 @@ def _save_html(view: Visualization, path: Path) -> None:
 
 def _write_html(view: Visualization, path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+    if view.kind.startswith("educational_"):
+        from ._educational_renderers import educational_html
+
+        path.write_text(educational_html(view), encoding="utf-8")
+        return
     if view.kind.startswith("ml_") and view.backend in {"svg", "plotly"}:
         from ._ml_renderers import html_ml
 

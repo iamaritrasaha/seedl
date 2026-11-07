@@ -31,7 +31,19 @@ def run_cli(*args: str, **env: str) -> subprocess.CompletedProcess[str]:
 
 
 @pytest.mark.parametrize(
-    "args", [(), ("--help",), ("help",), ("help", "see"), ("list",), ("doctor",), ("examples",)]
+    "args",
+    [
+        (),
+        ("--help",),
+        ("help",),
+        ("help", "see"),
+        ("help", "learn"),
+        ("list",),
+        ("doctor",),
+        ("examples",),
+        ("examples", "learn"),
+        ("learn", "list"),
+    ],
 )
 def test_cli_read_only_commands(args, tmp_path):
     result = subprocess.run(
@@ -65,14 +77,15 @@ def test_discovery_does_not_import_frameworks(command):
 
 
 @pytest.mark.parametrize("width", [24, 40, 80])
-def test_cli_narrow_and_plain(width):
+@pytest.mark.parametrize("cmd", [[], ["learn", "list"]])
+def test_cli_narrow_and_plain(width, cmd):
     result = run_cli(
-        "--plain", COLUMNS=str(width), NO_COLOR="1", TERM="dumb", PYTHONIOENCODING="ascii"
+        *cmd, "--plain", COLUMNS=str(width), NO_COLOR="1", TERM="dumb", PYTHONIOENCODING="ascii"
     )
     assert result.returncode == 0
     assert "\x1b" not in result.stdout
     assert max(map(len, result.stdout.splitlines())) <= width
-    assert "seedl" in result.stdout
+    assert "seedl" in result.stdout.lower()
 
 
 @pytest.mark.parametrize(
@@ -82,6 +95,10 @@ def test_cli_narrow_and_plain(width):
         (["help", "se"], "Did you mean 'see'"),
         (["help", "__dict__"], "seedl list"),
         (["demo", "--output", "wrong.png"], ".html or .svg"),
+        (["lern"], "Did you mean 'learn'"),
+        (["learn", "linear_regresion"], "Did you mean 'linear_regression'"),
+        (["learn", "foobar_concept"], "seedl learn list"),
+        (["learn", "linear_regression", "--output", "wrong.png"], ".html or .svg"),
     ],
 )
 def test_cli_invalid_input(args, expected):
@@ -117,18 +134,18 @@ def test_demo_provenance_and_no_overwrite(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(webbrowser, "open", lambda *a, **k: pytest.fail("browser launch"))
     path = tmp_path / "demo.html"
     assert main(["demo", "--output", str(path)]) == 0
-    content = path.read_text()
+    content = path.read_text(encoding="utf-8")
     assert "UCI Iris" in content and "centimeters" in content and "sepal length" in content
     assert "CC BY 4.0" in content
     assert '<script src="http' not in content
     with pytest.raises(SystemExit) as caught:
         main(["demo", "--output", str(path)])
     assert caught.value.code == 2
-    assert path.read_text() == content
+    assert path.read_text(encoding="utf-8") == content
     assert "already exists" in capsys.readouterr().err
     path_svg = tmp_path / "demo.svg"
     main(["demo", "--output", str(path_svg)])
-    ET.fromstring(path_svg.read_text())
+    ET.fromstring(path_svg.read_text(encoding="utf-8"))
 
 
 @pytest.mark.parametrize(
@@ -264,7 +281,7 @@ def test_svg_and_html_safe_responsive_export(tmp_path):
     assert "<script>" not in svg
     path = tmp_path / "safe.html"
     view.save(path)
-    doc = path.read_text()
+    doc = path.read_text(encoding="utf-8")
     assert "&lt;script&gt;" in doc and "&lt;img" in doc
     assert "<img src=x" not in doc
     assert 'name="viewport"' in doc
@@ -291,6 +308,12 @@ def test_discovery_examples_execute(topic, tmp_path, monkeypatch):
         pytest.importorskip("qiskit")
     if topic == "statevector":
         pytest.importorskip("numpy")
+    try:
+        import plotly.io as pio
+
+        monkeypatch.setattr(pio.renderers, "default", None)
+    except ImportError:
+        pass
     monkeypatch.chdir(tmp_path)
     exec(compile(EXAMPLES[topic], f"seedl examples {topic}", "exec"), {})
     assert list(tmp_path.glob("*.html"))
@@ -342,3 +365,100 @@ def test_font_assets_are_lazy_and_packaged():
     assert "Google Sans" in css and "JetBrains Mono" in css
     assert "data:font/woff2;base64," in css
     assert "SIL OPEN FONT LICENSE" in css
+
+
+def test_cli_learn_list():
+    result = run_cli("learn", "list")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "Classical Machine Learning" in stdout
+    assert "Deep Learning" in stdout
+    for concept in (
+        "linear_regression",
+        "polynomial_regression",
+        "gradient_descent",
+        "logistic_regression",
+        "knn",
+        "decision_tree",
+        "kmeans",
+        "pca",
+    ):
+        assert concept in stdout
+    for concept in (
+        "backpropagation",
+        "activation_functions",
+        "loss_functions",
+        "attention",
+        "dropout",
+        "batch_norm",
+        "convolution",
+    ):
+        assert concept in stdout
+
+
+def test_cli_learn_export_and_no_overwrite(tmp_path):
+    path_html = tmp_path / "linear_regression.html"
+    result = run_cli("learn", "linear_regression", "--output", str(path_html))
+    assert result.returncode == 0
+    assert path_html.exists()
+    content = path_html.read_text(encoding="utf-8")
+    assert "Linear Regression" in content
+    assert "Created" in result.stdout
+    assert "Data provenance" in result.stdout
+    assert "Mathematically verified" in result.stdout
+
+    # Re-running against existing path fails without overwrite
+    result_dup = run_cli("learn", "linear_regression", "--output", str(path_html))
+    assert result_dup.returncode == 2
+    assert "already exists" in result_dup.stderr
+    assert "Traceback" not in result_dup.stderr
+
+    # Export to SVG
+    path_svg = tmp_path / "linear_regression.svg"
+    result_svg = run_cli("learn", "linear_regression", "--output", str(path_svg))
+    assert result_svg.returncode == 0
+    assert path_svg.exists()
+    ET.fromstring(path_svg.read_text(encoding="utf-8"))
+
+
+def test_cli_learn_unknown_concept():
+    result_typo = run_cli("learn", "linear_regresion")
+    assert result_typo.returncode == 2
+    assert "Unknown educational concept 'linear_regresion'" in result_typo.stderr
+    assert "Did you mean 'linear_regression'?" in result_typo.stderr
+    assert "Run 'seedl learn list'." in result_typo.stderr
+    assert "Traceback" not in result_typo.stderr
+
+    result_unknown = run_cli("learn", "nonexistent_concept")
+    assert result_unknown.returncode == 2
+    assert "Unknown educational concept 'nonexistent_concept'" in result_unknown.stderr
+    assert "Run 'seedl learn list'." in result_unknown.stderr
+    assert "Traceback" not in result_unknown.stderr
+
+
+def test_cli_help_learn():
+    result = run_cli("help", "learn")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "sd.learn" in stdout
+    assert "linear_regression" in stdout
+    assert "seedl learn list" in stdout
+    assert "seedl learn <concept>" in stdout
+    assert "Runnable Python example" in stdout
+
+
+def test_cli_examples_learn():
+    result = run_cli("examples", "learn")
+    assert result.returncode == 0
+    stdout = result.stdout
+    assert "import seedl as sd" in stdout
+    assert 'sd.learn("linear_regression")' in stdout
+    assert "lesson.show()" in stdout
+    assert 'lesson.save("linear_regression.html")' in stdout
+
+
+def test_cli_lern_typo_hint():
+    result = run_cli("lern")
+    assert result.returncode == 2
+    assert "Did you mean 'learn'?" in result.stderr
+    assert "Traceback" not in result.stderr

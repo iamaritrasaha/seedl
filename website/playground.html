@@ -1,19 +1,21 @@
 <!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Neural Observatory Playground · SeeDL 0.6.0</title><meta name="description" content="SeeDL 0.6.0 Neural Observatory interactive research laboratory. Explore neural execution DAGs, tensor flow pipelines, attention rollout, attribution benchmarks, gradient health, quantum noise decoherence, and scientific reports.">
+<title>Neural Observatory Playground · SeeDL 0.7.0</title><meta name="description" content="SeeDL 0.7.0 Neural Observatory interactive research laboratory. Explore neural execution DAGs, tensor flow pipelines, attention rollout, attribution benchmarks, gradient health, quantum noise decoherence, and scientific reports.">
 <meta name="theme-color" content="#090e17"><link rel="icon" href="./assets/favicon.svg" type="image/svg+xml">
 <link rel="stylesheet" href="./assets/style.css"><script src="./assets/site.js" defer></script><script src="./assets/playground.js" defer></script></head>
 <body><a class="skip" href="#main">Skip to content</a><header class="header"><nav class="nav wrap" aria-label="Main navigation">
-<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.6.0</span></a>
+<a class="brand" href="./index.html" aria-label="SeeDL home"><span class="brand-mark" aria-hidden="true">⌘</span>SeeDL <span class="version">0.7.0</span></a>
 <button class="menu-button" data-menu aria-label="Toggle navigation" aria-controls="main-links" aria-expanded="false">☰</button>
 <div class="navlinks" id="main-links"><a href="./index.html">Overview</a><a href="./playground.html" aria-current="page">Playground</a><a href="./docs/index.html">Documentation</a><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a></div>
 <button class="theme-button" data-theme-toggle aria-label="Use light theme">☀</button></nav></header>
-<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> NEURAL OBSERVATORY / SEEDL 0.6.0</div><h1>Interactive Research Laboratory.</h1><p>Select a scientific instrument below. Every visualization contains authentic tensor data captured from local Python execution.</p></div>
+<main id="main" class="wrap"><div class="page-title"><div class="eyebrow"><span class="dot"></span> NEURAL OBSERVATORY / SEEDL 0.7.0</div><h1>Interactive Research Laboratory.</h1><p>Select a scientific instrument below. Every visualization contains authentic tensor data captured from local Python execution.</p></div>
 <section class="playground" aria-label="Interactive demonstrations">
 
 <div class="playground-controls">
 <div class="category-pills" role="group" aria-label="Filter demonstrations by domain">
-<button class="category-pill" data-category-filter="all" aria-pressed="true">All (19)</button>
+<button class="category-pill" data-category-filter="all" aria-pressed="true">All (26)</button>
+<button class="category-pill" data-category-filter="classical-ml" aria-pressed="false">Classical ML</button>
+<button class="category-pill" data-category-filter="interactive-ml" aria-pressed="false">Interactive ML Learning</button>
 <button class="category-pill" data-category-filter="neural" aria-pressed="false">Neural Networks</button>
 <button class="category-pill" data-category-filter="transformers" aria-pressed="false">Transformers</button>
 <button class="category-pill" data-category-filter="explainability" aria-pressed="false">Explainability</button>
@@ -48,6 +50,13 @@
 <button class="tab" id="tab-quantum-noise" role="tab" aria-selected="false" aria-controls="quantum-noise" tabindex="-1" data-tab="quantum-noise" data-category="quantum">17 &nbsp; Quantum Noise Lab</button>
 <button class="tab" id="tab-dataset-drift" role="tab" aria-selected="false" aria-controls="dataset-drift" tabindex="-1" data-tab="dataset-drift" data-category="data">18 &nbsp; Dataset Drift</button>
 <button class="tab" id="tab-report" role="tab" aria-selected="false" aria-controls="report" tabindex="-1" data-tab="report" data-category="reports">19 &nbsp; Scientific Report</button>
+<button class="tab" id="tab-linear-regression" role="tab" aria-selected="false" aria-controls="linear-regression" tabindex="-1" data-tab="linear-regression" data-category="interactive-ml">20 &nbsp; Linear Regression</button>
+<button class="tab" id="tab-polynomial-regression" role="tab" aria-selected="false" aria-controls="polynomial-regression" tabindex="-1" data-tab="polynomial-regression" data-category="interactive-ml">21 &nbsp; Polynomial Overfitting</button>
+<button class="tab" id="tab-gradient-descent" role="tab" aria-selected="false" aria-controls="gradient-descent" tabindex="-1" data-tab="gradient-descent" data-category="interactive-ml">22 &nbsp; Gradient Descent Lab</button>
+<button class="tab" id="tab-decision-tree" role="tab" aria-selected="false" aria-controls="decision-tree" tabindex="-1" data-tab="decision-tree" data-category="interactive-ml">23 &nbsp; Decision Tree Explorer</button>
+<button class="tab" id="tab-kmeans" role="tab" aria-selected="false" aria-controls="kmeans" tabindex="-1" data-tab="kmeans" data-category="interactive-ml">24 &nbsp; KMeans Clustering</button>
+<button class="tab" id="tab-pca" role="tab" aria-selected="false" aria-controls="pca" tabindex="-1" data-tab="pca" data-category="interactive-ml">25 &nbsp; PCA Variance &amp; Projection</button>
+<button class="tab" id="tab-sklearn-evaluation" role="tab" aria-selected="false" aria-controls="sklearn-evaluation" tabindex="-1" data-tab="sklearn-evaluation" data-category="classical-ml">26 &nbsp; Scikit-Learn Evaluation</button>
 </div>
 
 <div id="cnn" class="recorded-demo" role="tabpanel" aria-labelledby="tab-cnn">
@@ -376,5 +385,76 @@ noise_v = sd.quantum_noise(channel=&quot;depolarizing&quot;, param=0.2, steps=4)
 rep.add_section(&quot;Quantum Noise&quot;, noise_v, narrative=&quot;Kraus depolarizing decoherence.&quot;)
 rep.save(&quot;scientific_report.html&quot;)</code></pre></div></details></div>
 
+<div id="linear-regression" class="recorded-demo" role="tabpanel" aria-labelledby="tab-linear-regression" hidden>
+<span class="badge-category">Interactive ML Learning · OLS Regression</span>
+<h2>Linear Regression Explorer</h2><p>Ordinary Least Squares (OLS) regression simulation. Adjust candidate line parameters against ground-truth data points to observe residual error bars, Mean Squared Error (MSE), and R² coefficient of determination compared against the analytical closed-form optimum.</p>
+<div class="demo-stage"><iframe title="Linear Regression Explorer" data-demo="linear-regression" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Analytical closed-form OLS solution with residual vectors and R² diagnostics</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+lr_view = sd.learn(&quot;linear_regression&quot;, slope=2.2, intercept=1.0)
+lr_view.save(&quot;linear_regression.html&quot;)</code></pre></div></details></div>
+
+<div id="polynomial-regression" class="recorded-demo" role="tabpanel" aria-labelledby="tab-polynomial-regression" hidden>
+<span class="badge-category">Interactive ML Learning · Model Capacity</span>
+<h2>Polynomial Overfitting Explorer</h2><p>Non-linear polynomial curve fitting. Sweeps model capacity from degree 1 to 10 against noisy sine-wave data to visualize the bias-variance trade-off, underfitting, Runge phenomenon overfitting, and L2 Ridge regularization control.</p>
+<div class="demo-stage"><iframe title="Polynomial Overfitting Explorer" data-demo="polynomial-regression" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Multi-degree capacity error curve (Train vs Val MSE) and Ridge regularizer</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+poly_view = sd.learn(&quot;polynomial_regression&quot;, degree=3, regularization=0.0)
+poly_view.save(&quot;polynomial_regression.html&quot;)</code></pre></div></details></div>
+
+<div id="gradient-descent" class="recorded-demo" role="tabpanel" aria-labelledby="tab-gradient-descent" hidden>
+<span class="badge-category">Interactive ML Learning · First-Order Optimization</span>
+<h2>Gradient Descent Laboratory</h2><p>Interactive first-order gradient descent on a 2D anisotropic convex quadratic loss surface. Observe step-by-step iterate trajectories, learning rate sensitivity, overshoot oscillations, and monotonic convergence towards the global minimum.</p>
+<div class="demo-stage"><iframe title="Gradient Descent Laboratory" data-demo="gradient-descent" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Elliptical loss surface contours with iterative step trajectory and convergence telemetry</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+gd_view = sd.learn(&quot;gradient_descent&quot;, lr=0.15, steps=10)
+gd_view.save(&quot;gradient_descent.html&quot;)</code></pre></div></details></div>
+
+<div id="decision-tree" class="recorded-demo" role="tabpanel" aria-labelledby="tab-decision-tree" hidden>
+<span class="badge-category">Interactive ML Learning · Recursive Partitioning</span>
+<h2>Decision Tree Learning Explorer</h2><p>Recursive axis-aligned feature space partitioning for multi-class classification. Displays orthogonal decision region boundaries alongside the hierarchical binary split tree with Gini impurity and Information Gain telemetry at each node.</p>
+<div class="demo-stage"><iframe title="Decision Tree Learning Explorer" data-demo="decision-tree" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Feature space orthogonal partitions and hierarchical decision tree diagram</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+dt_view = sd.learn(&quot;decision_tree&quot;, max_depth=2, criterion=&quot;gini&quot;)
+dt_view.save(&quot;decision_tree.html&quot;)</code></pre></div></details></div>
+
+<div id="kmeans" class="recorded-demo" role="tabpanel" aria-labelledby="tab-kmeans" hidden>
+<span class="badge-category">Interactive ML Learning · Unsupervised Clustering</span>
+<h2>KMeans Clustering Explorer</h2><p>Step-by-step Lloyd algorithm clustering simulation. Visualizes cluster centroid relocations, Voronoi cell partitioning boundaries, and within-cluster sum of squares (inertia) reduction until mathematical convergence.</p>
+<div class="demo-stage"><iframe title="KMeans Clustering Explorer" data-demo="kmeans" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Voronoi cell boundaries, centroid update history, and inertia convergence curve</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+km_view = sd.learn(&quot;kmeans&quot;, k=3, iterations=5, seed=42)
+km_view.save(&quot;kmeans.html&quot;)</code></pre></div></details></div>
+
+<div id="pca" class="recorded-demo" role="tabpanel" aria-labelledby="tab-pca" hidden>
+<span class="badge-category">Interactive ML Learning · Dimensionality Reduction</span>
+<h2>PCA Variance &amp; Projection Explorer</h2><p>Principal Component Analysis geometry. Inspect sample covariance eigendecomposition, principal axis unit vectors scaled by variance eigenvalues, orthogonal projection lines, and explained variance percentage ratios.</p>
+<div class="demo-stage"><iframe title="PCA Variance &amp; Projection Explorer" data-demo="pca" loading="lazy"></iframe><div class="demo-caption">Rendered by SeeDL 0.7.0 · Orthogonal principal component vectors, 1D projection mapping, and scree plot</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>import seedl as sd
+
+pca_view = sd.learn(&quot;pca&quot;, n_components=2)
+pca_view.save(&quot;pca.html&quot;)</code></pre></div></details></div>
+
+<div id="sklearn-evaluation" class="recorded-demo" role="tabpanel" aria-labelledby="tab-sklearn-evaluation" hidden>
+<span class="badge-category">Classical ML · Model Diagnostics</span>
+<h2>Scikit-Learn Estimator Evaluation</h2><p>Comprehensive evaluation dossier for a fitted scikit-learn classification pipeline on authentic Wisconsin Breast Cancer data. Includes confusion matrix, ROC curve, Precision-Recall curve, and per-class metrics without ever modifying estimator state.</p>
+<div class="demo-stage"><iframe title="Scikit-Learn Estimator Evaluation" data-demo="sklearn-evaluation" loading="lazy"></iframe><div class="demo-caption">Computed by SeeDL 0.7.0 via sd.evaluate · Authentic scikit-learn pipeline test set diagnostics and confusion matrix</div></div>
+<details class="demo-source"><summary>View the Python source</summary><div class="terminal"><pre><code>from sklearn.datasets import load_breast_cancer
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import StandardScaler
+import seedl as sd
+
+ds = load_breast_cancer()
+X_tr, X_te, y_tr, y_te = train_test_split(ds.data, ds.target, test_size=0.25, random_state=42)
+model = make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)).fit(X_tr, y_tr)
+eval_res = sd.evaluate(model, X_te, y_te, split=&quot;test&quot;)
+eval_res.save(&quot;evaluation.html&quot;)</code></pre></div></details></div>
+
 <p class="notice">Reproducible, precomputed scientific demonstrations. Python and PyTorch do not run in this browser. Visualizations keep a dark palette in both site themes. <a class="textlink" href="./demos/manifest.json">Inspect build provenance ↗</a></p><noscript><p>JavaScript is required for interactive demos. Read the <a href="./docs/index.html">documentation</a> or return to the <a href="./index.html">static previews</a>.</p></noscript></section></main>
-<footer class="footer wrap"><span><a class="brand" href="./index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.6.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>
+<footer class="footer wrap"><span><a class="brand" href="./index.html">SeeDL</a> &nbsp; Tools for looking inside models.</span><div><a href="https://github.com/iamaritrasaha/seedl">GitHub ↗</a><a href="https://pypi.org/project/seedl/0.7.0/">PyPI ↗</a><a href="https://github.com/iamaritrasaha/seedl/blob/main/LICENSE">MIT License</a></div></footer></body></html>

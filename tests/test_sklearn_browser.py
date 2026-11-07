@@ -112,5 +112,5 @@ def test_serialization_report_and_full_precision(models, tmp_path):
     assert repr(result.metrics["rmse"]) in doc
     report = sd.report(title="Classical ML report", views=[result])
     report.save(tmp_path / "report.html")
-    report_text = (tmp_path / "report.html").read_text()
+    report_text = (tmp_path / "report.html").read_text(encoding="utf-8")
     assert "sandbox=" in report_text and "ML data" in report_text

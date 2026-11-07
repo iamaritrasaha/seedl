@@ -1,83 +1,130 @@
 # SeeDL
 
 SeeDL turns tensors, neural networks, classical ML estimators, training diagnostics, and quantum states
-into readable summaries and visualizations. Inspect existing Python objects,
-then explore them in a notebook or save a self-contained, offline HTML file.
+into readable summaries and self-contained visualizations. Inspect existing Python objects,
+then explore them in a notebook or save an offline HTML file.
 
 Python **3.10–3.13** · MIT · **Zero mandatory runtime dependencies**
 
-## Install
+---
 
+### What is SeeDL?
+SeeDL is a lightweight, dependency-free scientific visualization and model diagnostic library for Python. It inspects existing Python objects—NumPy arrays, PyTorch models, scikit-learn estimators, and Qiskit circuits—without modifying them or requiring background web servers.
+
+### Why use it?
+- **Zero mandatory dependencies**: Core runs in pure standard-library Python with offline SVG and HTML generation.
+- **Scientific integrity**: Transparent data provenance, non-destructive inspection, and explicit disclosures for numerical edge cases (NaN/Inf) and sampling.
+- **Offline typography & portability**: Fully self-contained exports bundled with Google Sans and JetBrains Mono fonts; no external CDN calls or tracking.
+- **Complete lifecycle**: From interactive ML concept simulations to in-flight training diagnostics, attention rollouts, and multi-metric model evaluations.
+
+---
+
+## Quick FAQ & How-To
+
+### How do I install it?
+Install the core library (pure Python, zero dependencies):
 ```bash
-python -m pip install seedl
+pip install seedl
+```
+Or install with all optional integrations (scikit-learn, PyTorch, NumPy, Plotly, Matplotlib, Qiskit):
+```bash
+pip install "seedl[all]"
+```
+Individual extras:
+```bash
+pip install "seedl[sklearn]"  # scikit-learn evaluation & interpretation
+pip install "seedl[numpy]"    # NumPy arrays & multidimensional tensors
+pip install "seedl[torch]"    # PyTorch networks, activations & gradients
+pip install "seedl[plotly]"   # interactive 3D WebGL charts
+pip install "seedl[quantum]"  # Qiskit quantum circuits & Bloch spheres
 ```
 
-The core handles Python numbers, sequences, matrices, and SVG/HTML exports.
-Install integrations as needed:
+### How do I inspect a tensor?
+```python
+import numpy as np
+import seedl as sd
 
-```bash
-python -m pip install "seedl[sklearn]"  # scikit-learn (new in this checkout)
-python -m pip install "seedl[numpy]"    # NumPy tensors
-python -m pip install "seedl[torch]"    # PyTorch models and diagnostics
-python -m pip install "seedl[plotly]"   # interactive charts and 3D
-python -m pip install "seedl[quantum]"  # Qiskit circuits and quantum arrays
+tensor = np.arange(24).reshape(2, 3, 4)
+view = sd.see(tensor, interactive=True, dim_names=["batch", "row", "col"])
+view.show()
 ```
 
-For CUDA or ROCm, use the [PyTorch installation instructions](https://pytorch.org/get-started/locally/)
-for your platform. SeeDL uses your existing tensor device.
+### How do I evaluate a trained scikit-learn model?
+Train your model in your own scikit-learn code, then pass the fitted estimator to SeeDL (`sd.evaluate` never calls `.fit()`):
+```python
+from sklearn.datasets import load_iris
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import seedl as sd
 
-> The CLI and presentation improvements described here are in development.
-> To try this checkout, run `python -m pip install -e .` from the repository.
-> Published 0.6.0 predates these changes, including the new `sklearn` extra. For the
-> classical ML APIs, install this checkout with `python -m pip install -e ".[sklearn]"`.
-> The package version is unchanged.
+X, y = load_iris(return_X_y=True)
+X_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, random_state=42)
+model = LogisticRegression(max_iter=1000).fit(X_train, y_train)
+
+# Comprehensive evaluation dossier (confusion matrix, ROC, PR, metrics)
+result = sd.evaluate(model, X_test, y_test, split="test")
+result.show()
+result.save("evaluation.html")
+```
+
+### How do I learn a machine-learning concept visually?
+Use `sd.learn()` in Python or `seedl learn` from your terminal:
+```python
+import seedl as sd
+
+# Explore ordinary least squares regression
+view = sd.learn("linear_regression")
+view.show()
+view.save("linear_regression.html")
+
+# Explore gradient descent optimization steps
+gd = sd.learn("gradient_descent", lr=0.15, steps=10)
+gd.save("gradient_descent.html")
+```
+From the command line:
+```bash
+seedl learn list                         # list all 15 educational lessons
+seedl learn linear_regression            # export linear_regression.html
+seedl learn kmeans --output clusters.svg # export as standalone SVG
+```
+
+### How do I save and share a visualization?
+All SeeDL visualizations return a `Visualization` or `Evaluation` object with `.save()`:
+```python
+view.save("report.html")  # self-contained interactive offline HTML
+view.save("figure.svg")  # standalone SVG with embedded typography
+```
+Generated HTML and SVG files are 100% self-contained—open them in any modern browser or share them without running a server.
+
+---
 
 ## Discover
 
 ```bash
-seedl                  # compact command guide
-seedl help see         # Python signature, documentation, runnable example
-seedl list             # capabilities organized by task
-seedl doctor           # environment and optional integrations
-seedl examples         # copyable Python examples
-seedl demo             # write seedl-demo.html with labeled UCI Iris data
+seedl                                # compact command guide
+seedl help see                       # Python signature, documentation, runnable example
+seedl help evaluate                  # classical ML evaluation documentation
+seedl help learn                     # educational simulation documentation
+seedl list                           # capabilities organized by task
+seedl doctor                         # environment and optional integrations
+seedl examples                       # copyable Python examples
+seedl demo                           # write seedl-demo.html with labeled UCI Iris data
+seedl learn list                     # browse all interactive ML/DL learning lessons
 ```
 
 `python -m seedl` provides the same commands. Use `seedl --help` for options,
 `--plain` or `NO_COLOR=1` for output without terminal colors. Help and doctor do
 not load PyTorch or Qiskit. The CLI describes Python APIs; use Python to inspect
-your in-memory objects. Demo writes a new file and never launches a browser.
+your in-memory objects. Demo and learn write new files and never launch a browser.
 
-## Visualize in a few lines
-
-```python
-import seedl as sd
-
-view = sd.see([[1, 2], [3, 4]], backend="svg")
-view.show()
-view.save("result.html")
-```
-
-The example is synthetic. SVG needs no optional packages. Omit `backend` to use
-Plotly when installed, with SVG as the fallback.
-
-In scripts, visualization functions print a compact summary. Calling SVG
-`.show()` immediately afterward does not repeat it. In notebooks, put `view` on
-the last line or call `view.show()` to display it. Explicit `.show()` with Plotly
-or Matplotlib uses that backend's display behavior. `.save()` never opens a browser.
-
-```python
-print(sd.guide())  # discover APIs inside Python
-print(sd.guide("activations"))
-print(view.to_text(detail="full"))
-# view.data, view.metadata and view.notes retain the structured results.
-```
+---
 
 ## Choose a workflow
 
 | Task | Python API | Example |
 | --- | --- | --- |
 | Evaluate a fitted scikit-learn model | `sd.evaluate(model, X_test, y_test, split="test")` | [Classical ML quickstart](docs/CLASSICAL_ML.md) |
+| Learn an ML/DL concept visually | `sd.learn("gradient_descent", lr=0.1)` | [Interactive ML Learning](docs/INTERACTIVE_ML_LEARNING.md) |
 | Inspect a tensor and its slices | `sd.see(tensor, interactive=True)` | [Tensor exploration](docs/GETTING_STARTED.md#intermediate-tensors-and-models) |
 | View a network | `sd.see(model, input=batch)` | [Model inspection](examples/02_model_and_training.py) |
 | Examine activations | `sd.activations(model, input=batch)` | [Activations and gradients](examples/03_activations_and_gradients.py) |
@@ -91,15 +138,18 @@ gradient inspection never calls backward. Arbitrary side effects inside custom
 model forward functions cannot be sandboxed. Attention weights describe routing,
 not causal importance. See the [scientific correctness notes](docs/SCIENTIFIC_CORRECTNESS_0.5.0.md).
 
+---
+
 ## Go further
 
+- [Interactive ML Learning](docs/INTERACTIVE_ML_LEARNING.md): 15 interactive simulations for classical ML and deep learning.
 - [Classical ML](docs/CLASSICAL_ML.md): evaluation, pipelines, importance, clusters, and executable notebooks.
 - [Getting started](docs/GETTING_STARTED.md): beginner, intermediate, and advanced paths.
 - [Command reference](docs/CLI.md): all commands, output handling, and demo provenance.
 - [Typography](docs/TYPOGRAPHY.md): offline Google Sans and JetBrains Mono assets.
 - [Extended feature reference and gallery](docs/REFERENCE.md): existing APIs and advanced options.
 - [Neural observatory](docs/NEURAL_OBSERVATORY.md), [execution tracing](docs/EXECUTION_TRACING.md), and [scientific reports](docs/SCIENTIFIC_REPORTS.md).
-- [Examples](examples/) and [release notes](docs/RELEASE_NOTES_0.6.0.md).
+- [Examples](examples/) and [release notes](docs/RELEASE_NOTES_0.7.0.md).
 
 ## Development
 

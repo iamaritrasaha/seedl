@@ -122,6 +122,27 @@ def _format_tensor_explorer(data: dict[str, Any], metadata: dict[str, Any]) -> s
 
 
 def _format_educational(kind: str, data: dict[str, Any]) -> str:
+    if "concept" in data:
+        concept = str(data["concept"])
+        if concept == "linear_regression":
+            return f"Linear regression · slope={data.get('slope')} · intercept={data.get('intercept')} · MSE={data.get('mse', 0):.4f} · R²={data.get('r2', 0):.3f}"
+        if concept == "polynomial_regression":
+            return f"Polynomial regression · degree={data.get('degree')} · Train MSE={data.get('mse_train', 0):.4f} · Val MSE={data.get('mse_val', 0):.4f}"
+        if concept == "gradient_descent":
+            traj = data.get("trajectory", [])
+            return f"Gradient descent · {data.get('objective', '1d')} · {len(traj)} steps · final loss={data.get('final_loss', 0):.4e}"
+        if concept == "logistic_regression":
+            return f"Logistic regression · threshold={data.get('threshold')} · Accuracy={data.get('accuracy', 0):.1%} · F1={data.get('f1', 0):.3f}"
+        if concept == "knn":
+            return f"K-nearest neighbors · k={data.get('k')} · {data.get('metric')} · predicted class {data.get('predicted_class')}"
+        if concept == "decision_tree":
+            return f"Decision tree · max_depth={data.get('max_depth')} · {data.get('criterion')} · {len(data.get('regions', []))} leaves"
+        if concept == "kmeans":
+            return f"K-means clustering · k={data.get('n_clusters')} · inertia={data.get('final_inertia', 0):.3f}"
+        if concept == "pca":
+            r = data.get("explained_variance_ratio", [0, 0])
+            return f"Principal component analysis · PC1 explains {r[0]:.1%} variance · PC2 explains {r[1]:.1%}"
+        return concept
     return str(data.get("concept", kind))
 
 

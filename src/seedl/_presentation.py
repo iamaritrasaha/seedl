@@ -48,6 +48,13 @@ def ascii_text(value: str) -> str:
         "…": "...",
         "⟩": ">",
         "⟨": "<",
+        "²": "^2",
+        "³": "^3",
+        "°": " deg",
+        "θ": "theta",
+        "λ": "lambda",
+        "σ": "sigma",
+        "μ": "mu",
     }.items():
         value = value.replace(original, replacement)
     return value.encode("ascii", errors="backslashreplace").decode("ascii")
@@ -284,6 +291,79 @@ def to_text(
                 _wrap(
                     f"Showing {len(shown)} of {len(rows)} layers; all records in .data['layers'].",
                     width,
+                )
+            )
+    nodes = view.data.get("nodes", [])
+    if nodes and isinstance(nodes, list) and isinstance(nodes[0], dict):
+        cols = ["Node", "Forward", "Gradient"]
+        shown_nodes = nodes if full else nodes[:8]
+        cells = [
+            [
+                clean_text(n.get("name", "")),
+                format_value(n.get("forward"), full=full),
+                format_value(n.get("gradient"), full=full),
+            ]
+            for n in shown_nodes
+        ]
+        sizes = [max(len(k), *(len(row[i]) for row in cells)) for i, k in enumerate(cols)]
+        lines.extend(("", "Computation Graph Nodes"))
+        if sum(sizes) + 2 * len(sizes) <= width:
+            lines.append(
+                "  ".join(
+                    k.ljust(sizes[i]) if i == 0 else k.rjust(sizes[i]) for i, k in enumerate(cols)
+                )
+            )
+            for row in cells:
+                lines.append(
+                    "  ".join(
+                        v.ljust(sizes[i]) if i == 0 else v.rjust(sizes[i])
+                        for i, v in enumerate(row)
+                    )
+                )
+        else:
+            for row in cells:
+                lines.extend(
+                    _wrap(
+                        "; ".join(f"{k}: {v}" for k, v in zip(cols, row, strict=True)),
+                        width,
+                        "  ",
+                    )
+                )
+        if len(shown_nodes) < len(nodes):
+            lines.extend(
+                _wrap(
+                    f"Showing {len(shown_nodes)} of {len(nodes)} graph nodes; all records in .data['nodes'].",
+                    width,
+                    "  ",
+                )
+            )
+    trajectory = view.data.get("trajectory", [])
+    if trajectory and isinstance(trajectory, list) and isinstance(trajectory[0], dict):
+        cols = ["Step", "Parameter w", "Loss", "Gradient"]
+        keys = ["step", "w", "loss", "grad"]
+        shown_traj = trajectory if full else trajectory[:6]
+        cells = [[format_value(p.get(k), full=full) for k in keys] for p in shown_traj]
+        sizes = [max(len(k), *(len(row[i]) for row in cells)) for i, k in enumerate(cols)]
+        lines.extend(("", "Optimization Trajectory"))
+        if sum(sizes) + 2 * len(sizes) <= width:
+            lines.append("  ".join(k.rjust(sizes[i]) for i, k in enumerate(cols)))
+            for row in cells:
+                lines.append("  ".join(v.rjust(sizes[i]) for i, v in enumerate(row)))
+        else:
+            for row in cells:
+                lines.extend(
+                    _wrap(
+                        "; ".join(f"{k}: {v}" for k, v in zip(cols, row, strict=True)),
+                        width,
+                        "  ",
+                    )
+                )
+        if len(shown_traj) < len(trajectory):
+            lines.extend(
+                _wrap(
+                    f"Showing {len(shown_traj)} of {len(trajectory)} steps; all records in .data['trajectory'].",
+                    width,
+                    "  ",
                 )
             )
     info = [text for level, text in notes if level == "INFO"]

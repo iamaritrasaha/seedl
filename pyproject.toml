@@ -1,8 +1,8 @@
 [project]
 name = "seedl"
 version = "0.6.0"
-description = "Deep learning tensor exploration (rank, slicing, memory layouts) and quantum computing visualization"
-keywords = ["deep-learning", "tensor", "rank", "slicing", "memory-layout", "visualization", "quantum-computing", "pytorch", "numpy"]
+description = "Scientific visualization and diagnostics for tensors, neural networks, scikit-learn models, and quantum computing"
+keywords = ["deep-learning", "tensor", "rank", "slicing", "memory-layout", "visualization", "quantum-computing", "pytorch", "numpy", "scikit-learn"]
 classifiers = [
     "Development Status :: 4 - Beta",
     "Intended Audience :: Developers",
@@ -35,13 +35,14 @@ Repository = "https://github.com/iamaritrasaha/seedl"
 Issues = "https://github.com/iamaritrasaha/seedl/issues"
 
 [project.optional-dependencies]
+sklearn = ["scikit-learn>=1.4.2,<2"]
 torch = ["torch>=2.0"]
 numpy = ["numpy>=1.23"]
 plotly = ["plotly>=5.18"]
 matplotlib = ["matplotlib>=3.7"]
 quantum = ["qiskit>=1.0", "numpy>=1.23"]
-all = ["torch>=2.0", "numpy>=1.23", "plotly>=5.18", "matplotlib>=3.7", "qiskit>=1.0"]
-dev = ["pytest>=7.4", "ruff>=0.4", "mypy>=1.8", "tomli>=2; python_version < '3.11'"]
+all = ["scikit-learn>=1.4.2,<2", "torch>=2.0", "numpy>=1.23", "plotly>=5.18", "matplotlib>=3.7", "qiskit>=1.0"]
+dev = ["pandas>=1.5", "pytest>=7.4", "ruff>=0.4", "mypy>=1.8", "tomli>=2; python_version < '3.11'"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

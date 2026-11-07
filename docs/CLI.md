@@ -13,6 +13,8 @@ Install this checkout with `python -m pip install -e .`. Both `seedl` and
 | `seedl list` | Categorized capabilities |
 | `seedl doctor` | Python support range, package version, platform and optional package presence |
 | `seedl examples` | Short complete examples to paste into Python |
+| `seedl examples evaluate` | Complete scikit-learn training/evaluation example (printed, not executed) |
+| `seedl help evaluate` | New ML API, split provenance, metrics and captured plots |
 | `seedl examples attention` | One focused example; `--help` lists topics |
 | `seedl demo` | Create `seedl-demo.html` using authentic labeled example data |
 | `seedl demo --output iris.svg` | Create a new SVG instead |

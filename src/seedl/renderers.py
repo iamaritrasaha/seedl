@@ -42,6 +42,11 @@ def render(view: Visualization, backend: str, *, chart_only: bool = False) -> An
 
 def _render(view: Visualization, backend: str, *, chart_only: bool = False) -> Any:
     """Build a backend figure from a ``Visualization`` without changing its data."""
+    if view.kind.startswith("ml_"):
+        from ._ml_renderers import render_ml
+
+        resolve_backend(backend)
+        return render_ml(view, backend, chart_only=chart_only)
     if view.kind == "tensor_explorer":
         from ._tensor_explorer import svg_tensor_explorer
 

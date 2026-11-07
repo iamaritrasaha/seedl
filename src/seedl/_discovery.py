@@ -38,6 +38,15 @@ GROUPS = {
         "explain",
         "compare_attributions",
     ),
+    "Classical machine learning": (
+        "evaluate",
+        "inspect_estimator",
+        "feature_importance",
+        "partial_dependence",
+        "cv_results",
+        "learning_curve",
+        "validation_curve",
+    ),
     "Quantum": (
         "bloch",
         "circuit",
@@ -49,6 +58,7 @@ GROUPS = {
     "Reports and saved analyses": ("report", "save_analysis", "load_analysis"),
 }
 EXAMPLES = {
+    "evaluate": 'from sklearn.datasets import load_iris\nfrom sklearn.linear_model import LogisticRegression\nfrom sklearn.model_selection import train_test_split\nimport seedl as sd\n\nX, y = load_iris(return_X_y=True)\nX_train, X_test, y_train, y_test = train_test_split(X, y, stratify=y, random_state=0)\nmodel = LogisticRegression(max_iter=500).fit(X_train, y_train)  # your training code\nresult = sd.evaluate(model, X_test, y_test, split="test", backend="svg")\nresult.save("evaluation.html")',
     "see": 'import seedl as sd\n\nview = sd.see([[1, 2], [3, 4]], backend="svg")\nview.show()\nview.save("result.html")',
     "tensor": 'import numpy as np\nimport seedl as sd\n\ntensor = np.arange(24).reshape(2, 3, 4)  # synthetic example\nview = sd.see(tensor, interactive=True, dim_names=["batch", "row", "column"])\nview.save("tensor.html")',
     "network": 'import torch\nimport seedl as sd\n\ntorch.manual_seed(0)\nmodel = torch.nn.Sequential(torch.nn.Linear(4, 3), torch.nn.ReLU())\nx = torch.ones(2, 4)  # synthetic input\nview = sd.see(model, input=x, backend="svg")\nview.save("network.html")',
@@ -119,7 +129,10 @@ def function_help(name: str) -> str:
     example = EXAMPLES.get(name)
     if example:
         lines.extend(("", "Runnable Python example", "", example))
-    lines.extend(("", f"Reference: {DOCS}/REFERENCE.md", f"Examples: {DOCS}/GETTING_STARTED.md"))
+    reference = (
+        "CLASSICAL_ML.md" if name in GROUPS["Classical machine learning"] else "REFERENCE.md"
+    )
+    lines.extend(("", f"Reference: {DOCS}/{reference}", f"Examples: {DOCS}/GETTING_STARTED.md"))
     return "\n".join(lines)
 
 

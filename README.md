@@ -1,6 +1,6 @@
 # SeeDL
 
-SeeDL turns tensors, neural networks, training diagnostics, and quantum states
+SeeDL turns tensors, neural networks, classical ML estimators, training diagnostics, and quantum states
 into readable summaries and visualizations. Inspect existing Python objects,
 then explore them in a notebook or save a self-contained, offline HTML file.
 
@@ -16,6 +16,7 @@ The core handles Python numbers, sequences, matrices, and SVG/HTML exports.
 Install integrations as needed:
 
 ```bash
+python -m pip install "seedl[sklearn]"  # scikit-learn (new in this checkout)
 python -m pip install "seedl[numpy]"    # NumPy tensors
 python -m pip install "seedl[torch]"    # PyTorch models and diagnostics
 python -m pip install "seedl[plotly]"   # interactive charts and 3D
@@ -27,7 +28,9 @@ for your platform. SeeDL uses your existing tensor device.
 
 > The CLI and presentation improvements described here are in development.
 > To try this checkout, run `python -m pip install -e .` from the repository.
-> Published 0.6.0 predates these changes; the package version is unchanged.
+> Published 0.6.0 predates these changes, including the new `sklearn` extra. For the
+> classical ML APIs, install this checkout with `python -m pip install -e ".[sklearn]"`.
+> The package version is unchanged.
 
 ## Discover
 
@@ -74,6 +77,7 @@ print(view.to_text(detail="full"))
 
 | Task | Python API | Example |
 | --- | --- | --- |
+| Evaluate a fitted scikit-learn model | `sd.evaluate(model, X_test, y_test, split="test")` | [Classical ML quickstart](docs/CLASSICAL_ML.md) |
 | Inspect a tensor and its slices | `sd.see(tensor, interactive=True)` | [Tensor exploration](docs/GETTING_STARTED.md#intermediate-tensors-and-models) |
 | View a network | `sd.see(model, input=batch)` | [Model inspection](examples/02_model_and_training.py) |
 | Examine activations | `sd.activations(model, input=batch)` | [Activations and gradients](examples/03_activations_and_gradients.py) |
@@ -89,6 +93,7 @@ not causal importance. See the [scientific correctness notes](docs/SCIENTIFIC_CO
 
 ## Go further
 
+- [Classical ML](docs/CLASSICAL_ML.md): evaluation, pipelines, importance, clusters, and executable notebooks.
 - [Getting started](docs/GETTING_STARTED.md): beginner, intermediate, and advanced paths.
 - [Command reference](docs/CLI.md): all commands, output handling, and demo provenance.
 - [Typography](docs/TYPOGRAPHY.md): offline Google Sans and JetBrains Mono assets.

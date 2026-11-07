@@ -20,6 +20,7 @@ from ._validation import (
     validate_see_options,
     validate_tensor_view_options,
 )
+from .evaluation import Evaluation
 from .exceptions import SeeDLError
 from .renderers import resolve_backend
 from .view import Visualization
@@ -288,6 +289,7 @@ def see(
 
     Supported objects include PyTorch modules and tensors, NumPy arrays, real
     numbers, numeric sequences, metric-history dictionaries, dataset batches,
+    scikit-learn estimators/pipelines (inspection only; use evaluate for metrics),
     prediction scores, and quantum circuits/states. Returns a :class:`Visualization`.
 
     Parameters:
@@ -333,6 +335,33 @@ def see(
         min_weight=min_weight,
         edge_opacity=edge_opacity,
     )
+
+    from ._sklearn_detect import is_sklearn_estimator
+
+    if is_sklearn_estimator(obj):
+        if (
+            input is not None
+            or slice is not None
+            or layout is not None
+            or dim_names is not None
+            or compare is not None
+            or interactive is not None
+            or select_neuron is not None
+            or simulate
+            or view not in {"auto", "summary", "architecture"}
+            or color_by != "auto"
+            or sample != 0
+            or max_neurons != 100
+            or max_connections != 1500
+            or min_weight != 0.0
+            or edge_opacity != 0.45
+            or detail != "summary"
+        ):
+            raise SeeDLError(
+                "These see() options belong to tensor/PyTorch/quantum workflows. Use sd.see(estimator) for read-only inspection, sd.inspect_estimator() for bounded tree detail, or sd.evaluate(estimator, X, y) for evaluation."
+            )
+        result = inspect_estimator(obj, backend=backend)
+        return result
 
     from ._execution_graph import ExecutionTrace
 
@@ -1582,3 +1611,219 @@ def load_analysis(filepath: Any) -> Any:
     from ._serialization import load_analysis as _load_impl
 
     return _load_impl(filepath)
+
+
+def inspect_estimator(
+    model: Any,
+    *,
+    max_depth: int = 3,
+    max_nodes: int = 63,
+    max_features: int = 50,
+    backend: str = "auto",
+) -> Visualization:
+    """Inspect fitted status, parameters, coefficients, feature importance and bounded tree splits without fitting."""
+    from ._sklearn import inspect_estimator as impl
+
+    result = impl(
+        model, max_depth=max_depth, max_nodes=max_nodes, max_features=max_features, backend=backend
+    )
+    _show_result(result)
+    return result
+
+
+def evaluate(
+    model: Any,
+    X: Any,
+    y: Any = None,
+    *,
+    task: str = "auto",
+    split: str = "unspecified",
+    plots: str | list[str] | None = None,
+    normalize: str | None = None,
+    class_names: Any = None,
+    positive_label: Any = None,
+    labels: Any = None,
+    projection: Any = None,
+    silhouette_max_samples: int = 1000,
+    max_points: int = 2048,
+    backend: str = "auto",
+) -> Evaluation:
+    """Evaluate a fitted scikit-learn model without fitting; return metrics and captured plots.
+
+    X and y must be row-aligned evaluation data. Specify split='test' for a held-out
+    test set, or 'training'/'validation' as appropriate. Classification includes
+    per-class support and metrics, with binary ROC/PR only when valid scores exist.
+    Use plots='confusion_matrix' or result.plot('roc') to select captured views.
+    Metrics use all supplied rows; display samples are bounded by max_points.
+    """
+    from ._sklearn import evaluate as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        task=task,
+        split=split,
+        plots=plots,
+        normalize=normalize,
+        class_names=class_names,
+        positive_label=positive_label,
+        labels=labels,
+        projection=projection,
+        silhouette_max_samples=silhouette_max_samples,
+        max_points=max_points,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def feature_importance(
+    model: Any,
+    X: Any = None,
+    y: Any = None,
+    *,
+    method: str = "native",
+    split: str = "unspecified",
+    scoring: Any = None,
+    n_repeats: int = 5,
+    max_samples: int = 512,
+    max_features: int = 50,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Evaluation:
+    """Display labeled native importance/coefficients, or explicit held-out permutation importance without refitting.
+
+    method='permutation' requires X and supervised target y. Permutation acts on
+    original input columns through the whole pipeline; native fitted coefficients
+    may instead refer to transformed features. Neither method proves causality.
+    """
+    from ._sklearn_interpret import feature_importance as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        method=method,
+        split=split,
+        scoring=scoring,
+        n_repeats=n_repeats,
+        max_samples=max_samples,
+        max_features=max_features,
+        random_state=random_state,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def partial_dependence(
+    model: Any,
+    X: Any,
+    features: Any,
+    *,
+    kind: str = "average",
+    target: Any = None,
+    grid_resolution: int = 30,
+    max_samples: int = 256,
+    max_ice: int = 20,
+    backend: str = "auto",
+) -> Evaluation:
+    """Compute bounded scikit-learn PDP/ICE for numeric original-input features, without fitting.
+
+    features selects one to four columns by index/name. kind='both' includes ICE;
+    multiclass classifiers require target=<class label>. These are reference-
+    population model-response summaries, not causal interventions.
+    """
+    from ._sklearn_interpret import partial_dependence as impl
+
+    result = impl(
+        model,
+        X,
+        features,
+        kind=kind,
+        target=target,
+        grid_resolution=grid_resolution,
+        max_samples=max_samples,
+        max_ice=max_ice,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def cv_results(
+    results: Any, *, metric: str = "score", max_candidates: int = 50, backend: str = "auto"
+) -> Evaluation:
+    """Visualize existing GridSearchCV/cross_validate results; never run or refit a search."""
+    from ._sklearn_selection import cv_results as impl
+
+    result = impl(results, metric=metric, max_candidates=max_candidates, backend=backend)
+    _show_result(result)
+    return result
+
+
+def learning_curve(
+    model: Any,
+    X: Any,
+    y: Any,
+    *,
+    allow_refit: bool = False,
+    cv: int = 3,
+    train_sizes: Any = None,
+    scoring: Any = None,
+    max_samples: int = 2000,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Evaluation:
+    """Compute bounded CV learning curves only with explicit allow_refit=True; fits clones on supplied training data."""
+    from ._sklearn_selection import learning_curve as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        allow_refit=allow_refit,
+        cv=cv,
+        train_sizes=train_sizes,
+        scoring=scoring,
+        max_samples=max_samples,
+        random_state=random_state,
+        backend=backend,
+    )
+    _show_result(result)
+    return result
+
+
+def validation_curve(
+    model: Any,
+    X: Any,
+    y: Any,
+    *,
+    param_name: str,
+    param_range: Any,
+    allow_refit: bool = False,
+    cv: int = 3,
+    scoring: Any = None,
+    max_samples: int = 2000,
+    random_state: int = 0,
+    backend: str = "auto",
+) -> Evaluation:
+    """Compute bounded CV validation curves only with allow_refit=True; fits estimator clones, not the original."""
+    from ._sklearn_selection import validation_curve as impl
+
+    result = impl(
+        model,
+        X,
+        y,
+        param_name=param_name,
+        param_range=param_range,
+        allow_refit=allow_refit,
+        cv=cv,
+        scoring=scoring,
+        max_samples=max_samples,
+        random_state=random_state,
+        backend=backend,
+    )
+    _show_result(result)
+    return result

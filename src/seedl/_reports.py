@@ -45,6 +45,8 @@ def _is_interactive_view(v: Visualization) -> bool:
         return False
     if v.backend == "plotly":
         return True
+    if v.kind.startswith("ml_"):
+        return True
     if v.kind in INTERACTIVE_VIEW_KINDS:
         return True
     if (

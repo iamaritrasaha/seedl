@@ -112,6 +112,7 @@ def _compact_guide(width: int) -> str:
             "  view.show()",
             '  view.save("result.html")',
             "",
+            "Classical ML: seedl examples evaluate",
             "Run seedl --help for command options.",
             "No browser opens automatically. Demo writes only the requested file.",
         )
@@ -139,13 +140,18 @@ def _doctor() -> str:
         ("plotly", "plotly"),
         ("matplotlib", "matplotlib"),
         ("qiskit", "quantum"),
+        ("sklearn", "sklearn"),
     ):
         try:
             present = importlib.util.find_spec(module) is not None
         except (ImportError, ValueError):
             present = False
         try:
-            version = importlib.metadata.version(module) if present else ""
+            version = (
+                importlib.metadata.version("scikit-learn" if module == "sklearn" else module)
+                if present
+                else ""
+            )
         except importlib.metadata.PackageNotFoundError:
             version = "version unknown"
         status = (
@@ -153,6 +159,11 @@ def _doctor() -> str:
             if present
             else f'missing; install: python -m pip install "seedl[{extra}]"'
         )
+        if module == "sklearn" and present:
+            from ._sklearn_detect import supported_sklearn_version
+
+            if not supported_sklearn_version(version):
+                status += "; adapter requires scikit-learn>=1.4.2,<2"
         lines.append(f"  {module:<11} {status}")
     lines.extend(
         (
@@ -237,6 +248,7 @@ def main(argv: list[str] | None = None) -> int:
                 if args.topic
                 else [
                     "see",
+                    "evaluate",
                     "tensor",
                     "network",
                     "activations",

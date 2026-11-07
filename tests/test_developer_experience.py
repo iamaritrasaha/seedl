@@ -95,7 +95,7 @@ def test_doctor_missing_optional_dependencies(monkeypatch, capsys):
     monkeypatch.setattr("seedl.cli.importlib.util.find_spec", lambda _: None)
     assert main(["doctor"]) == 0
     text = capsys.readouterr().out
-    assert text.count("missing; install:") == 5
+    assert text.count("missing; install:") == 6
     assert "without extras" in text
     assert "seedl[quantum]" in text
 
@@ -285,6 +285,8 @@ def test_discovery_examples_execute(topic, tmp_path, monkeypatch):
         pytest.importorskip("numpy")
     if topic in {"network", "activations", "gradients", "gradient_health"}:
         pytest.importorskip("torch")
+    if topic == "evaluate":
+        pytest.importorskip("sklearn")
     if topic == "circuit":
         pytest.importorskip("qiskit")
     if topic == "statevector":

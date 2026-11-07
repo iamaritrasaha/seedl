@@ -91,6 +91,9 @@ def format_value(value: Any, *, full: bool = False) -> str:
 def note_level(note: str) -> str:
     """Label existing observations; do not invent a diagnosis or threshold."""
     text = note.lower()
+    for explicit in ("WARNING", "CAUTION", "INFO"):
+        if text.lstrip().startswith(explicit.lower() + ":"):
+            return explicit
     if any(
         token in text
         for token in (
@@ -121,7 +124,13 @@ def note_level(note: str) -> str:
 
 
 def ordered_notes(view: Visualization) -> list[tuple[str, str]]:
-    notes = [(note_level(str(n)), str(n)) for n in view.notes]
+    notes = []
+    for note in view.notes:
+        text = str(note)
+        level = note_level(text)
+        if text.lstrip().upper().startswith(level + ":"):
+            text = text.lstrip()[len(level) + 1 :].lstrip()
+        notes.append((level, text))
     return sorted(notes, key=lambda item: {"WARNING": 0, "CAUTION": 1, "INFO": 2}[item[0]])
 
 
